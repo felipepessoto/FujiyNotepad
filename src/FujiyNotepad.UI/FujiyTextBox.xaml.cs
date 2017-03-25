@@ -39,6 +39,11 @@ namespace FujiyNotepad.UI
 
         public void OpenFile(string filePath)
         {
+            if(mFile != null)
+            {
+                mFile.Dispose();//TODO pensar em uma forma melhor de clean, talvez remover todo o User Control
+            }
+
             this.filePath = filePath;
 
             maximumStartOffset = GetMaximumStartOffset();
@@ -49,7 +54,7 @@ namespace FujiyNotepad.UI
 
             GoToOffset(0);
 
-            Task.Run((Action)StartTaskToIndexLines);
+            Task.Run((Action)StartTaskToIndexLines);//TODO Cancelar qdo trocar arquivo
         }
 
         public void GoToLineNumber(int lineNumber)
@@ -93,6 +98,11 @@ namespace FujiyNotepad.UI
                         batchTime.Stop();
                         Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"{line} - {batchTime.ElapsedMilliseconds}ms"; });
                         batchTime.Restart();
+                    }
+
+                    if(result > lastResult)
+                    {
+                        lastResult = result;
                     }
                 }
             }
