@@ -32,7 +32,12 @@ namespace FujiyNotepad.UI
 
         private void MenuGoToLine_Click(object sender, RoutedEventArgs e)
         {
-            TextControl.GoToLineNumber(100);//TODO implementar janela para entrar com valor
+            GoToLine goToWindows = new GoToLine();
+            goToWindows.ShowDialog();
+            if (goToWindows.LineNumber > 0)
+            {
+                TextControl.GoToLineNumber(goToWindows.LineNumber);
+            }
         }
 
         private void Open_Click(object sender, RoutedEventArgs e)
@@ -48,11 +53,17 @@ namespace FujiyNotepad.UI
             }
         }
 
-        private void OpenFile(string filePath)
+        private Task OpenFile(string filePath)
         {
             cancelIndexingTokenSource?.Cancel();
             TextControl.OpenFile(filePath);
-            StartOrResumeIndexing();
+            EnableMenu();
+            return StartOrResumeIndexing();
+        }
+
+        private void EnableMenu()
+        {
+            EditMenu.IsEnabled = true;
         }
 
         private void OpenSample_Click(object sender, RoutedEventArgs e)
