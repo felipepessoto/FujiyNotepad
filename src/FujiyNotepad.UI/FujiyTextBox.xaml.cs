@@ -75,7 +75,8 @@ namespace FujiyNotepad.UI
 
             lineNumberIndex[++line] = 0;
 
-            Stopwatch c = Stopwatch.StartNew();
+            Stopwatch batchTime = Stopwatch.StartNew();
+            Stopwatch totalTimeToIndex = Stopwatch.StartNew();
 
             while (shouldContinue)
             {
@@ -89,14 +90,14 @@ namespace FujiyNotepad.UI
 
                     if (line % 10000 == 0)
                     {
-                        c.Stop();
-                        Dispatcher.Invoke(() => { App.Current.MainWindow.Title = line.ToString() + " - " + c.ElapsedMilliseconds + "ms"; });
-                        c.Restart();
+                        batchTime.Stop();
+                        Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"{line} - {batchTime.ElapsedMilliseconds}ms"; });
+                        batchTime.Restart();
                     }
                 }
             }
 
-            Dispatcher.Invoke(() => { App.Current.MainWindow.Title = "Finished indexing lines"; });
+            Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"Finished indexing lines. Time: {totalTimeToIndex.ElapsedMilliseconds}ms"; });
         }
 
         private IEnumerable<long> SearchInFile(long startOffset, char charToSearch)
