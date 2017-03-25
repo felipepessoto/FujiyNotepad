@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
@@ -28,6 +29,8 @@ namespace FujiyNotepad.UI
         long viewPortSize = 1024 * 1024 * 1024;//TODO precisa ser dinamico
         StringBuilder sb = new StringBuilder();
         long maximumStartOffset;
+        SortedDictionary<int, long> lineNumberIndex = new SortedDictionary<int, long>();
+        long searchSize = 1024 * 1024;
 
         public FujiyTextBox()
         {
@@ -44,22 +47,75 @@ namespace FujiyNotepad.UI
             mFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
             conteudo.Margin = new Thickness(0, 0, ScrollBarConteudo.Width, 0);
 
-            UpdateText(0);
+            UpdateTextFromOffset(0);
+
+            Task.Run((Action)StartTaskToIndexLines);
+        }
+
+        private void StartTaskToIndexLines()//Task?
+        {
+            long lastResult = 0;
+            bool shouldContinue = true;
+            int line = 0;
+            Stopwatch c = Stopwatch.StartNew();
+
+            while (shouldContinue)
+            {
+                shouldContinue = false;
+
+                foreach (long result in SearchInFile(lastResult, '\n'))
+                {
+                    shouldContinue = true;
+
+                    lineNumberIndex[++line] = result;
+
+                    if (line % 10000 == 0)
+                    {
+                        c.Stop();
+                        Dispatcher.Invoke(() => { App.Current.MainWindow.Title = line.ToString() + " - " + c.ElapsedMilliseconds + "ms"; });
+                        c.Restart();
+                    }
+                }
+            }
+        }
+
+        private IEnumerable<long> SearchInFile(long startOffset, char charToSearch)
+        {
+            do
+            {
+                long bytesToRead = Math.Min(searchSize, fileSize - startOffset);
+
+                using (var stream = mFile.CreateViewStream(startOffset, bytesToRead, MemoryMappedFileAccess.Read))
+                using (var streamReader = new StreamReader(stream))
+                {
+                    int byteRead;
+                    do
+                    {
+                        byteRead = stream.ReadByte();
+                        if (byteRead == charToSearch)
+                        {
+                            yield return startOffset + stream.Position;
+                        }
+                    } while (byteRead > -1);
+                }
+                startOffset += bytesToRead;
+            }
+            while (startOffset < fileSize);
         }
 
         private void ScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
         {
-            UpdateText(e.NewValue);
+            UpdateTextFromScrollPosition(e.NewValue);
         }
 
-        private void UpdateText(double scrollValue)
+        private void UpdateTextFromScrollPosition(double scrollValue)
         {
             long startOffset = (long)(fileSize * scrollValue / ScrollBarConteudo.Maximum);
 
-            UpdateText(startOffset);
+            UpdateTextFromOffset(startOffset);
         }
 
-        private void UpdateText(long startOffset)
+        private void UpdateTextFromOffset(long startOffset)
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
@@ -81,15 +137,14 @@ namespace FujiyNotepad.UI
             }
         }
 
-
         private long SearchNewLineBefore(long startOffset)
         {
-            if(startOffset == 0)
+            if (startOffset == 0)
             {
                 return 0;
             }
             long searchBackOffset = startOffset;
-            long searchSizePerIteration = Math.Min(1024, startOffset);
+            long searchSizePerIteration = Math.Min(searchSize, startOffset);
 
             do
             {
@@ -100,11 +155,11 @@ namespace FujiyNotepad.UI
                 {
                     var newLineAt = streamReader.ReadToEnd().LastIndexOf('\n');
 
-                    if(newLineAt > -1)
+                    if (newLineAt > -1)
                     {
                         return searchBackOffset + newLineAt + 1;
                     }
-                    
+
 
                     /*
                     stream.Seek(0, SeekOrigin.End);
