@@ -5,9 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FujiyNotepad.UI"
         mc:Ignorable="d"
-        Title="Go To Line" Height="128.697" Width="218.302">
+        Title="Go To Line" Height="130" Width="220" ResizeMode="NoResize">
     <Grid>
-        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Line number:" VerticalAlignment="Top"/>
+        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Line number:" VerticalAlignment="Top" Margin="10,0,0,0"/>
         <TextBox Name="TxtLineNumber" HorizontalAlignment="Left" Height="23" Text="" VerticalAlignment="Top" Width="191" Margin="10,21,0,0"/>
         <Button Name="BtnGoTo" Content="Go To" HorizontalAlignment="Left" VerticalAlignment="Top" Width="75" Margin="10,49,0,0" Click="BtnGoTo_Click"/>
 
