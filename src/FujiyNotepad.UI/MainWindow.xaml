@@ -7,6 +7,11 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="350" Width="525">
     <Grid>
-        <local:FujiyTextBox x:Name="TextControl" ></local:FujiyTextBox>
+        <Menu IsMainMenu="True" HorizontalAlignment="Stretch" Height="20" VerticalAlignment="Top">
+            <MenuItem Header="Edit">
+                <MenuItem Name="MenuGoToLine" Header="Go To Line 100" Click="MenuGoToLine_Click"/>
+            </MenuItem>
+        </Menu>
+        <local:FujiyTextBox x:Name="TextControl" Margin="0,20, 0, 0" ></local:FujiyTextBox>
     </Grid>
 </Window>

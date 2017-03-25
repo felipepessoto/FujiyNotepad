@@ -47,9 +47,24 @@ namespace FujiyNotepad.UI
             mFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
             conteudo.Margin = new Thickness(0, 0, ScrollBarConteudo.Width, 0);
 
-            UpdateTextFromOffset(0);
+            GoToOffset(0);
 
             Task.Run((Action)StartTaskToIndexLines);
+        }
+
+        public void GoToLineNumber(int lineNumber)
+        {
+            long offset = lineNumberIndex[lineNumber];
+
+            UpdateScrollBarFromOffset(offset);
+
+            GoToOffset(offset);
+        }
+
+        private void UpdateScrollBarFromOffset(long offset)
+        {
+            double newScrollValue = offset * ScrollBarConteudo.Maximum / fileSize;
+            ScrollBarConteudo.Value = newScrollValue;
         }
 
         private void StartTaskToIndexLines()//Task?
@@ -57,6 +72,9 @@ namespace FujiyNotepad.UI
             long lastResult = 0;
             bool shouldContinue = true;
             int line = 0;
+
+            lineNumberIndex[++line] = 0;
+
             Stopwatch c = Stopwatch.StartNew();
 
             while (shouldContinue)
@@ -77,6 +95,8 @@ namespace FujiyNotepad.UI
                     }
                 }
             }
+
+            Dispatcher.Invoke(() => { App.Current.MainWindow.Title = "Finished indexing lines"; });
         }
 
         private IEnumerable<long> SearchInFile(long startOffset, char charToSearch)
@@ -112,10 +132,10 @@ namespace FujiyNotepad.UI
         {
             long startOffset = (long)(fileSize * scrollValue / ScrollBarConteudo.Maximum);
 
-            UpdateTextFromOffset(startOffset);
+            GoToOffset(startOffset);
         }
 
-        private void UpdateTextFromOffset(long startOffset)
+        private void GoToOffset(long startOffset)
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 

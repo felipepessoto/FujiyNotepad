@@ -50,5 +50,10 @@ namespace FujiyNotepad.UI
                 }
             }
         }
+
+        private void MenuGoToLine_Click(object sender, RoutedEventArgs e)
+        {
+            TextControl.GoToLineNumber(100);//TODO implementar janela para entrar com valor
+        }
     }
 }
