@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -54,7 +55,7 @@ namespace FujiyNotepad.UI
 
             GoToOffset(0);
 
-            Task.Run((Action)StartTaskToIndexLines);//TODO Cancelar qdo trocar arquivo
+            Task.Run(()=> { StartTaskToIndexLines(CancellationToken.None); }, CancellationToken.None);//TODO Cancelar qdo trocar arquivo
         }
 
         public void GoToLineNumber(int lineNumber)
@@ -72,7 +73,7 @@ namespace FujiyNotepad.UI
             ScrollBarConteudo.Value = newScrollValue;
         }
 
-        private void StartTaskToIndexLines()//Task?
+        private void StartTaskToIndexLines(CancellationToken cancelToken)//Task?
         {
             long lastResult = 0;
             bool shouldContinue = true;
@@ -85,6 +86,7 @@ namespace FujiyNotepad.UI
 
             while (shouldContinue)
             {
+                cancelToken.ThrowIfCancellationRequested();
                 shouldContinue = false;
 
                 foreach (long result in SearchInFile(lastResult, '\n'))
@@ -96,7 +98,7 @@ namespace FujiyNotepad.UI
                     if (line % 10000 == 0)
                     {
                         batchTime.Stop();
-                        Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"{line} - {batchTime.ElapsedMilliseconds}ms"; });
+                        Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"Indexed {line} lines - Last batch took: {batchTime.ElapsedMilliseconds}ms"; });
                         batchTime.Restart();
                     }
 
@@ -136,6 +138,7 @@ namespace FujiyNotepad.UI
 
         private void ScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
         {
+            //TODO evitar que seja chamado varias vezes em menos de 100ms
             UpdateTextFromScrollPosition(e.NewValue);
         }
 
