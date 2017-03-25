@@ -7,7 +7,6 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="350" Width="525">
     <Grid>
-        <TextBox Name="conteudo" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalScrollBarVisibility="Auto" />
-        <ScrollBar Name="ScrollBarConteudo" HorizontalAlignment="Right" VerticalAlignment="Stretch" Maximum="1000" Scroll="ScrollBar_Scroll"/>
+        <local:FujiyTextBox x:Name="TextControl" ></local:FujiyTextBox>
     </Grid>
 </Window>
