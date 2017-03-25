@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FujiyNotepad.UI.Model;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -30,8 +31,12 @@ namespace FujiyNotepad.UI
         long viewPortSize = 1024 * 1024 * 1024;//TODO precisa ser dinamico
         StringBuilder sb = new StringBuilder();
         long maximumStartOffset;
-        SortedDictionary<int, long> lineNumberIndex = new SortedDictionary<int, long>();
-        long searchSize = 1024 * 1024;
+        //SortedDictionary<int, long> lineNumberIndex = new SortedDictionary<int, long>();
+        //SortedList<int, long> lineNumberIndex = new SortedList<int, long>();
+        List<long> lineNumberIndex = new List<long>();
+        TextSearcher searcher;
+
+
 
         public FujiyTextBox()
         {
@@ -40,7 +45,7 @@ namespace FujiyNotepad.UI
 
         public void OpenFile(string filePath)
         {
-            if(mFile != null)
+            if (mFile != null)
             {
                 mFile.Dispose();//TODO pensar em uma forma melhor de clean, talvez remover todo o User Control
             }
@@ -53,18 +58,25 @@ namespace FujiyNotepad.UI
             mFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
             conteudo.Margin = new Thickness(0, 0, ScrollBarConteudo.Width, 0);
 
-            GoToOffset(0);
+            searcher = new TextSearcher(mFile, fileSize);
 
-            Task.Run(()=> { StartTaskToIndexLines(CancellationToken.None); }, CancellationToken.None);//TODO Cancelar qdo trocar arquivo
+            GoToOffset(0);
         }
 
         public void GoToLineNumber(int lineNumber)
         {
-            long offset = lineNumberIndex[lineNumber];
+            if (lineNumberIndex.Count > lineNumber)
+            {
+                long offset = lineNumberIndex[lineNumber];
 
-            UpdateScrollBarFromOffset(offset);
+                UpdateScrollBarFromOffset(offset);
 
-            GoToOffset(offset);
+                GoToOffset(offset);
+            }
+            else
+            {
+                //TODO mensagem
+            }
         }
 
         private void UpdateScrollBarFromOffset(long offset)
@@ -73,67 +85,38 @@ namespace FujiyNotepad.UI
             ScrollBarConteudo.Value = newScrollValue;
         }
 
-        private void StartTaskToIndexLines(CancellationToken cancelToken)//Task?
+        public void StartTaskToIndexLines(CancellationToken cancelToken)
         {
-            long lastResult = 0;
-            bool shouldContinue = true;
-            int line = 0;
+            long startOffset = 0;
 
-            lineNumberIndex[++line] = 0;
+            if (lineNumberIndex.Count == 0)
+            {
+                lineNumberIndex.Add(0);
+                lineNumberIndex.Add(0);
+            }
+            else
+            {
+                startOffset = lineNumberIndex[lineNumberIndex.Count - 1];
+            }
 
             Stopwatch batchTime = Stopwatch.StartNew();
             Stopwatch totalTimeToIndex = Stopwatch.StartNew();
 
-            while (shouldContinue)
+            foreach (long result in searcher.SearchInFile(startOffset, '\n'))
             {
                 cancelToken.ThrowIfCancellationRequested();
-                shouldContinue = false;
+                lineNumberIndex.Add(result);
 
-                foreach (long result in SearchInFile(lastResult, '\n'))
+                if (lineNumberIndex.Count % 10000 == 0)
                 {
-                    shouldContinue = true;
-
-                    lineNumberIndex[++line] = result;
-
-                    if (line % 10000 == 0)
-                    {
-                        batchTime.Stop();
-                        Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"Indexed {line} lines - Last batch took: {batchTime.ElapsedMilliseconds}ms"; });
-                        batchTime.Restart();
-                    }
-
-                    if(result > lastResult)
-                    {
-                        lastResult = result;
-                    }
+                    batchTime.Stop();
+                    Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"Indexed {lineNumberIndex.Count} lines - Last batch took: {batchTime.ElapsedMilliseconds}ms"; });
+                    batchTime.Restart();
                 }
             }
+
 
             Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"Finished indexing lines. Time: {totalTimeToIndex.ElapsedMilliseconds}ms"; });
-        }
-
-        private IEnumerable<long> SearchInFile(long startOffset, char charToSearch)
-        {
-            do
-            {
-                long bytesToRead = Math.Min(searchSize, fileSize - startOffset);
-
-                using (var stream = mFile.CreateViewStream(startOffset, bytesToRead, MemoryMappedFileAccess.Read))
-                using (var streamReader = new StreamReader(stream))
-                {
-                    int byteRead;
-                    do
-                    {
-                        byteRead = stream.ReadByte();
-                        if (byteRead == charToSearch)
-                        {
-                            yield return startOffset + stream.Position;
-                        }
-                    } while (byteRead > -1);
-                }
-                startOffset += bytesToRead;
-            }
-            while (startOffset < fileSize);
         }
 
         private void ScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
@@ -153,7 +136,7 @@ namespace FujiyNotepad.UI
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
-            startOffset = SearchNewLineBefore(startOffset);
+            startOffset = searcher.SearchNewLineBefore(startOffset);
 
             long length = GetLengthToFillViewport(startOffset);
 
@@ -169,50 +152,6 @@ namespace FujiyNotepad.UI
 
                 conteudo.Text = sb.ToString();
             }
-        }
-
-        private long SearchNewLineBefore(long startOffset)
-        {
-            if (startOffset == 0)
-            {
-                return 0;
-            }
-            long searchBackOffset = startOffset;
-            long searchSizePerIteration = Math.Min(searchSize, startOffset);
-
-            do
-            {
-                searchBackOffset = Math.Max(searchBackOffset - searchSizePerIteration, 0);
-
-                using (var stream = mFile.CreateViewStream(searchBackOffset, searchSizePerIteration, MemoryMappedFileAccess.Read))
-                using (var streamReader = new StreamReader(stream))
-                {
-                    var newLineAt = streamReader.ReadToEnd().LastIndexOf('\n');
-
-                    if (newLineAt > -1)
-                    {
-                        return searchBackOffset + newLineAt + 1;
-                    }
-
-
-                    /*
-                    stream.Seek(0, SeekOrigin.End);
-
-                    while (stream.Position > 0)
-                    {
-                        stream.Seek(-1, SeekOrigin.Current);
-                        if(stream.ReadByte() == '\n')
-                        {
-                            return currentPosition;
-                        }
-                        stream.Seek(-1, SeekOrigin.Current);
-                    }
-                    */
-                }
-            }
-            while (searchBackOffset > 0);
-
-            return 0;
         }
 
         private long GetLengthToFillViewport(long startOffset)

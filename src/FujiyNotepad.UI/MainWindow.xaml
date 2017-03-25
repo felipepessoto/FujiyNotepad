@@ -14,6 +14,8 @@
             </MenuItem>
             <MenuItem Header="Edit">
                 <MenuItem Name="MenuGoToLine" Header="Go To Line 100" Click="MenuGoToLine_Click"/>
+                <MenuItem Name="StartIndexLineNumber" Header="Start indexing" Click="StartIndexLineNumber_Click" />
+                <MenuItem Name="StopIndexLineNumber" Header="Stop indexing" Click="StopIndexLineNumber_Click" />
             </MenuItem>
         </Menu>
         <local:FujiyTextBox x:Name="TextControl" Margin="0,20, 0, 0" ></local:FujiyTextBox>

@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,6 +24,7 @@ namespace FujiyNotepad.UI
     /// </summary>
     public partial class MainWindow : Window
     {
+        CancellationTokenSource cancelIndexingTokenSource;
         public MainWindow()
         {
             InitializeComponent();
@@ -38,20 +40,26 @@ namespace FujiyNotepad.UI
             OpenFileDialog dlg = new OpenFileDialog();
 
             bool? result = dlg.ShowDialog();
-            
+
             if (result == true)
             {
                 string filePath = dlg.FileName;
-                TextControl.OpenFile(filePath);
+                OpenFile(filePath);
             }
+        }
+
+        private void OpenFile(string filePath)
+        {
+            cancelIndexingTokenSource?.Cancel();
+            TextControl.OpenFile(filePath);
+            StartOrResumeIndexing();
         }
 
         private void OpenSample_Click(object sender, RoutedEventArgs e)
         {
             string filePath = @"Sample.txt";
-
             CreateFakeFile(filePath);
-            TextControl.OpenFile(filePath);
+            OpenFile(filePath);
         }
 
         private void CreateFakeFile(string filePath)
@@ -69,6 +77,23 @@ namespace FujiyNotepad.UI
                     }
                 }
             }
+        }
+
+        private void StartIndexLineNumber_Click(object sender, RoutedEventArgs e)
+        {
+            StartOrResumeIndexing();
+        }
+
+        private void StopIndexLineNumber_Click(object sender, RoutedEventArgs e)
+        {
+            cancelIndexingTokenSource.Cancel();
+        }
+
+        private async Task StartOrResumeIndexing()
+        {
+            cancelIndexingTokenSource = new CancellationTokenSource();
+            await Task.Run(() => { TextControl.StartTaskToIndexLines(cancelIndexingTokenSource.Token); }, cancelIndexingTokenSource.Token);
+
         }
     }
 }
