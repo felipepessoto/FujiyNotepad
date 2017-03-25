@@ -8,6 +8,10 @@
         Title="MainWindow" Height="350" Width="525">
     <Grid>
         <Menu IsMainMenu="True" HorizontalAlignment="Stretch" Height="20" VerticalAlignment="Top">
+            <MenuItem Header="File">
+                <MenuItem Name="Open" Header="Open" Click="Open_Click" />
+                <MenuItem Name="OpenSample" Header="Open Sample" Click="OpenSample_Click" />
+            </MenuItem>
             <MenuItem Header="Edit">
                 <MenuItem Name="MenuGoToLine" Header="Go To Line 100" Click="MenuGoToLine_Click"/>
             </MenuItem>

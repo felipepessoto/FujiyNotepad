@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.MemoryMappedFiles;
@@ -22,19 +23,38 @@ namespace FujiyNotepad.UI
     /// </summary>
     public partial class MainWindow : Window
     {
-
-        string filePath = @"Sample.txt";
-
         public MainWindow()
         {
             InitializeComponent();
+        }
 
-            CreateFakeFile();
+        private void MenuGoToLine_Click(object sender, RoutedEventArgs e)
+        {
+            TextControl.GoToLineNumber(100);//TODO implementar janela para entrar com valor
+        }
 
+        private void Open_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog dlg = new OpenFileDialog();
+
+            bool? result = dlg.ShowDialog();
+            
+            if (result == true)
+            {
+                string filePath = dlg.FileName;
+                TextControl.OpenFile(filePath);
+            }
+        }
+
+        private void OpenSample_Click(object sender, RoutedEventArgs e)
+        {
+            string filePath = @"Sample.txt";
+
+            CreateFakeFile(filePath);
             TextControl.OpenFile(filePath);
         }
 
-        private void CreateFakeFile()
+        private void CreateFakeFile(string filePath)
         {
             if (File.Exists(filePath) == false)
             {
@@ -49,11 +69,6 @@ namespace FujiyNotepad.UI
                     }
                 }
             }
-        }
-
-        private void MenuGoToLine_Click(object sender, RoutedEventArgs e)
-        {
-            TextControl.GoToLineNumber(100);//TODO implementar janela para entrar com valor
         }
     }
 }
