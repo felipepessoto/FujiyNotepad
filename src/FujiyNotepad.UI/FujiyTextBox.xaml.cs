@@ -31,16 +31,13 @@ namespace FujiyNotepad.UI
         long viewPortSize = 1024 * 1024 * 1024;//TODO precisa ser dinamico
         StringBuilder sb = new StringBuilder();
         long maximumStartOffset;
-        //SortedDictionary<int, long> lineNumberIndex = new SortedDictionary<int, long>();
-        //SortedList<int, long> lineNumberIndex = new SortedList<int, long>();
-        List<long> lineNumberIndex = new List<long>();
         TextSearcher searcher;
-
-
+        public LineIndexer LineIndexer { get; set; }
 
         public FujiyTextBox()
         {
             InitializeComponent();
+            conteudo.Margin = new Thickness(0, 0, ScrollBarConteudo.Width, 0);
         }
 
         public void OpenFile(string filePath)
@@ -56,18 +53,18 @@ namespace FujiyNotepad.UI
 
             fileSize = new FileInfo(filePath).Length;
             mFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
-            conteudo.Margin = new Thickness(0, 0, ScrollBarConteudo.Width, 0);
 
             searcher = new TextSearcher(mFile, fileSize);
+            LineIndexer = new LineIndexer(searcher);
 
             GoToOffset(0);
         }
 
         public void GoToLineNumber(int lineNumber)
         {
-            if (lineNumberIndex.Count > lineNumber)
+            if (LineIndexer.GetNumberOfLinesIndexed() > lineNumber)
             {
-                long offset = lineNumberIndex[lineNumber];
+                long offset = LineIndexer.GetOffsetFromLineNumber(lineNumber);
 
                 UpdateScrollBarFromOffset(offset);
 
@@ -75,7 +72,15 @@ namespace FujiyNotepad.UI
             }
             else
             {
-                //TODO mensagem
+                if (LineIndexer.IsCompleted)
+                {
+                    //TODO mensagem
+                }
+                else
+                {
+                    //TODO mensagem
+                }
+
             }
         }
 
@@ -83,40 +88,6 @@ namespace FujiyNotepad.UI
         {
             double newScrollValue = offset * ScrollBarConteudo.Maximum / fileSize;
             ScrollBarConteudo.Value = newScrollValue;
-        }
-
-        public void StartTaskToIndexLines(CancellationToken cancelToken)
-        {
-            long startOffset = 0;
-
-            if (lineNumberIndex.Count == 0)
-            {
-                lineNumberIndex.Add(0);
-                lineNumberIndex.Add(0);
-            }
-            else
-            {
-                startOffset = lineNumberIndex[lineNumberIndex.Count - 1];
-            }
-
-            Stopwatch batchTime = Stopwatch.StartNew();
-            Stopwatch totalTimeToIndex = Stopwatch.StartNew();
-
-            foreach (long result in searcher.SearchInFile(startOffset, '\n'))
-            {
-                cancelToken.ThrowIfCancellationRequested();
-                lineNumberIndex.Add(result);
-
-                if (lineNumberIndex.Count % 10000 == 0)
-                {
-                    batchTime.Stop();
-                    Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"Indexed {lineNumberIndex.Count} lines - Last batch took: {batchTime.ElapsedMilliseconds}ms"; });
-                    batchTime.Restart();
-                }
-            }
-
-
-            Dispatcher.Invoke(() => { App.Current.MainWindow.Title = $"Finished indexing lines. Time: {totalTimeToIndex.ElapsedMilliseconds}ms"; });
         }
 
         private void ScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)

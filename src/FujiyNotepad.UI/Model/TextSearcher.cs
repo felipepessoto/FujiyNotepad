@@ -12,19 +12,22 @@ namespace FujiyNotepad.UI.Model
     {
         long searchSize = 1024 * 1024;
         private readonly MemoryMappedFile mFile;
-        private readonly long fileSize;
+        public long FileSize { get; }
 
         public TextSearcher(MemoryMappedFile file, long fileSize)
         {
             this.mFile = file;
-            this.fileSize = fileSize;
+            FileSize = fileSize;
         }
 
-        public IEnumerable<long> SearchInFile(long startOffset, char charToSearch)
+        public IEnumerable<long> SearchInFile(long startOffset, char charToSearch, IProgress<int> progress)
         {
+            int lastReportValue = 0;
+            progress.Report(0);
+
             do
             {
-                long bytesToRead = Math.Min(searchSize, fileSize - startOffset);
+                long bytesToRead = Math.Min(searchSize, FileSize - startOffset);
 
                 using (var stream = mFile.CreateViewStream(startOffset, bytesToRead, MemoryMappedFileAccess.Read))
                 using (var streamReader = new StreamReader(stream))
@@ -40,8 +43,15 @@ namespace FujiyNotepad.UI.Model
                     } while (byteRead > -1);
                 }
                 startOffset += bytesToRead;
+
+                int progressValue = (int)(startOffset * 100 / FileSize);
+                if (lastReportValue != progressValue)
+                {
+                    lastReportValue = progressValue;
+                    progress.Report(progressValue);
+                }
             }
-            while (startOffset < fileSize);
+            while (startOffset < FileSize);
         }
 
         public long SearchNewLineBefore(long startOffset)
