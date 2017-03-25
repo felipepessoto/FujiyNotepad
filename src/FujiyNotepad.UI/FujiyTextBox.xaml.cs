@@ -37,7 +37,7 @@ namespace FujiyNotepad.UI
         public FujiyTextBox()
         {
             InitializeComponent();
-            conteudo.Margin = new Thickness(0, 0, ScrollBarConteudo.Width, 0);
+            TxtContent.Margin = new Thickness(0, 0, ContentScrollBar.Width, 0);
         }
 
         public void OpenFile(string filePath)
@@ -86,8 +86,8 @@ namespace FujiyNotepad.UI
 
         private void UpdateScrollBarFromOffset(long offset)
         {
-            double newScrollValue = offset * ScrollBarConteudo.Maximum / fileSize;
-            ScrollBarConteudo.Value = newScrollValue;
+            double newScrollValue = offset * ContentScrollBar.Maximum / fileSize;
+            ContentScrollBar.Value = newScrollValue;
         }
 
         private void ScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
@@ -98,7 +98,7 @@ namespace FujiyNotepad.UI
 
         private void UpdateTextFromScrollPosition(double scrollValue)
         {
-            long startOffset = (long)(fileSize * scrollValue / ScrollBarConteudo.Maximum);
+            long startOffset = (long)(fileSize * scrollValue / ContentScrollBar.Maximum);
 
             GoToOffset(startOffset);
         }
@@ -121,7 +121,7 @@ namespace FujiyNotepad.UI
                     sb.AppendLine(streamReader.ReadLine());
                 }
 
-                conteudo.Text = sb.ToString();
+                TxtContent.Text = sb.ToString();
             }
         }
 
@@ -145,6 +145,11 @@ namespace FujiyNotepad.UI
 
                 return fs.Position;
             }
+        }
+
+        private void TxtContent_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
+        {
+
         }
     }
 }
