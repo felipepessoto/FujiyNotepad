@@ -22,8 +22,8 @@ namespace FujiyNotepad.UI.Model
 
         public IEnumerable<long> SearchInFile(long startOffset, char charToSearch, IProgress<int> progress)
         {
-            int lastReportValue = 0;
-            progress.Report(0);
+            int lastReportValue = (int)(startOffset * 100 / FileSize);
+            progress.Report(lastReportValue);
 
             do
             {

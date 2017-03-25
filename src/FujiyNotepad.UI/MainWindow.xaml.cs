@@ -91,14 +91,25 @@ namespace FujiyNotepad.UI
 
         private async Task StartOrResumeIndexing()
         {
-            var progress = new Progress<int>(percent =>
+            StartIndexLineNumber.IsEnabled = false;
+            StopIndexLineNumber.IsEnabled = true;
+            try
             {
-                Title = percent + "% indexed";//TODO criar status bar
+                var progress = new Progress<int>(percent =>
+                {
+                    Title = percent + "% indexed";//TODO criar status bar
             });
 
-            cancelIndexingTokenSource = new CancellationTokenSource();
-            await Task.Run(() => { TextControl.LineIndexer.StartTaskToIndexLines(cancelIndexingTokenSource.Token, progress); }, cancelIndexingTokenSource.Token);
+                cancelIndexingTokenSource = new CancellationTokenSource();
+                await Task.Run(() => { TextControl.LineIndexer.StartTaskToIndexLines(cancelIndexingTokenSource.Token, progress); }, cancelIndexingTokenSource.Token);
 
+                StopIndexLineNumber.IsEnabled = false;
+            }
+            catch (OperationCanceledException)
+            {
+                StartIndexLineNumber.IsEnabled = true;
+                StopIndexLineNumber.IsEnabled = false;
+            }
         }
     }
 }
