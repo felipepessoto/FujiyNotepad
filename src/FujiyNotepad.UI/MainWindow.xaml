@@ -8,9 +8,10 @@
         Title="MainWindow" Height="350" Width="525" WindowState="Maximized">
     <Grid>
         <Menu IsMainMenu="True" HorizontalAlignment="Stretch" Height="20" VerticalAlignment="Top">
-            <MenuItem Header="File">
-                <MenuItem Name="Open" Header="Open" Click="Open_Click" />
+            <MenuItem Header="_File">
+                <MenuItem Name="Open" Header="_Open" Click="Open_Click" />
                 <MenuItem Name="OpenSample" Header="Open Sample" Click="OpenSample_Click" />
+                <MenuItem Name="Exit" Header="E_xit" Click="Exit_Click" />
             </MenuItem>
             <MenuItem Name="EditMenu" Header="_Edit" IsEnabled="False">
                 <MenuItem Name="MenuGoToLine" Header="_Go To..." Click="MenuGoToLine_Click"/>
@@ -18,6 +19,14 @@
                 <MenuItem Name="StopIndexLineNumber" Header="Stop indexing" Click="StopIndexLineNumber_Click" IsEnabled="False" />
             </MenuItem>
         </Menu>
-        <local:FujiyTextBox x:Name="TextControl" Margin="0,20, 0, 0" ></local:FujiyTextBox>
+        <local:FujiyTextBox x:Name="TextControl" Margin="0,20, 0, 20" ></local:FujiyTextBox>
+        <StatusBar HorizontalAlignment="Stretch" Height="20" VerticalAlignment="Bottom">
+            <StatusBarItem>
+                <TextBlock Name="LblStatus" />
+            </StatusBarItem>
+            <StatusBarItem>
+                <TextBlock Name="LblCursorPosition" />
+            </StatusBarItem>
+        </StatusBar>
     </Grid>
 </Window>
