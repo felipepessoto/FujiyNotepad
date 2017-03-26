@@ -54,6 +54,8 @@ namespace FujiyNotepad.UI.Model
             while (startOffset < FileSize);
         }
 
+
+        //TODO mudar para search backward
         public long SearchNewLineBefore(long startOffset)
         {
             if (startOffset == 0)

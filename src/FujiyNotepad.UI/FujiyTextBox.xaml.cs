@@ -33,6 +33,7 @@ namespace FujiyNotepad.UI
         long maximumStartOffset;
         TextSearcher searcher;
         public LineIndexer LineIndexer { get; set; }
+        long lastOffset;
 
         public FujiyTextBox()
         {
@@ -93,12 +94,7 @@ namespace FujiyNotepad.UI
         private void ScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
         {
             //TODO evitar que seja chamado varias vezes em menos de 100ms
-            UpdateTextFromScrollPosition(e.NewValue);
-        }
-
-        private void UpdateTextFromScrollPosition(double scrollValue)
-        {
-            long startOffset = (long)(fileSize * scrollValue / ContentScrollBar.Maximum);
+            long startOffset = (long)(fileSize * e.NewValue / ContentScrollBar.Maximum);
 
             GoToOffset(startOffset);
         }
@@ -108,7 +104,7 @@ namespace FujiyNotepad.UI
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
             startOffset = searcher.SearchNewLineBefore(startOffset);
-
+            lastOffset = startOffset;
             long length = GetLengthToFillViewport(startOffset);
 
             using (var stream = mFile.CreateViewStream(startOffset, length, MemoryMappedFileAccess.Read))
@@ -147,9 +143,38 @@ namespace FujiyNotepad.UI
             }
         }
 
-        private void TxtContent_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
+        private void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            //int line = TxtContent.GetLineIndexFromCharacterIndex(TxtContent.SelectionStart);
+            //int column = TxtContent.SelectionStart - TxtContent.GetFirstCharIndexFromLine(line);
 
+            int linesToScroll;
+
+            switch (e.Key)
+            {
+                //case Key.Up:
+                //    linesToScroll = -1;
+                //    break;
+                case Key.Down:
+                    linesToScroll = 1;
+                    break;
+                //case Key.PageUp:
+                //    linesToScroll = -TxtContent.GetLastVisibleLineIndex();
+                //    break;
+                case Key.PageDown:
+                    linesToScroll = TxtContent.GetLastVisibleLineIndex() - 1;
+                    break;
+                default:
+                    return; //Only to make the compiler happy about the linesToScroll variable
+            }
+
+            e.Handled = true;
+            var nextLineOffset = searcher.SearchInFile(lastOffset, '\n', new Progress<int>()).Take(linesToScroll).Last();
+            if (nextLineOffset != default(long))
+            {
+                GoToOffset(nextLineOffset);
+                UpdateScrollBarFromOffset(nextLineOffset);
+            }
         }
     }
 }
