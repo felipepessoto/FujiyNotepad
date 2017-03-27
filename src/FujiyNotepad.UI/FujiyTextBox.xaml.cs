@@ -105,7 +105,7 @@ namespace FujiyNotepad.UI
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
-            startOffset = searcher.SearchNewLineBefore(startOffset);
+            startOffset = searcher.SearchBackward(startOffset);
             lastOffset = startOffset;
             long length = GetLengthToFillViewport(startOffset);
 
@@ -135,7 +135,7 @@ namespace FujiyNotepad.UI
         private long GetLengthToFillViewport(long startOffset)
         {
             int linesInVewport = CountVisibleLines();
-            var nextLineOffset = searcher.SearchInFile(startOffset, '\n', new Progress<int>()).Take(linesInVewport).LastOrDefault();
+            var nextLineOffset = searcher.Search(startOffset, '\n', new Progress<int>()).Take(linesInVewport).LastOrDefault();
             if (nextLineOffset != default(long))
             {
                 return nextLineOffset - startOffset;
@@ -208,7 +208,7 @@ namespace FujiyNotepad.UI
             }
 
             e.Handled = true;
-            var nextLineOffset = searcher.SearchInFile(lastOffset, '\n', new Progress<int>()).Take(linesToScroll).LastOrDefault();
+            var nextLineOffset = searcher.Search(lastOffset, '\n', new Progress<int>()).Take(linesToScroll).LastOrDefault();
             if (nextLineOffset != default(long))
             {
                 GoToOffset(nextLineOffset);

@@ -33,7 +33,7 @@ namespace FujiyNotepad.UI.Model
                 startOffset = lineNumberIndex[lineNumberIndex.Count - 1];
             }
 
-            foreach (long result in searcher.SearchInFile(startOffset, '\n', progress))
+            foreach (long result in searcher.Search(startOffset, '\n', progress))
             {
                 cancelToken.ThrowIfCancellationRequested();
                 lineNumberIndex.Add(result);

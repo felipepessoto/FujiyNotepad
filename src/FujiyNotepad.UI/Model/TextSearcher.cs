@@ -20,7 +20,7 @@ namespace FujiyNotepad.UI.Model
             FileSize = fileSize;
         }
 
-        public IEnumerable<long> SearchInFile(long startOffset, char charToSearch, IProgress<int> progress)
+        public IEnumerable<long> Search(long startOffset, char charToSearch, IProgress<int> progress)
         {
             int lastReportValue = (int)(startOffset * 100 / FileSize);
             progress.Report(lastReportValue);
@@ -56,7 +56,7 @@ namespace FujiyNotepad.UI.Model
 
 
         //TODO mudar para search backward
-        public long SearchNewLineBefore(long startOffset)
+        public long SearchBackward(long startOffset)
         {
             if (startOffset == 0)
             {
