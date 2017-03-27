@@ -136,7 +136,7 @@ namespace FujiyNotepad.UI
             var nextLineOffset = searcher.SearchInFile(startOffset, '\n', new Progress<int>()).Take(linesInVewport).LastOrDefault();
             if (nextLineOffset != default(long))
             {
-                return nextLineOffset;
+                return nextLineOffset - startOffset;
             }
             return fileSize - startOffset;
         }
