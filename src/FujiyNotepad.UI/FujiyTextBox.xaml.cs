@@ -105,7 +105,7 @@ namespace FujiyNotepad.UI
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
-            startOffset = searcher.SearchBackward(startOffset);
+            startOffset = searcher.SearchBackward(startOffset, '\n', new Progress<int>()).FirstOrDefault();
             lastOffset = startOffset;
             long length = GetLengthToFillViewport(startOffset);
 
@@ -191,15 +191,17 @@ namespace FujiyNotepad.UI
 
             switch (e.Key)
             {
-                //case Key.Up:
-                //    linesToScroll = -1;
-                //    break;
+                case Key.Up:
+                    //TODO só deveria fazer o scroll caso esteja na primeira linha
+                    linesToScroll = -1;
+                    break;
                 case Key.Down:
+                    //TODO só deveria fazer o scroll caso esteja na ultima linha
                     linesToScroll = 1;
                     break;
-                //case Key.PageUp:
-                //    linesToScroll = -TxtContent.GetLastVisibleLineIndex();
-                //    break;
+                case Key.PageUp:
+                    linesToScroll = -(CountVisibleLines() - 2);
+                    break;
                 case Key.PageDown:
                     linesToScroll = CountVisibleLines() - 2;
                     break;
@@ -208,11 +210,25 @@ namespace FujiyNotepad.UI
             }
 
             e.Handled = true;
-            var nextLineOffset = searcher.Search(lastOffset, '\n', new Progress<int>()).Take(linesToScroll).LastOrDefault();
-            if (nextLineOffset != default(long))
+
+            if (linesToScroll != 0)
             {
-                GoToOffset(nextLineOffset);
-                UpdateScrollBarFromOffset(nextLineOffset);
+                long? nextLineOffset;
+                if (linesToScroll < 0)
+                {
+                    long startOffset = Math.Max(lastOffset - 1, 0);
+                    nextLineOffset = searcher.SearchBackward(startOffset, '\n', new Progress<int>()).Take(-linesToScroll).Cast<long?>().LastOrDefault();
+                }
+                else
+                {
+                    nextLineOffset = searcher.Search(lastOffset, '\n', new Progress<int>()).Take(linesToScroll).Cast<long?>().LastOrDefault();
+                }
+
+                if (nextLineOffset != null)
+                {
+                    GoToOffset(nextLineOffset.Value);
+                    UpdateScrollBarFromOffset(nextLineOffset.Value);
+                }
             }
         }
     }

@@ -22,8 +22,10 @@ namespace FujiyNotepad.UI.Model
 
         public IEnumerable<long> Search(long startOffset, char charToSearch, IProgress<int> progress)
         {
-            int lastReportValue = (int)(startOffset * 100 / FileSize);
+            int lastReportValue = 0;// (int)(startOffset * 100 / FileSize);
             progress.Report(lastReportValue);
+
+            //TODO validar se startOffset é o tamanho do arquivo?
 
             do
             {
@@ -56,48 +58,57 @@ namespace FujiyNotepad.UI.Model
 
 
         //TODO mudar para search backward
-        public long SearchBackward(long startOffset)
+        public IEnumerable<long> SearchBackward(long startOffset, char charToSearch, IProgress<int> progress)
         {
+            if(startOffset < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(startOffset), $"{nameof(startOffset)} cannot be negative");
+            }
             if (startOffset == 0)
             {
-                return 0;
+                yield break;
             }
+
+            int lastReportValue = 0;
+            progress.Report(lastReportValue);
+
             long searchBackOffset = startOffset;
-            long searchSizePerIteration = Math.Min(searchSize, startOffset);
 
             do
             {
-                searchBackOffset = Math.Max(searchBackOffset - searchSizePerIteration, 0);
+                long searchSizePerIteration = Math.Min(searchSize, searchBackOffset);
+                searchBackOffset = searchBackOffset - searchSizePerIteration;// Math.Max(searchBackOffset - searchSizePerIteration, 0);
 
                 using (var stream = mFile.CreateViewStream(searchBackOffset, searchSizePerIteration, MemoryMappedFileAccess.Read))
                 using (var streamReader = new StreamReader(stream))
                 {
-                    var newLineAt = streamReader.ReadToEnd().LastIndexOf('\n');
-
-                    if (newLineAt > -1)
-                    {
-                        return searchBackOffset + newLineAt + 1;
-                    }
-
-
-                    /*
                     stream.Seek(0, SeekOrigin.End);
 
                     while (stream.Position > 0)
                     {
                         stream.Seek(-1, SeekOrigin.Current);
-                        if(stream.ReadByte() == '\n')
+                        if(stream.ReadByte() == charToSearch)
                         {
-                            return currentPosition;
+                            yield return stream.Position;
                         }
                         stream.Seek(-1, SeekOrigin.Current);
-                    }
-                    */
+                    }                    
+                }
+
+                int progressValue = (int)((FileSize - startOffset) * 100 / FileSize);
+                if (lastReportValue != progressValue)
+                {
+                    lastReportValue = progressValue;
+                    progress.Report(progressValue);
                 }
             }
             while (searchBackOffset > 0);
 
-            return 0;
+            //Implicit new line at file start
+            if(charToSearch == '\n')
+            {
+                yield return 0;
+            }
         }
     }
 }
