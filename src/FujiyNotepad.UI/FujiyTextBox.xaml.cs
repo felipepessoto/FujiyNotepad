@@ -28,7 +28,6 @@ namespace FujiyNotepad.UI
         MemoryMappedFile mFile;
         long fileSize;
         string filePath;
-        long viewPortSize = 1024 * 1024 * 1024;//TODO precisa ser dinamico
         StringBuilder sb = new StringBuilder();
         long maximumStartOffset;
         TextSearcher searcher;
@@ -39,10 +38,12 @@ namespace FujiyNotepad.UI
         {
             InitializeComponent();
             TxtContent.Margin = new Thickness(0, 0, ContentScrollBar.Width, 0);
+            IsEnabled = false;
         }
 
         public void OpenFile(string filePath)
         {
+            IsEnabled = true;
             if (mFile != null)
             {
                 mFile.Dispose();//TODO pensar em uma forma melhor de clean, talvez remover todo o User Control
@@ -59,6 +60,7 @@ namespace FujiyNotepad.UI
             LineIndexer = new LineIndexer(searcher);
 
             GoToOffset(0);
+            ContentScrollBar.Value = 0;
         }
 
         public void GoToLineNumber(int lineNumber)
@@ -175,6 +177,7 @@ namespace FujiyNotepad.UI
                 TxtContent.Text = new string('\n', 500);
                 lineIndex = TxtContent.GetLastVisibleLineIndex();
                 TxtContent.Text = temp;
+                //TODO as vezes retorna 500
             }
             return lineIndex + 1;
         }
