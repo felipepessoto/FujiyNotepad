@@ -49,10 +49,10 @@ namespace FujiyNotepad.UI
             }
 
             this.filePath = filePath;
+            fileSize = new FileInfo(filePath).Length;
 
             maximumStartOffset = GetMaximumStartOffset();
-
-            fileSize = new FileInfo(filePath).Length;
+            
             mFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
 
             searcher = new TextSearcher(mFile, fileSize);
@@ -107,6 +107,8 @@ namespace FujiyNotepad.UI
             lastOffset = startOffset;
             long length = GetLengthToFillViewport(startOffset);
 
+            Debug.Assert(length > 0);
+
             using (var stream = mFile.CreateViewStream(startOffset, length, MemoryMappedFileAccess.Read))
             using (var streamReader = new StreamReader(stream))
             {
@@ -132,15 +134,27 @@ namespace FujiyNotepad.UI
             {
                 fs.Seek(0, SeekOrigin.End);
                 int newLines = 0;
+                int visibleLines = CountVisibleLines();//TODO precisa atualizar sempre que fizer resize
 
-                while (newLines < 3 && fs.Position > 0)//TODO testar arquivo pequeno
+                while (newLines < visibleLines && fs.Position > 0)//TODO testar arquivo pequeno
                 {
                     fs.Seek(-2, SeekOrigin.Current);
                     newLines += fs.ReadByte() == '\n' ? 1 : 0;
                 }
 
-                return fs.Position;
+                return Math.Min(fs.Position, fileSize -1);
             }
+        }
+
+        private int CountVisibleLines()
+        {
+            string temp = TxtContent.Text;
+
+            TxtContent.Text = new string('\n', 500);
+            int visibleLines = TxtContent.GetLastVisibleLineIndex();
+            TxtContent.Text = temp;
+
+            return visibleLines;
         }
 
         private void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -169,7 +183,7 @@ namespace FujiyNotepad.UI
             }
 
             e.Handled = true;
-            var nextLineOffset = searcher.SearchInFile(lastOffset, '\n', new Progress<int>()).Take(linesToScroll).Last();
+            var nextLineOffset = searcher.SearchInFile(lastOffset, '\n', new Progress<int>()).Take(linesToScroll).LastOrDefault();
             if (nextLineOffset != default(long))
             {
                 GoToOffset(nextLineOffset);
