@@ -96,7 +96,7 @@ namespace FujiyNotepad.UI
             {
                 var progress = new Progress<int>(percent =>
                 {
-                    LblStatus.Text = percent + "% indexed";//TODO criar status bar
+                    LblStatus.Text = percent + "% indexed";
                 });
 
                 cancelIndexingTokenSource = new CancellationTokenSource();
