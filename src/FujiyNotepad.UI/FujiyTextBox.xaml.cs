@@ -51,8 +51,8 @@ namespace FujiyNotepad.UI
             this.filePath = filePath;
             fileSize = new FileInfo(filePath).Length;
 
-            maximumStartOffset = GetMaximumStartOffset();
-            
+            maximumStartOffset = GetMaximumStartOffset();//TODO precisa atualizar sempre que fizer resize
+
             mFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
 
             searcher = new TextSearcher(mFile, fileSize);
@@ -113,10 +113,17 @@ namespace FujiyNotepad.UI
             using (var streamReader = new StreamReader(stream))
             {
                 sb.Clear();
-
-                for (int i = 0; i < 100 && streamReader.EndOfStream == false; i++)
+                int linesInVewport = CountVisibleLines();
+                for (int i = 0; i < linesInVewport && streamReader.EndOfStream == false; i++)
                 {
-                    sb.AppendLine(streamReader.ReadLine());
+                    if (i == linesInVewport - 1)
+                    {
+                        sb.Append(streamReader.ReadLine());
+                    }
+                    else
+                    {
+                        sb.AppendLine(streamReader.ReadLine());
+                    }
                 }
 
                 TxtContent.Text = sb.ToString();
@@ -125,7 +132,13 @@ namespace FujiyNotepad.UI
 
         private long GetLengthToFillViewport(long startOffset)
         {
-            return Math.Min(fileSize - startOffset, viewPortSize);
+            int linesInVewport = CountVisibleLines();
+            var nextLineOffset = searcher.SearchInFile(startOffset, '\n', new Progress<int>()).Take(linesInVewport).LastOrDefault();
+            if (nextLineOffset != default(long))
+            {
+                return nextLineOffset;
+            }
+            return fileSize - startOffset;
         }
 
         private long GetMaximumStartOffset()
@@ -134,7 +147,7 @@ namespace FujiyNotepad.UI
             {
                 fs.Seek(0, SeekOrigin.End);
                 int newLines = 0;
-                int visibleLines = CountVisibleLines();//TODO precisa atualizar sempre que fizer resize
+                int visibleLines = CountVisibleLines();
 
                 while (newLines < visibleLines && fs.Position > 0)//TODO testar arquivo pequeno
                 {
@@ -142,19 +155,28 @@ namespace FujiyNotepad.UI
                     newLines += fs.ReadByte() == '\n' ? 1 : 0;
                 }
 
-                return Math.Min(fs.Position, fileSize -1);
+                return Math.Min(fs.Position, fileSize - 1);
             }
         }
 
         private int CountVisibleLines()
         {
-            string temp = TxtContent.Text;
+            //Implement cache to the result. Refresh on resize.
+            int lineIndex;
 
-            TxtContent.Text = new string('\n', 500);
-            int visibleLines = TxtContent.GetLastVisibleLineIndex();
-            TxtContent.Text = temp;
-
-            return visibleLines;
+            if (TxtContent.Text != string.Empty)
+            {
+                lineIndex = TxtContent.GetLastVisibleLineIndex();
+            }
+            else
+            {
+                //TODO tratar casos onde tem texto mas não preenche a tela toda
+                string temp = TxtContent.Text;
+                TxtContent.Text = new string('\n', 500);
+                lineIndex = TxtContent.GetLastVisibleLineIndex();
+                TxtContent.Text = temp;
+            }
+            return lineIndex + 1;
         }
 
         private void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -176,7 +198,7 @@ namespace FujiyNotepad.UI
                 //    linesToScroll = -TxtContent.GetLastVisibleLineIndex();
                 //    break;
                 case Key.PageDown:
-                    linesToScroll = TxtContent.GetLastVisibleLineIndex() - 1;
+                    linesToScroll = CountVisibleLines() - 2;
                     break;
                 default:
                     return; //Only to make the compiler happy about the linesToScroll variable
