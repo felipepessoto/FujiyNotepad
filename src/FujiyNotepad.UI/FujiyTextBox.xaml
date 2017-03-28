@@ -8,6 +8,6 @@
              d:DesignHeight="300" d:DesignWidth="300">
     <Grid>
         <TextBox Name="TxtContent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalScrollBarVisibility="Auto" IsUndoEnabled="False" VerticalScrollBarVisibility="Disabled" PreviewKeyDown="TxtContent_PreviewKeyDown" />
-        <ScrollBar Name="ContentScrollBar" HorizontalAlignment="Right" VerticalAlignment="Stretch" Maximum="1000" Scroll="ScrollBar_Scroll"/>
+        <ScrollBar Name="ContentScrollBar" HorizontalAlignment="Right" VerticalAlignment="Stretch" Maximum="1000" Scroll="ScrollBar_Scroll" />
     </Grid>
 </UserControl>
