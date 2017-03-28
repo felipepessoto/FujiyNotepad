@@ -61,6 +61,7 @@ namespace FujiyNotepad.UI
 
             GoToOffset(0);
             ContentScrollBar.Value = 0;
+            TxtContent.Focus();
         }
 
         public void GoToLineNumber(int lineNumber)
@@ -192,12 +193,19 @@ namespace FujiyNotepad.UI
             switch (e.Key)
             {
                 case Key.Up:
-                    //TODO só deveria fazer o scroll caso esteja na primeira linha
+                    if (TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex) > 0)
+                    {
+                        return;
+                    }
                     linesToScroll = -1;
                     break;
                 case Key.Down:
-                    //TODO só deveria fazer o scroll caso esteja na ultima linha
+                    if ((TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex) + 1) < CountVisibleLines())
+                    {
+                        return;
+                    }
                     linesToScroll = 1;
+
                     break;
                 case Key.PageUp:
                     linesToScroll = -(CountVisibleLines() - 2);
