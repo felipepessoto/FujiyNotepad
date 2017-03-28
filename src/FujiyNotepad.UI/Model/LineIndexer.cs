@@ -36,7 +36,7 @@ namespace FujiyNotepad.UI.Model
             foreach (long result in searcher.Search(startOffset, '\n', progress))
             {
                 cancelToken.ThrowIfCancellationRequested();
-                lineNumberIndex.Add(result);
+                lineNumberIndex.Add(result + 1);
             }
 
             IsCompleted = true;

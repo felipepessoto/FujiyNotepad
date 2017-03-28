@@ -40,7 +40,7 @@ namespace FujiyNotepad.UI.Model
                         byteRead = stream.ReadByte();
                         if (byteRead == charToSearch)
                         {
-                            yield return startOffset + stream.Position;
+                            yield return startOffset + stream.Position -1;
                         }
                     } while (byteRead > -1);
                 }
