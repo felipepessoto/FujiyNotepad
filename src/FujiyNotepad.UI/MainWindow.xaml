@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FujiyNotepad.UI"
+        xmlns:commands="clr-namespace:FujiyNotepad.UI.Commands"
         mc:Ignorable="d"
         Title="MainWindow" Height="350" Width="525" WindowState="Maximized">
     <Grid>
@@ -14,7 +15,7 @@
                 <MenuItem Name="Exit" Header="E_xit" Click="Exit_Click" />
             </MenuItem>
             <MenuItem Name="EditMenu" Header="_Edit" IsEnabled="False">
-                <MenuItem Name="MenuGoToLine" Header="_Go To..." Click="MenuGoToLine_Click"/>
+                <MenuItem Name="MenuGoToLine" Header="_Go To..." Click="MenuGoToLine_Click" InputGestureText="Ctrl+G" />
                 <MenuItem Name="StartIndexLineNumber" Header="Start indexing" Click="StartIndexLineNumber_Click" />
                 <MenuItem Name="StopIndexLineNumber" Header="Stop indexing" Click="StopIndexLineNumber_Click" IsEnabled="False" />
             </MenuItem>
@@ -29,4 +30,12 @@
             </StatusBarItem>
         </StatusBar>
     </Grid>
+
+    <Window.InputBindings>
+        <KeyBinding Modifiers="Control" Key="G">
+            <KeyBinding.Command>
+                <commands:GoToLineCommand Executed="GoToLineCommand_OnExecuted"/>
+            </KeyBinding.Command>
+        </KeyBinding>
+    </Window.InputBindings>
 </Window>

@@ -35,5 +35,10 @@ namespace FujiyNotepad.UI
             }
             this.Close();
         }
+
+        private void BtnCancel_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
     }
 }

@@ -20,6 +20,19 @@ namespace FujiyNotepad.UI
 
         private void MenuGoToLine_Click(object sender, RoutedEventArgs e)
         {
+            GoToLine();
+        }
+
+        private void GoToLineCommand_OnExecuted(object sender, object e)
+        {
+            if (EditMenu.IsEnabled)
+            {
+                GoToLine();
+            }
+        }
+
+        private void GoToLine()
+        {
             GoToLine goToWindows = new GoToLine();
             goToWindows.ShowDialog();
             if (goToWindows.LineNumber > 0)

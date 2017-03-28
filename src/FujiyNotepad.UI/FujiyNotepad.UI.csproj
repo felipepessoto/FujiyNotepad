@@ -71,6 +71,7 @@
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Commands\GoToLineCommand.cs" />
     <Compile Include="FujiyTextBox.xaml.cs">
       <DependentUpon>FujiyTextBox.xaml</DependentUpon>
     </Compile>
