@@ -194,7 +194,7 @@ namespace FujiyNotepad.UI
             {
                 fs.Seek(0, SeekOrigin.End);
                 int newLines = 0;
-                int visibleLines = CountVisibleLines();
+                int visibleLines = CountVisibleLines() - 2;//Rows behind horizontal scrollbar
 
                 while (newLines < visibleLines && fs.Position > 0)//TODO testar arquivo pequeno
                 {
