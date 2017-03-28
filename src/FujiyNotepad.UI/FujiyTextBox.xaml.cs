@@ -8,13 +8,12 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace FujiyNotepad.UI
 {
-    /// <summary>
-    /// Interaction logic for FujiyTextBox.xaml
-    /// </summary>
     public partial class FujiyTextBox : UserControl
     {
         MemoryMappedFile mFile;
@@ -86,64 +85,33 @@ namespace FujiyNotepad.UI
             ContentScrollBar.Value = newScrollValue;
         }
 
-        private void ScrollBar_Scroll(object sender, System.Windows.Controls.Primitives.ScrollEventArgs e)
+        private void ScrollBar_Scroll(object sender, ScrollEventArgs e)
         {
-            //TODO implementar Large Increment/Decrement
-            //Mas antes juntar com o codigo do PreviewKeyDown
-            //A diferença é que no PreviewKeyDown o Caret tem que se mover junto
-            if (e.ScrollEventType == ScrollEventType.SmallDecrement)
+            //TODO evitar que seja chamado varias vezes em menos de 100ms
+
+            int linesToScroll;
+
+            switch (e.ScrollEventType)
             {
-                ScrollLineUp();
+                case ScrollEventType.SmallDecrement:
+                    linesToScroll = -1;
+                    break;
+                case ScrollEventType.SmallIncrement:
+                    linesToScroll = 1;
+                    break;
+                case ScrollEventType.LargeDecrement:
+                    linesToScroll = -(CountVisibleLines() - 2);
+                    break;
+                case ScrollEventType.LargeIncrement:
+                    linesToScroll = CountVisibleLines() - 2;
+                    break;
+                default:
+                    long startOffset = (long)(fileSize * e.NewValue / ContentScrollBar.Maximum);
+                    GoToOffset(startOffset);
+                    return;
             }
-            else if(e.ScrollEventType == ScrollEventType.SmallIncrement)
-            {
-                ScrollLineDown();
-            }
-            else
-            {
-                //TODO evitar que seja chamado varias vezes em menos de 100ms
-                long startOffset = (long)(fileSize * e.NewValue / ContentScrollBar.Maximum);
 
-                GoToOffset(startOffset);
-            }
-        }
-
-        //TODO é possível juntar com o codigo do TxtContent_PreviewKeyDown?
-        private void ScrollLineUp()
-        {
-            int lineIndex = TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex);
-            int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
-
-            long startOffset = Math.Max(lastOffset - 1, 0);
-            long? nextLineOffset = searcher.SearchBackward(startOffset, '\n', new Progress<int>()).Cast<long?>().FirstOrDefault() + 1;
-
-            if (nextLineOffset != null)
-            {
-                GoToOffset(nextLineOffset.Value);
-                UpdateScrollBarFromOffset(nextLineOffset.Value);
-
-                //int newLineIndex = lineIndex + 1;
-                //int newColumn = Math.Min(column, TxtContent.GetLineLength(newLineIndex));
-                TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(lineIndex + 1) + column;
-            }
-        }
-
-        private void ScrollLineDown()
-        {
-            int lineIndex = TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex);
-            int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
-
-            long? nextLineOffset = searcher.Search(lastOffset, '\n', new Progress<int>()).Cast<long?>().FirstOrDefault() + 1;
-
-            if (nextLineOffset != null)
-            {
-                GoToOffset(nextLineOffset.Value);
-                UpdateScrollBarFromOffset(nextLineOffset.Value);
-
-                int newLineIndex = Math.Max(lineIndex - 1, 0);
-                int newColumn = Math.Min(column, TxtContent.GetLineLength(newLineIndex));
-                TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(newLineIndex) + newColumn;
-            }
+            ScrollContent(linesToScroll, true);
         }
 
         private void GoToOffset(long startOffset)
@@ -229,7 +197,7 @@ namespace FujiyNotepad.UI
 
         private void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            int lineIndex = TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex);// TxtContent.GetLineIndexFromCharacterIndex(TxtContent.SelectionStart);
+            int lineIndex = GetCarretLineIndex();
             int line = lineIndex + 1;
             int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
 
@@ -264,6 +232,14 @@ namespace FujiyNotepad.UI
 
             e.Handled = true;
 
+            ScrollContent(linesToScroll, false);
+        }
+
+        private void ScrollContent(int linesToScroll, bool keepCaretAtSameLine)
+        {
+            int lineIndex = GetCarretLineIndex();
+            int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
+
             if (linesToScroll != 0)
             {
                 long? nextLineOffset;
@@ -282,10 +258,16 @@ namespace FujiyNotepad.UI
                     GoToOffset(nextLineOffset.Value);
                     UpdateScrollBarFromOffset(nextLineOffset.Value);
 
-                    int newColumn = Math.Min(column, TxtContent.GetLineLength(lineIndex));
-                    TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(lineIndex) + newColumn;
+                    int newLineIndex = Math.Max(keepCaretAtSameLine ? lineIndex - linesToScroll: lineIndex, 0);
+                    int newColumn = Math.Min(column, TxtContent.GetLineLength(newLineIndex));
+                    TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(newLineIndex) + newColumn;
                 }
             }
+        }
+
+        private int GetCarretLineIndex()
+        {
+            return TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex);
         }
     }
 }
