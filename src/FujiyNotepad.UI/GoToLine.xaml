@@ -9,7 +9,7 @@
     <Grid>
         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Line number:" VerticalAlignment="Top" Margin="10,0,0,0"/>
         <TextBox Name="TxtLineNumber" HorizontalAlignment="Left" Height="23" Text="" VerticalAlignment="Top" Width="191" Margin="10,21,0,0"/>
-        <Button Name="BtnGoTo" Content="Go To" HorizontalAlignment="Left" VerticalAlignment="Top" Width="75" Margin="10,49,0,0" Click="BtnGoTo_Click"/>
+        <Button Name="BtnGoTo" Content="Go To" HorizontalAlignment="Left" VerticalAlignment="Top" Width="75" Margin="10,49,0,0" Click="BtnGoTo_Click" IsDefault="True" />
 
     </Grid>
 </Window>

@@ -24,6 +24,7 @@ namespace FujiyNotepad.UI
         public GoToLine()
         {
             InitializeComponent();
+            TxtLineNumber.Focus();
         }
 
         private void BtnGoTo_Click(object sender, RoutedEventArgs e)
