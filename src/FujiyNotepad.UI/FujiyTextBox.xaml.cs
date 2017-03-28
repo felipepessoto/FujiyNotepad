@@ -220,9 +220,9 @@ namespace FujiyNotepad.UI
                 //TODO tratar casos onde tem texto mas não preenche a tela toda
                 string temp = TxtContent.Text;
                 TxtContent.Text = new string('\n', 500);
+                TxtContent.GetLineIndexFromCharacterIndex(0);//Workaround to GetLastVisibleLineIndex work at first
                 lineIndex = TxtContent.GetLastVisibleLineIndex();
                 TxtContent.Text = temp;
-                //TODO as vezes retorna 500
             }
             return lineIndex + 1;
         }
