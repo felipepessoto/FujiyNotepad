@@ -185,22 +185,23 @@ namespace FujiyNotepad.UI
 
         private void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            //int line = TxtContent.GetLineIndexFromCharacterIndex(TxtContent.SelectionStart);
-            //int column = TxtContent.SelectionStart - TxtContent.GetFirstCharIndexFromLine(line);
+            int lineIndex = TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex);
+            int line = lineIndex + 1;// TxtContent.GetLineIndexFromCharacterIndex(TxtContent.SelectionStart);
+            int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
 
             int linesToScroll;
 
             switch (e.Key)
             {
                 case Key.Up:
-                    if (TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex) > 0)
+                    if (line > 1)
                     {
                         return;
                     }
                     linesToScroll = -1;
                     break;
                 case Key.Down:
-                    if ((TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex) + 1) < CountVisibleLines())
+                    if (line < CountVisibleLines())
                     {
                         return;
                     }
@@ -214,7 +215,7 @@ namespace FujiyNotepad.UI
                     linesToScroll = CountVisibleLines() - 2;
                     break;
                 default:
-                    return; //Only to make the compiler happy about the linesToScroll variable
+                    return;
             }
 
             e.Handled = true;
@@ -237,6 +238,9 @@ namespace FujiyNotepad.UI
                     GoToOffset(nextLineOffset.Value);
                     UpdateScrollBarFromOffset(nextLineOffset.Value);
                 }
+
+                int newColumn = Math.Min(column, TxtContent.GetLineLength(lineIndex));
+                TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(lineIndex) + newColumn;
             }
         }
     }
