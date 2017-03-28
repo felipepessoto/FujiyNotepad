@@ -64,10 +64,6 @@ namespace FujiyNotepad.UI.Model
             {
                 throw new ArgumentOutOfRangeException(nameof(startOffset), $"{nameof(startOffset)} cannot be negative");
             }
-            if (startOffset == 0)
-            {
-                yield break;
-            }
 
             int lastReportValue = 0;
             progress.Report(lastReportValue);
@@ -79,20 +75,23 @@ namespace FujiyNotepad.UI.Model
                 long searchSizePerIteration = Math.Min(searchSize, searchBackOffset);
                 searchBackOffset = searchBackOffset - searchSizePerIteration;// Math.Max(searchBackOffset - searchSizePerIteration, 0);
 
-                using (var stream = mFile.CreateViewStream(searchBackOffset, searchSizePerIteration, MemoryMappedFileAccess.Read))
-                using (var streamReader = new StreamReader(stream))
+                if (searchSizePerIteration > 0)
                 {
-                    stream.Seek(0, SeekOrigin.End);
-
-                    while (stream.Position > 0)
+                    using (var stream = mFile.CreateViewStream(searchBackOffset, searchSizePerIteration, MemoryMappedFileAccess.Read))
+                    using (var streamReader = new StreamReader(stream))
                     {
-                        stream.Seek(-1, SeekOrigin.Current);
-                        if(stream.ReadByte() == charToSearch)
+                        stream.Seek(0, SeekOrigin.End);
+
+                        while (stream.Position > 0)
                         {
-                            yield return stream.Position;
+                            stream.Seek(-1, SeekOrigin.Current);
+                            if (stream.ReadByte() == charToSearch)
+                            {
+                                yield return searchBackOffset + stream.Position - 1;
+                            }
+                            stream.Seek(-1, SeekOrigin.Current);
                         }
-                        stream.Seek(-1, SeekOrigin.Current);
-                    }                    
+                    }
                 }
 
                 int progressValue = (int)((FileSize - startOffset) * 100 / FileSize);
@@ -107,7 +106,7 @@ namespace FujiyNotepad.UI.Model
             //Implicit new line at file start
             if(charToSearch == '\n')
             {
-                yield return 0;
+                yield return -1;
             }
         }
     }
