@@ -50,8 +50,7 @@ namespace FujiyNotepad.UI
             searcher = new TextSearcher(mFile, fileSize);
             LineIndexer = new LineIndexer(searcher);
 
-            GoToOffset(0);
-            ContentScrollBar.Value = 0;
+            GoToOffset(0, true);
             TxtContent.Focus();
         }
 
@@ -60,10 +59,7 @@ namespace FujiyNotepad.UI
             if (LineIndexer.GetNumberOfLinesIndexed() > lineNumber)
             {
                 long offset = LineIndexer.GetOffsetFromLineNumber(lineNumber);
-
-                UpdateScrollBarFromOffset(offset);
-
-                GoToOffset(offset);
+                GoToOffset(offset, true);
             }
             else
             {
@@ -107,14 +103,14 @@ namespace FujiyNotepad.UI
                     break;
                 default:
                     long startOffset = (long)(fileSize * e.NewValue / ContentScrollBar.Maximum);
-                    GoToOffset(startOffset);
+                    GoToOffset(startOffset, false);
                     return;
             }
 
             ScrollContent(linesToScroll, true);
         }
 
-        private void GoToOffset(long startOffset)
+        private long GoToOffset(long startOffset, bool updateScrollBar)
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
@@ -143,6 +139,12 @@ namespace FujiyNotepad.UI
 
                 TxtContent.Text = sb.ToString();
             }
+
+            if (updateScrollBar)
+            {
+                UpdateScrollBarFromOffset(startOffset);
+            }
+            return startOffset;
         }
 
         private long GetLengthToFillViewport(long startOffset)
@@ -226,6 +228,18 @@ namespace FujiyNotepad.UI
                 case Key.PageDown:
                     linesToScroll = CountVisibleLines() - 2;
                     break;
+                case Key.Home:
+                    if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
+                    {
+                        GoToOffset(0, true);
+                    }
+                    return;
+                case Key.End:
+                    if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
+                    {
+                        GoToOffset(maximumStartOffset, true);
+                    }
+                    return;
                 default:
                     return;
             }
@@ -255,10 +269,9 @@ namespace FujiyNotepad.UI
 
                 if (nextLineOffset != null)
                 {
-                    GoToOffset(nextLineOffset.Value);
-                    UpdateScrollBarFromOffset(nextLineOffset.Value);
+                    GoToOffset(nextLineOffset.Value, true);
 
-                    int newLineIndex = Math.Max(keepCaretAtSameLine ? lineIndex - linesToScroll: lineIndex, 0);
+                    int newLineIndex = Math.Max(keepCaretAtSameLine ? lineIndex - linesToScroll : lineIndex, 0);
                     int newColumn = Math.Min(column, TxtContent.GetLineLength(newLineIndex));
                     TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(newLineIndex) + newColumn;
                 }
