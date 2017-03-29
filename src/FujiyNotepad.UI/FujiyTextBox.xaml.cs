@@ -96,10 +96,10 @@ namespace FujiyNotepad.UI
                     linesToScroll = 1;
                     break;
                 case ScrollEventType.LargeDecrement:
-                    linesToScroll = -(CountVisibleLines() - 2);
+                    linesToScroll = -(CountVisibleLines() - 1);//TODO -(CountVisibleLines() - 2);
                     break;
                 case ScrollEventType.LargeIncrement:
-                    linesToScroll = CountVisibleLines() - 2;
+                    linesToScroll = CountVisibleLines() - 1;//TODO CountVisibleLines() - 2;
                     break;
                 default:
                     long startOffset = (long)(fileSize * e.NewValue / ContentScrollBar.Maximum);
@@ -164,7 +164,7 @@ namespace FujiyNotepad.UI
             {
                 fs.Seek(0, SeekOrigin.End);
                 int newLines = 0;
-                int visibleLines = CountVisibleLines() - 2;//Rows behind horizontal scrollbar
+                int visibleLines = CountVisibleLines() - 1;//TODO CountVisibleLines() - 2;//Rows behind horizontal scrollbar
 
                 while (newLines < visibleLines && fs.Position > 0)//TODO testar arquivo pequeno
                 {
@@ -178,6 +178,10 @@ namespace FujiyNotepad.UI
 
         private int CountVisibleLines()
         {
+            //TODO teste
+            int lines = (int)Math.Floor((TxtContent.VerticalOffset + TxtContent.ViewportHeight - 1) / (TxtContent.FontFamily.LineSpacing * TxtContent.FontSize));
+            return lines;
+
             //Implement cache to the result. Refresh on resize.
             int lineIndex;
 
@@ -223,10 +227,10 @@ namespace FujiyNotepad.UI
 
                     break;
                 case Key.PageUp:
-                    linesToScroll = -(CountVisibleLines() - 2);
+                    linesToScroll = -(CountVisibleLines() - 1);//TODO -(CountVisibleLines() - 2);
                     break;
                 case Key.PageDown:
-                    linesToScroll = CountVisibleLines() - 2;
+                    linesToScroll = CountVisibleLines() - 1;//TODO CountVisibleLines() - 2;
                     break;
                 case Key.Home:
                     if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
