@@ -7,6 +7,7 @@ using System.Windows.Input;
 
 namespace FujiyNotepad.UI.Commands
 {
+    //TODO precisa de um por comando? Só é usado para criar os atalhos e o mesmo é usado para o Find Text
     public class GoToLineCommand : ICommand
     {
         public event EventHandler<object> Executed;

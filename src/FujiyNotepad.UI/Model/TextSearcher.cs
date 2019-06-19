@@ -20,6 +20,7 @@ namespace FujiyNotepad.UI.Model
             FileSize = fileSize;
         }
 
+        //TODO usar somente a versao char[]
         public IEnumerable<long> Search(long startOffset, char charToSearch, IProgress<int> progress)
         {
             int lastReportValue = 0;// (int)(startOffset * 100 / FileSize);
@@ -40,7 +41,7 @@ namespace FujiyNotepad.UI.Model
                         byteRead = stream.ReadByte();
                         if (byteRead == charToSearch)
                         {
-                            yield return startOffset + stream.Position -1;
+                            yield return startOffset + stream.Position - 1;
                         }
                     } while (byteRead > -1);
                 }
@@ -56,11 +57,64 @@ namespace FujiyNotepad.UI.Model
             while (startOffset < FileSize);
         }
 
+        public IEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress)
+        {
+            int lastReportValue = 0;
+            progress.Report(lastReportValue);
+
+            //long bytesToRead = Math.Min(searchSize, FileSize - startOffset);
+            var buffer = new byte[charsToSearch.Length - 1];
+
+            using (var stream = mFile.CreateViewStream(startOffset, 0, MemoryMappedFileAccess.Read))
+            using (var streamReader = new StreamReader(stream))
+            {
+                int byteRead;
+                do
+                {
+                    byteRead = stream.ReadByte();
+                    var currentPosition = stream.Position;
+                    if (byteRead == charsToSearch[0])
+                    {
+                        bool equals = true;
+                        stream.Read(buffer, 0, charsToSearch.Length - 1);
+
+                        for (int i = 0; i < charsToSearch.Length - 1; i++)
+                        {
+                            if (buffer[i] != charsToSearch[i + 1])//TODO case insensitive
+                            {
+                                equals = false;
+                                break;
+                            }
+                        }
+
+                        if (equals)
+                        {
+                            yield return startOffset + stream.Position - 1;
+                        }
+                        else
+                        {
+                            stream.Position = currentPosition;
+                        }
+                    }
+
+                    long totalBytes = FileSize - startOffset;
+                    long currentProgress = currentPosition - startOffset;
+                    int progressValue = (int)(currentProgress * 100 / totalBytes);
+                    if (lastReportValue != progressValue)
+                    {
+                        lastReportValue = progressValue;
+                        progress.Report(progressValue);
+                    }
+
+                } while (byteRead > -1);
+            }
+        }
+
 
         //TODO mudar para search backward
         public IEnumerable<long> SearchBackward(long startOffset, char charToSearch, IProgress<int> progress)
         {
-            if(startOffset < 0)
+            if (startOffset < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(startOffset), $"{nameof(startOffset)} cannot be negative");
             }
@@ -104,7 +158,7 @@ namespace FujiyNotepad.UI.Model
             while (searchBackOffset > 0);
 
             //Implicit new line at file start
-            if(charToSearch == '\n')
+            if (charToSearch == '\n')
             {
                 yield return -1;
             }

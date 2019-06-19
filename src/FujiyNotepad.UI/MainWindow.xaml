@@ -16,6 +16,7 @@
             </MenuItem>
             <MenuItem Name="EditMenu" Header="_Edit" IsEnabled="False">
                 <MenuItem Name="MenuGoToLine" Header="_Go To..." Click="MenuGoToLine_Click" InputGestureText="Ctrl+G" />
+                <MenuItem Name="MenuFind" Header="_Find..." Click="MenuFind_Click" InputGestureText="Ctrl+F" />
                 <MenuItem Name="StartIndexLineNumber" Header="Start indexing" Click="StartIndexLineNumber_Click" />
                 <MenuItem Name="StopIndexLineNumber" Header="Stop indexing" Click="StopIndexLineNumber_Click" IsEnabled="False" />
             </MenuItem>
@@ -32,6 +33,11 @@
     </Grid>
 
     <Window.InputBindings>
+        <KeyBinding Modifiers="Control" Key="F">
+            <KeyBinding.Command>
+                <commands:GoToLineCommand Executed="FindTextCommand_OnExecuted"/>
+            </KeyBinding.Command>
+        </KeyBinding>
         <KeyBinding Modifiers="Control" Key="G">
             <KeyBinding.Command>
                 <commands:GoToLineCommand Executed="GoToLineCommand_OnExecuted"/>

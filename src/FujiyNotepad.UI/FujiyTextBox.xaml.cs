@@ -75,6 +75,15 @@ namespace FujiyNotepad.UI
             }
         }
 
+        public void FindText(string text)
+        {
+            var offsetOccurence = searcher.Search(0, text.ToCharArray(), new Progress<int>()).Cast<long?>().FirstOrDefault();
+            if (offsetOccurence.HasValue)
+            {
+                GoToOffset(offsetOccurence.GetValueOrDefault(), true);
+            }            
+        }
+
         private void UpdateScrollBarFromOffset(long offset)
         {
             double newScrollValue = offset * ContentScrollBar.Maximum / fileSize;

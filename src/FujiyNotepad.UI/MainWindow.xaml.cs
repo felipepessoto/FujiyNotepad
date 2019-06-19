@@ -41,6 +41,31 @@ namespace FujiyNotepad.UI
             }
         }
 
+        private void MenuFind_Click(object sender, RoutedEventArgs e)
+        {
+            FindText();
+        }
+
+        private void FindTextCommand_OnExecuted(object sender, object e)
+        {
+            if (EditMenu.IsEnabled)
+            {
+                FindText();
+            }
+        }
+
+        private void FindText()
+        {
+            FindTextWindow findTextWindow = new FindTextWindow();
+            findTextWindow.ShowDialog();
+            if (string.IsNullOrEmpty(findTextWindow.TextToFind) == false)
+            {
+                //TODO Como cancelar?
+                //TODO progresso
+                TextControl.FindText(findTextWindow.TextToFind);
+            }
+        }
+
         private void Open_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog dlg = new OpenFileDialog();
