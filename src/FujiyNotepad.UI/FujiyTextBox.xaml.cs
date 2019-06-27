@@ -25,6 +25,10 @@ namespace FujiyNotepad.UI
         public LineIndexer LineIndexer { get; set; }
         long lastOffset;
 
+        private bool IsChangingText { get; set; }
+        private long CarretSelectionOffset { get; set; }
+        private int CarretSelectionLength { get; set; }//TODO implement
+
         public FujiyTextBox()
         {
             InitializeComponent();
@@ -145,8 +149,10 @@ namespace FujiyNotepad.UI
                         sb.AppendLine(streamReader.ReadLine());
                     }
                 }
-
+                IsChangingText = true;
                 TxtContent.Text = sb.ToString();
+                IsChangingText = false;
+                UpdateCarretSelection();
             }
 
             if (updateScrollBar)
@@ -214,7 +220,6 @@ namespace FujiyNotepad.UI
         {
             int lineIndex = GetCarretLineIndex();
             int line = lineIndex + 1;
-            int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
 
             int linesToScroll;
 
@@ -264,9 +269,6 @@ namespace FujiyNotepad.UI
 
         private void ScrollContent(int linesToScroll, bool keepCaretAtSameLine)
         {
-            int lineIndex = GetCarretLineIndex();
-            int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
-
             if (linesToScroll != 0)
             {
                 long? nextLineOffset;
@@ -283,17 +285,37 @@ namespace FujiyNotepad.UI
                 if (nextLineOffset != null)
                 {
                     GoToOffset(nextLineOffset.Value, true);
-
-                    int newLineIndex = Math.Max(keepCaretAtSameLine ? lineIndex - linesToScroll : lineIndex, 0);
-                    int newColumn = Math.Min(column, TxtContent.GetLineLength(newLineIndex));
-                    TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(newLineIndex) + newColumn;
                 }
+            }
+        }
+
+        private void UpdateCarretSelection()
+        {
+            if (CarretSelectionOffset < lastOffset || CarretSelectionOffset > (lastOffset + TxtContent.Text.Length))
+            {
+                TxtContent.IsReadOnlyCaretVisible = false;
+            }
+            else
+            {
+                TxtContent.IsReadOnlyCaretVisible = true;
+                TxtContent.SelectionStart = (int)(CarretSelectionOffset - lastOffset);
             }
         }
 
         private int GetCarretLineIndex()
         {
             return TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex);
+        }
+
+        private void TxtContent_SelectionChanged(object sender, RoutedEventArgs e)
+        {
+            if (IsChangingText == false)
+            {
+                TxtContent.IsReadOnlyCaretVisible = true;
+                var txtContent = ((TextBox)e.OriginalSource);
+                CarretSelectionOffset = txtContent.SelectionStart + lastOffset;
+                CarretSelectionLength = txtContent.SelectionLength;
+            }
         }
     }
 }
