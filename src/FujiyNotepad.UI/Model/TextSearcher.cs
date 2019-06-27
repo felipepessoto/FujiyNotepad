@@ -20,43 +20,6 @@ namespace FujiyNotepad.UI.Model
             FileSize = fileSize;
         }
 
-        //TODO usar somente a versao char[]
-        public IEnumerable<long> Search(long startOffset, char charToSearch, IProgress<int> progress)
-        {
-            int lastReportValue = 0;// (int)(startOffset * 100 / FileSize);
-            progress.Report(lastReportValue);
-
-            //TODO validar se startOffset é o tamanho do arquivo?
-
-            do
-            {
-                long bytesToRead = Math.Min(searchSize, FileSize - startOffset);
-
-                using (var stream = mFile.CreateViewStream(startOffset, bytesToRead, MemoryMappedFileAccess.Read))
-                using (var streamReader = new StreamReader(stream))
-                {
-                    int byteRead;
-                    do
-                    {
-                        byteRead = stream.ReadByte();
-                        if (byteRead == charToSearch)
-                        {
-                            yield return startOffset + stream.Position - 1;
-                        }
-                    } while (byteRead > -1);
-                }
-                startOffset += bytesToRead;
-
-                int progressValue = (int)(startOffset * 100 / FileSize);
-                if (lastReportValue != progressValue)
-                {
-                    lastReportValue = progressValue;
-                    progress.Report(progressValue);
-                }
-            }
-            while (startOffset < FileSize);
-        }
-
         public IEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress)
         {
             int lastReportValue = 0;
