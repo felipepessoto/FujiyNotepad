@@ -159,7 +159,7 @@ namespace FujiyNotepad.UI
         private long GetLengthToFillViewport(long startOffset)
         {
             int linesInVewport = CountVisibleLines();
-            var nextLineOffset = searcher.Search(startOffset, '\n', new Progress<int>()).Take(linesInVewport).Cast<long?>().LastOrDefault() + 1;
+            var nextLineOffset = searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>()).Take(linesInVewport).Cast<long?>().LastOrDefault() + 1;
             if (nextLineOffset != null)
             {
                 return nextLineOffset.Value - startOffset;
@@ -277,7 +277,7 @@ namespace FujiyNotepad.UI
                 }
                 else
                 {
-                    nextLineOffset = searcher.Search(lastOffset, '\n', new Progress<int>()).Take(linesToScroll).Cast<long?>().LastOrDefault() + 1;
+                    nextLineOffset = searcher.Search(lastOffset, LineIndexer.LineBreakChar, new Progress<int>()).Take(linesToScroll).Cast<long?>().LastOrDefault() + 1;
                 }
 
                 if (nextLineOffset != null)

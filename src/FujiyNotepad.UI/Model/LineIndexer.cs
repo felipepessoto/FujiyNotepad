@@ -10,6 +10,8 @@ namespace FujiyNotepad.UI.Model
     public class LineIndexer
     {
         List<long> lineNumberIndex = new List<long>();
+        public static char[] LineBreakChar = new[] { '\n' };//ReadOnlySpan<char>
+
         private readonly TextSearcher searcher;
 
         public bool IsCompleted { get; set; }
@@ -33,7 +35,7 @@ namespace FujiyNotepad.UI.Model
                 startOffset = lineNumberIndex[lineNumberIndex.Count - 1];
             }
 
-            foreach (long result in searcher.Search(startOffset, '\n', progress))
+            foreach (long result in searcher.Search(startOffset, LineBreakChar, progress))
             {
                 cancelToken.ThrowIfCancellationRequested();
                 lineNumberIndex.Add(result + 1);
