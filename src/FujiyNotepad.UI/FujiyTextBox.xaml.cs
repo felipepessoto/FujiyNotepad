@@ -151,8 +151,8 @@ namespace FujiyNotepad.UI
                 }
                 IsChangingText = true;
                 TxtContent.Text = sb.ToString();
-                IsChangingText = false;
                 UpdateCarretSelection();
+                IsChangingText = false;
             }
 
             if (updateScrollBar)
@@ -291,14 +291,19 @@ namespace FujiyNotepad.UI
 
         private void UpdateCarretSelection()
         {
-            if (CarretSelectionOffset < lastOffset || CarretSelectionOffset > (lastOffset + TxtContent.Text.Length))
+            var lastSelectedCharOffset = CarretSelectionOffset + CarretSelectionLength;
+
+            if (lastSelectedCharOffset <= lastOffset || CarretSelectionOffset > (lastOffset + TxtContent.Text.Length))
             {
                 TxtContent.IsReadOnlyCaretVisible = false;
             }
             else
             {
                 TxtContent.IsReadOnlyCaretVisible = true;
-                TxtContent.SelectionStart = (int)(CarretSelectionOffset - lastOffset);
+                TxtContent.SelectionStart = Math.Max((int)(CarretSelectionOffset - lastOffset), 0);
+
+                int countSelectedCharsNotVisible = Math.Max((int)(lastOffset - CarretSelectionOffset), 0);
+                TxtContent.SelectionLength = CarretSelectionLength - countSelectedCharsNotVisible;
             }
         }
 
@@ -313,6 +318,7 @@ namespace FujiyNotepad.UI
             {
                 TxtContent.IsReadOnlyCaretVisible = true;
                 var txtContent = ((TextBox)e.OriginalSource);
+                //TODO if the user changes the end selection while the selected text is only partially visible, it inadvertently recalculates the CarretSelectionOffset
                 CarretSelectionOffset = txtContent.SelectionStart + lastOffset;
                 CarretSelectionLength = txtContent.SelectionLength;
             }
