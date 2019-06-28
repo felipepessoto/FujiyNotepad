@@ -219,6 +219,7 @@ namespace FujiyNotepad.UI
         private void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             int lineIndex = GetCarretLineIndex();
+            int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
             int line = lineIndex + 1;
 
             int linesToScroll;
@@ -262,9 +263,17 @@ namespace FujiyNotepad.UI
                     return;
             }
 
-            e.Handled = true;
-
             ScrollContent(linesToScroll, false);
+
+            switch (e.Key)
+            {
+                case Key.PageUp:
+                case Key.PageDown:
+                    int newColumn = Math.Min(column, TxtContent.GetLineLength(lineIndex));
+                    TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(lineIndex) + newColumn;
+                    e.Handled = true;
+                    break;
+            }
         }
 
         private void ScrollContent(int linesToScroll, bool keepCaretAtSameLine)
