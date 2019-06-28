@@ -302,7 +302,7 @@ namespace FujiyNotepad.UI
         {
             var lastSelectedCharOffset = CarretSelectionOffset + CarretSelectionLength;
 
-            if (lastSelectedCharOffset <= lastOffset || CarretSelectionOffset > (lastOffset + TxtContent.Text.Length))
+            if (lastSelectedCharOffset < lastOffset || CarretSelectionOffset > (lastOffset + TxtContent.Text.Length))
             {
                 TxtContent.IsReadOnlyCaretVisible = false;
             }
