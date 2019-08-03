@@ -53,7 +53,7 @@ namespace FujiyNotepad.UI.Model
 
                         if (equals)
                         {
-                            yield return startOffset + stream.Position - 1;
+                            yield return startOffset + currentPosition - 1;// stream.Position - 1;
                         }
                         else
                         {
