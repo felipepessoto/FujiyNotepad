@@ -21,7 +21,7 @@ namespace FujiyNotepad.UI.Model
             this.searcher = searcher;
         }
 
-        public void StartTaskToIndexLines(CancellationToken cancelToken, IProgress<int> progress)
+        public async Task StartTaskToIndexLines(CancellationToken cancelToken, IProgress<int> progress)
         {
             long startOffset = 0;
 
@@ -35,7 +35,7 @@ namespace FujiyNotepad.UI.Model
                 startOffset = lineNumberIndex[lineNumberIndex.Count - 1];
             }
 
-            foreach (long result in searcher.Search(startOffset, LineBreakChar, progress))
+            await foreach (long result in searcher.Search(startOffset, LineBreakChar, progress))
             {
                 cancelToken.ThrowIfCancellationRequested();
                 lineNumberIndex.Add(result + 1);

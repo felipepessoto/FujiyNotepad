@@ -18,26 +18,26 @@ namespace FujiyNotepad.UI
             InitializeComponent();
         }
 
-        private void MenuGoToLine_Click(object sender, RoutedEventArgs e)
+        private async void MenuGoToLine_Click(object sender, RoutedEventArgs e)
         {
-            GoToLine();
+            await GoToLine();
         }
 
-        private void GoToLineCommand_OnExecuted(object sender, object e)
+        private async void GoToLineCommand_OnExecuted(object sender, object e)
         {
             if (EditMenu.IsEnabled)
             {
-                GoToLine();
+                await GoToLine();
             }
         }
 
-        private void GoToLine()
+        private async Task GoToLine()
         {
             GoToLine goToWindows = new GoToLine();
             goToWindows.ShowDialog();
             if (goToWindows.LineNumber > 0)
             {
-                TextControl.GoToLineNumber(goToWindows.LineNumber);
+                await TextControl.GoToLineNumber(goToWindows.LineNumber);
             }
         }
 
@@ -56,17 +56,11 @@ namespace FujiyNotepad.UI
 
         private void FindText()
         {
-            FindTextWindow findTextWindow = new FindTextWindow();
+            FindTextWindow findTextWindow = new FindTextWindow(TextControl);
             findTextWindow.ShowDialog();
-            if (string.IsNullOrEmpty(findTextWindow.TextToFind) == false)
-            {
-                //TODO Como cancelar?
-                //TODO progresso
-                TextControl.FindText(findTextWindow.TextToFind);
-            }
         }
 
-        private void Open_Click(object sender, RoutedEventArgs e)
+        private async void Open_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog dlg = new OpenFileDialog();
 
@@ -75,16 +69,16 @@ namespace FujiyNotepad.UI
             if (result == true)
             {
                 string filePath = dlg.FileName;
-                OpenFile(filePath);
+                await OpenFile(filePath);
             }
         }
 
-        private Task OpenFile(string filePath)
+        private async Task OpenFile(string filePath)
         {
             cancelIndexingTokenSource?.Cancel();
-            TextControl.OpenFile(filePath);
+            await TextControl.OpenFile(filePath);
             EnableMenu();
-            return StartOrResumeIndexing();
+            StartOrResumeIndexing();
         }
 
         private void EnableMenu()
@@ -92,11 +86,11 @@ namespace FujiyNotepad.UI
             EditMenu.IsEnabled = true;
         }
 
-        private void OpenSample_Click(object sender, RoutedEventArgs e)
+        private async void OpenSample_Click(object sender, RoutedEventArgs e)
         {
             string filePath = @"Sample.txt";
             CreateFakeFile(filePath);
-            OpenFile(filePath);
+            await OpenFile(filePath);
         }
 
         private void CreateFakeFile(string filePath)

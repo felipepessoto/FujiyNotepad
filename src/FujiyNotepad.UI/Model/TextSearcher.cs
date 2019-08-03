@@ -20,7 +20,7 @@ namespace FujiyNotepad.UI.Model
             FileSize = fileSize;
         }
 
-        public IEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress)
+        public async IAsyncEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress)
         {
             int lastReportValue = 0;
             progress.Report(lastReportValue);
@@ -39,7 +39,7 @@ namespace FujiyNotepad.UI.Model
                     if (byteRead == charsToSearch[0])
                     {
                         bool equals = true;
-                        stream.Read(buffer, 0, charsToSearch.Length - 1);
+                        await stream.ReadAsync(buffer, 0, charsToSearch.Length - 1);
 
                         for (int i = 0; i < charsToSearch.Length - 1; i++)
                         {

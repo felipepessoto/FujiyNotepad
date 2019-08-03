@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -36,7 +37,7 @@ namespace FujiyNotepad.UI
             IsEnabled = false;
         }
 
-        public void OpenFile(string filePath)
+        public async Task OpenFile(string filePath)
         {
             IsEnabled = true;
             if (mFile != null)
@@ -54,16 +55,16 @@ namespace FujiyNotepad.UI
             searcher = new TextSearcher(mFile, fileSize);
             LineIndexer = new LineIndexer(searcher);
 
-            GoToOffset(0, true);
+            await GoToOffset(0, true);
             TxtContent.Focus();
         }
 
-        public void GoToLineNumber(int lineNumber)
+        public async Task GoToLineNumber(int lineNumber)
         {
             if (LineIndexer.GetNumberOfLinesIndexed() > lineNumber)
             {
                 long offset = LineIndexer.GetOffsetFromLineNumber(lineNumber);
-                GoToOffset(offset, true);
+                await GoToOffset(offset, true);
             }
             else
             {
@@ -79,13 +80,13 @@ namespace FujiyNotepad.UI
             }
         }
 
-        public void FindText(string text)
+        public async Task FindText(string text, Progress<int> progress)
         {
-            var offsetOccurence = searcher.Search(0, text.ToCharArray(), new Progress<int>()).Cast<long?>().FirstOrDefault();
-            if (offsetOccurence.HasValue)
+            await foreach (var offsetOccurence in searcher.Search(0, text.ToCharArray(), progress))
             {
-                GoToOffset(offsetOccurence.GetValueOrDefault(), true);
-            }            
+                await GoToOffset(offsetOccurence, true);
+                break;
+            }           
         }
 
         private void UpdateScrollBarFromOffset(long offset)
@@ -94,7 +95,7 @@ namespace FujiyNotepad.UI
             ContentScrollBar.Value = newScrollValue;
         }
 
-        private void ScrollBar_Scroll(object sender, ScrollEventArgs e)
+        private async void ScrollBar_Scroll(object sender, ScrollEventArgs e)
         {
             //TODO evitar que seja chamado varias vezes em menos de 100ms
 
@@ -116,20 +117,20 @@ namespace FujiyNotepad.UI
                     break;
                 default:
                     long startOffset = (long)(fileSize * e.NewValue / ContentScrollBar.Maximum);
-                    GoToOffset(startOffset, false);
+                    await GoToOffset(startOffset, false);
                     return;
             }
 
-            ScrollContent(linesToScroll, true);
+            await ScrollContent(linesToScroll, true);
         }
 
-        private long GoToOffset(long startOffset, bool updateScrollBar)
+        private async Task<long> GoToOffset(long startOffset, bool updateScrollBar)
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
             startOffset = searcher.SearchBackward(startOffset, '\n', new Progress<int>()).FirstOrDefault() + 1;
             lastOffset = startOffset;
-            long length = GetLengthToFillViewport(startOffset);
+            long length = await GetLengthToFillViewport(startOffset);
 
             Debug.Assert(length > 0);
 
@@ -162,15 +163,34 @@ namespace FujiyNotepad.UI
             return startOffset;
         }
 
-        private long GetLengthToFillViewport(long startOffset)
+        private async Task<long> GetLengthToFillViewport(long startOffset)
         {
             int linesInVewport = CountVisibleLines();
-            var nextLineOffset = searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>()).Take(linesInVewport).Cast<long?>().LastOrDefault() + 1;
-            if (nextLineOffset != null)
+
+            if (linesInVewport > 0)
             {
-                return nextLineOffset.Value - startOffset;
+                await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>()))
+                {
+                    if (--linesInVewport == 0)
+                    {
+                        long nextLineOffset = offset + 1;
+                        return nextLineOffset - startOffset;
+                    }
+                }
             }
+
             return fileSize - startOffset;
+
+
+
+
+            //int linesInVewport = CountVisibleLines();
+            //var nextLineOffset = searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>()).Take(linesInVewport).Cast<long?>().LastOrDefault() + 1;
+            //if (nextLineOffset != null)
+            //{
+            //    return nextLineOffset.Value - startOffset;
+            //}
+            //return fileSize - startOffset;
         }
 
         private long GetMaximumStartOffset()
@@ -216,7 +236,7 @@ namespace FujiyNotepad.UI
             return lineIndex + 1;
         }
 
-        private void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
+        private async void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             int lineIndex = GetCarretLineIndex();
             int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
@@ -250,20 +270,20 @@ namespace FujiyNotepad.UI
                 case Key.Home:
                     if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
                     {
-                        GoToOffset(0, true);
+                        await GoToOffset(0, true);
                     }
                     return;
                 case Key.End:
                     if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
                     {
-                        GoToOffset(maximumStartOffset, true);
+                        await GoToOffset(maximumStartOffset, true);
                     }
                     return;
                 default:
                     return;
             }
 
-            ScrollContent(linesToScroll, false);
+            await ScrollContent(linesToScroll, false);
 
             switch (e.Key)
             {
@@ -276,7 +296,7 @@ namespace FujiyNotepad.UI
             }
         }
 
-        private void ScrollContent(int linesToScroll, bool keepCaretAtSameLine)
+        private async Task ScrollContent(int linesToScroll, bool keepCaretAtSameLine)
         {
             if (linesToScroll != 0)
             {
@@ -288,12 +308,24 @@ namespace FujiyNotepad.UI
                 }
                 else
                 {
-                    nextLineOffset = searcher.Search(lastOffset, LineIndexer.LineBreakChar, new Progress<int>()).Take(linesToScroll).Cast<long?>().LastOrDefault() + 1;
+                    //nextLineOffset = searcher.Search(lastOffset, LineIndexer.LineBreakChar, new Progress<int>()).Take(linesToScroll).Cast<long?>().LastOrDefault() + 1;
+                    nextLineOffset = 1;
+
+                    if (linesToScroll > 0)
+                    {
+                        await foreach (var offset in searcher.Search(lastOffset, LineIndexer.LineBreakChar, new Progress<int>()))
+                        {
+                            if (--linesToScroll == 0)
+                            {
+                                nextLineOffset = offset + 1;
+                            }
+                        }
+                    }
                 }
 
                 if (nextLineOffset != null)
                 {
-                    GoToOffset(nextLineOffset.Value, true);
+                    await GoToOffset(nextLineOffset.Value, true);
                 }
             }
         }

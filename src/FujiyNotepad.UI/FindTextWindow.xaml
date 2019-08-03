@@ -5,11 +5,12 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FujiyNotepad.UI"
         mc:Ignorable="d"
-        Title="Find" Height="130" Width="230" ResizeMode="NoResize">
+        Title="Find" Height="160" Width="230" ResizeMode="NoResize">
     <Grid>
         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Find what:" VerticalAlignment="Top" Margin="10,0,0,0"/>
-        <TextBox Name="TxtTextToFind" HorizontalAlignment="Left" Height="23" Text="" VerticalAlignment="Top" Width="199" Margin="10,21,0,0"/>
+        <TextBox Name="TxtTextToFind" HorizontalAlignment="Left" Height="23" Text="" VerticalAlignment="Top" Width="200" Margin="10,21,0,0"/>
         <Button Name="BtnFind" Content="Find Next" HorizontalAlignment="Left" VerticalAlignment="Top" Width="75" Margin="10,59,0,0"  IsDefault="True" Click="BtnFind_Click" />
         <Button Name="BtnCancel" Content="Cancel" HorizontalAlignment="Left" VerticalAlignment="Top" Width="75" Margin="117,59,0,0" Click="BtnCancel_Click" />
+        <ProgressBar Name="PgbProgress" Visibility="Visible" HorizontalAlignment="Left" Height="10" Margin="10,90,0,0" VerticalAlignment="Top" Width="200"/>
     </Grid>
 </Window>

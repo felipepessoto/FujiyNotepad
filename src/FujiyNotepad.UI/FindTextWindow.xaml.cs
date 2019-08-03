@@ -1,4 +1,6 @@
-﻿using System.Windows;
+﻿using System;
+using System.Threading.Tasks;
+using System.Windows;
 
 namespace FujiyNotepad.UI
 {
@@ -7,18 +9,30 @@ namespace FujiyNotepad.UI
     /// </summary>
     public partial class FindTextWindow : Window
     {
-        public string TextToFind { get; private set; }
+        private string TextToFind { get; set; }
+        private FujiyTextBox TextControl { get; }
 
-        public FindTextWindow()
+        Progress<int> ProgressStatus { get; }
+
+        public FindTextWindow(FujiyTextBox textControl)
         {
             InitializeComponent();
             TxtTextToFind.Focus();
+            TextControl = textControl;
+
+            ProgressStatus = new Progress<int>(percent =>
+            {
+                PgbProgress.Value = percent;
+            });
         }
 
-        private void BtnFind_Click(object sender, RoutedEventArgs e)
+        private async void BtnFind_Click(object sender, RoutedEventArgs e)
         {
             TextToFind = TxtTextToFind.Text;
-            Close();
+            if (string.IsNullOrEmpty(TextToFind) == false)
+            {
+                await Task.Run(() => { TextControl.FindText(TextToFind, ProgressStatus); });
+            }
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)
