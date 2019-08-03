@@ -85,9 +85,14 @@ namespace FujiyNotepad.UI
         {
             return Task.Run(async () =>
             {
-                await foreach (var offsetOccurence in searcher.Search(0, text.ToCharArray(), progress, token))
+                await foreach (var offsetOccurence in searcher.Search(CarretSelectionOffset + CarretSelectionLength, text.ToCharArray(), progress, token))
                 {
-                    await Dispatcher.InvokeAsync(() => { return GoToOffset(offsetOccurence, true); });
+                    await await Dispatcher.InvokeAsync(async () =>
+                    {
+                        long lineBeginningOffset = await GoToOffset(offsetOccurence, true);
+                        TxtContent.Select((int)(offsetOccurence - lineBeginningOffset), text.Length);
+                        App.Current.MainWindow.Activate();
+                    });
                     break;
                 }
             });

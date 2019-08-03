@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:FujiyNotepad.UI"
         xmlns:commands="clr-namespace:FujiyNotepad.UI.Commands"
         mc:Ignorable="d"
-        Title="MainWindow" Height="350" Width="525" WindowState="Maximized">
+        Title="Fujiy Notepad" Height="350" Width="525" WindowState="Maximized">
     <Grid>
         <Menu IsMainMenu="True" HorizontalAlignment="Stretch" Height="20" VerticalAlignment="Top">
             <MenuItem Header="_File">

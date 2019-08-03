@@ -57,6 +57,7 @@ namespace FujiyNotepad.UI
         private void FindText()
         {
             FindTextWindow findTextWindow = new FindTextWindow(TextControl);
+            findTextWindow.Owner = this;
             findTextWindow.ShowDialog();
         }
 
