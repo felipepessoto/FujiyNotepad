@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -80,13 +81,16 @@ namespace FujiyNotepad.UI
             }
         }
 
-        public async Task FindText(string text, Progress<int> progress)
+        public Task FindText(string text, Progress<int> progress, CancellationToken token)
         {
-            await foreach (var offsetOccurence in searcher.Search(0, text.ToCharArray(), progress))
+            return Task.Run(async () =>
             {
-                await GoToOffset(offsetOccurence, true);
-                break;
-            }           
+                await foreach (var offsetOccurence in searcher.Search(0, text.ToCharArray(), progress, token))
+                {
+                    await Dispatcher.InvokeAsync(() => { return GoToOffset(offsetOccurence, true); });
+                    break;
+                }
+            });
         }
 
         private void UpdateScrollBarFromOffset(long offset)
@@ -169,7 +173,7 @@ namespace FujiyNotepad.UI
 
             if (linesInVewport > 0)
             {
-                await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>()))
+                await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>(), CancellationToken.None))
                 {
                     if (--linesInVewport == 0)
                     {
@@ -313,7 +317,7 @@ namespace FujiyNotepad.UI
 
                     if (linesToScroll > 0)
                     {
-                        await foreach (var offset in searcher.Search(lastOffset, LineIndexer.LineBreakChar, new Progress<int>()))
+                        await foreach (var offset in searcher.Search(lastOffset, LineIndexer.LineBreakChar, new Progress<int>(), CancellationToken.None))
                         {
                             if (--linesToScroll == 0)
                             {

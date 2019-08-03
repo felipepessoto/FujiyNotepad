@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -13,6 +14,10 @@ namespace FujiyNotepad.UI
         private FujiyTextBox TextControl { get; }
 
         Progress<int> ProgressStatus { get; }
+
+        private CancellationTokenSource CancellationTokenSource { get; set; }
+
+        private bool Running { get; set; }
 
         public FindTextWindow(FujiyTextBox textControl)
         {
@@ -31,13 +36,27 @@ namespace FujiyNotepad.UI
             TextToFind = TxtTextToFind.Text;
             if (string.IsNullOrEmpty(TextToFind) == false)
             {
-                await Task.Run(() => { TextControl.FindText(TextToFind, ProgressStatus); });
+                PgbProgress.Visibility = Visibility.Visible;
+                CancellationTokenSource = new CancellationTokenSource();
+                Running = true;
+                BtnFind.IsEnabled = false;
+                await TextControl.FindText(TextToFind, ProgressStatus, CancellationTokenSource.Token);
+                Running = false;
+                BtnFind.IsEnabled = true;
+                PgbProgress.Visibility = Visibility.Hidden;
             }
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)
         {
-            Close();
+            if (Running)
+            {
+                CancellationTokenSource.Cancel();
+            }
+            else
+            {
+                Close();
+            }
         }
     }
 }

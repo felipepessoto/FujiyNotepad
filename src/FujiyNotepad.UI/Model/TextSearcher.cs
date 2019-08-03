@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FujiyNotepad.UI.Model
@@ -20,7 +21,7 @@ namespace FujiyNotepad.UI.Model
             FileSize = fileSize;
         }
 
-        public async IAsyncEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress)
+        public async IAsyncEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress, CancellationToken token)
         {
             int lastReportValue = 0;
             progress.Report(lastReportValue);
@@ -69,7 +70,7 @@ namespace FujiyNotepad.UI.Model
                         progress.Report(progressValue);
                     }
 
-                } while (byteRead > -1);
+                } while (byteRead > -1 && token.IsCancellationRequested == false);
             }
         }
 
