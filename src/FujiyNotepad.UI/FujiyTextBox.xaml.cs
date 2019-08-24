@@ -327,6 +327,7 @@ namespace FujiyNotepad.UI
                             if (--linesToScroll == 0)
                             {
                                 nextLineOffset = offset + 1;
+                                break;
                             }
                         }
                     }
