@@ -1,0 +1,4 @@
+* text=false
+*.manifest binary
+*.application binary
+*.deploy binary
