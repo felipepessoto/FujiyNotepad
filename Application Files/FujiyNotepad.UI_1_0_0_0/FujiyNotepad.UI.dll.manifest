@@ -80,6 +80,15 @@
       <dsig:DigestValue>+lE9Wm4jCx+8jTcZkdY2CHro0sRbR30xOfSReekosQE=</dsig:DigestValue>
     </hash>
   </file>
+  <file name="FujiyNotepad.UI.pdb" size="21220">
+    <hash>
+      <dsig:Transforms>
+        <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+      </dsig:Transforms>
+      <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+      <dsig:DigestValue>NGvpKLybUmGAGZxRPjAFdaz0pJr9zblJZmgnVflOFoQ=</dsig:DigestValue>
+    </hash>
+  </file>
   <file name="FujiyNotepad.UI.runtimeconfig.json" size="154">
     <hash>
       <dsig:Transforms>
