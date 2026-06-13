@@ -17,6 +17,7 @@ namespace FujiyNotepad.UI
             new InputGestureCollection { new KeyGesture(Key.G, ModifierKeys.Control) });
 
         private CancellationTokenSource? cancelIndexingTokenSource;
+        private Task indexingTask = Task.CompletedTask;
         private bool isFileOpen;
 
         public MainWindow()
@@ -71,10 +72,12 @@ namespace FujiyNotepad.UI
 
         private async Task OpenFile(string filePath)
         {
-            cancelIndexingTokenSource?.Cancel();
+            // Stop and wait for any in-flight indexing before TextControl.OpenFile disposes the
+            // current byte source; otherwise the background index could read a disposed source.
+            await StopIndexingAsync();
             await TextControl.OpenFile(filePath);
             EnableMenu();
-            _ = StartOrResumeIndexing();
+            StartOrResumeIndexing();
         }
 
         private void EnableMenu()
@@ -110,7 +113,7 @@ namespace FujiyNotepad.UI
 
         private void StartIndexLineNumber_Click(object sender, RoutedEventArgs e)
         {
-            _ = StartOrResumeIndexing();
+            StartOrResumeIndexing();
         }
 
         private void StopIndexLineNumber_Click(object sender, RoutedEventArgs e)
@@ -118,13 +121,17 @@ namespace FujiyNotepad.UI
             cancelIndexingTokenSource?.Cancel();
         }
 
-        private async Task StartOrResumeIndexing()
+        private void StartOrResumeIndexing()
         {
             StartIndexLineNumber.IsEnabled = false;
             StopIndexLineNumber.IsEnabled = true;
 
             cancelIndexingTokenSource = new CancellationTokenSource();
-            CancellationToken token = cancelIndexingTokenSource.Token;
+            indexingTask = RunIndexingAsync(cancelIndexingTokenSource.Token);
+        }
+
+        private async Task RunIndexingAsync(CancellationToken token)
+        {
             try
             {
                 var progress = new Progress<int>(percent =>
@@ -140,6 +147,20 @@ namespace FujiyNotepad.UI
             {
                 StartIndexLineNumber.IsEnabled = true;
                 StopIndexLineNumber.IsEnabled = false;
+            }
+        }
+
+        private async Task StopIndexingAsync()
+        {
+            cancelIndexingTokenSource?.Cancel();
+            try
+            {
+                await indexingTask;
+            }
+            catch
+            {
+                // The previous file's indexing is being torn down; any failure from it is irrelevant
+                // to the file about to be opened, so it must not block the switch.
             }
         }
 
