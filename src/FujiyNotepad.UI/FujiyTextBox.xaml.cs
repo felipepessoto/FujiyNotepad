@@ -1,7 +1,6 @@
 ﻿using FujiyNotepad.UI.Model;
 using System.Diagnostics;
 using System.IO;
-using System.IO.MemoryMappedFiles;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,14 +11,15 @@ namespace FujiyNotepad.UI
 {
     public partial class FujiyTextBox : UserControl
     {
-        MemoryMappedFile? mFile;
+        IByteSource? source;
         long fileSize;
-        string filePath = string.Empty;
         readonly StringBuilder sb = new();
         long maximumStartOffset;
         TextSearcher searcher = null!;
         public LineIndexer LineIndexer { get; private set; } = null!;
         long lastOffset;
+
+        private const int MaxViewportBytes = 8 * 1024 * 1024;
 
         private bool IsChangingText { get; set; }
         private long CaretSelectionOffset { get; set; }
@@ -35,17 +35,15 @@ namespace FujiyNotepad.UI
         public async Task OpenFile(string filePath)
         {
             IsEnabled = true;
-            mFile?.Dispose();
+            source?.Dispose();
 
-            this.filePath = filePath;
-            fileSize = new FileInfo(filePath).Length;
+            source = new FileByteSource(filePath);
+            fileSize = source.Length;
+
+            searcher = new TextSearcher(source);
+            LineIndexer = new LineIndexer(searcher);
 
             maximumStartOffset = GetMaximumStartOffset();//TODO: recompute whenever the control is resized
-
-            mFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
-
-            searcher = new TextSearcher(mFile, fileSize);
-            LineIndexer = new LineIndexer(searcher);
 
             await GoToOffset(0, true);
             TxtContent.Focus();
@@ -53,8 +51,8 @@ namespace FujiyNotepad.UI
 
         public void DisposeFile()
         {
-            mFile?.Dispose();
-            mFile = null;
+            source?.Dispose();
+            source = null;
         }
 
         public async Task GoToLineNumber(int lineNumber)
@@ -82,7 +80,7 @@ namespace FujiyNotepad.UI
         {
             return Task.Run(async () =>
             {
-                await foreach (var offsetOccurence in searcher.Search(CaretSelectionOffset + CaretSelectionLength, text.ToCharArray(), progress, token))
+                await foreach (var offsetOccurence in searcher.Search(CaretSelectionOffset + CaretSelectionLength, Encoding.UTF8.GetBytes(text), progress, token))
                 {
                     await await Dispatcher.InvokeAsync(async () =>
                     {
@@ -134,13 +132,17 @@ namespace FujiyNotepad.UI
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
-            startOffset = searcher.SearchBackward(startOffset, '\n', new Progress<int>()).FirstOrDefault() + 1;
+            startOffset = searcher.SearchBackward(startOffset, (byte)'\n', new Progress<int>()).FirstOrDefault() + 1;
             lastOffset = startOffset;
             long length = await GetLengthToFillViewport(startOffset);
 
-            Debug.Assert(length > 0);
+            Debug.Assert(length > 0 || fileSize == 0);
 
-            using (var stream = mFile!.CreateViewStream(startOffset, length, MemoryMappedFileAccess.Read))
+            int windowLength = (int)Math.Min(length, MaxViewportBytes);
+            byte[] window = new byte[windowLength];
+            int bytesRead = source!.ReadFull(startOffset, window);
+
+            using (var stream = new MemoryStream(window, 0, bytesRead))
             using (var streamReader = new StreamReader(stream))
             {
                 sb.Clear();
@@ -181,7 +183,7 @@ namespace FujiyNotepad.UI
 
             if (linesInViewport > 0)
             {
-                await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>(), CancellationToken.None))
+                await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreak, new Progress<int>(), CancellationToken.None))
                 {
                     if (--linesInViewport == 0)
                     {
@@ -196,20 +198,27 @@ namespace FujiyNotepad.UI
 
         private long GetMaximumStartOffset()
         {
-            using (var fs = File.OpenRead(filePath))
+            if (fileSize <= 0)
             {
-                fs.Seek(0, SeekOrigin.End);
-                int newLines = 0;
-                int visibleLines = CountVisibleLines() - 1;//TODO CountVisibleLines() - 2;//Rows behind horizontal scrollbar
-
-                while (newLines < visibleLines && fs.Position > 0)//TODO: test with a small file
-                {
-                    fs.Seek(-2, SeekOrigin.Current);
-                    newLines += fs.ReadByte() == '\n' ? 1 : 0;
-                }
-
-                return Math.Min(fs.Position, fileSize - 1);
+                return 0;
             }
+
+            int linesFromEnd = CountVisibleLines() - 1;//Rows behind horizontal scrollbar
+            if (linesFromEnd <= 0)
+            {
+                return fileSize - 1;
+            }
+
+            // The top-of-viewport offset when scrolled fully down: the start of the line that is
+            // `linesFromEnd` newlines back from the end of the file. Scan from fileSize - 1 so the
+            // file's terminating newline is not itself counted as a line from the end.
+            long offsetAfterLastNewlines = searcher.SearchBackward(fileSize - 1, (byte)'\n', new Progress<int>())
+                .Where(offset => offset >= 0)
+                .Take(linesFromEnd)
+                .DefaultIfEmpty(-1)
+                .Last() + 1;
+
+            return Math.Min(offsetAfterLastNewlines, fileSize - 1);
         }
 
         private int CountVisibleLines()
@@ -286,7 +295,7 @@ namespace FujiyNotepad.UI
                 if (linesToScroll < 0)
                 {
                     long startOffset = Math.Max(lastOffset - 1, 0);
-                    nextLineOffset = searcher.SearchBackward(startOffset, '\n', new Progress<int>()).Take(-linesToScroll).Cast<long?>().LastOrDefault() + 1;
+                    nextLineOffset = searcher.SearchBackward(startOffset, (byte)'\n', new Progress<int>()).Take(-linesToScroll).Cast<long?>().LastOrDefault() + 1;
                 }
                 else
                 {
@@ -295,7 +304,7 @@ namespace FujiyNotepad.UI
 
                     if (linesToScroll > 0)
                     {
-                        await foreach (var offset in searcher.Search(lastOffset, LineIndexer.LineBreakChar, new Progress<int>(), CancellationToken.None))
+                        await foreach (var offset in searcher.Search(lastOffset, LineIndexer.LineBreak, new Progress<int>(), CancellationToken.None))
                         {
                             if (--linesToScroll == 0)
                             {

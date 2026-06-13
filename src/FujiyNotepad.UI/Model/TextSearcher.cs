@@ -1,128 +1,201 @@
-﻿using System.IO;
-using System.IO.MemoryMappedFiles;
 using System.Runtime.CompilerServices;
 
 namespace FujiyNotepad.UI.Model
 {
-    public class TextSearcher
+    /// <summary>
+    /// Forward/backward byte-pattern search over an <see cref="IByteSource"/>. Reads the source in
+    /// large chunks and scans them with the vectorized span search, which is dramatically faster than
+    /// a byte-at-a-time scan on large files.
+    /// </summary>
+    public sealed class TextSearcher
     {
-        long searchSize = 1024 * 1024;
-        private readonly MemoryMappedFile mFile;
-        public long FileSize { get; }
+        private const int DefaultChunkSize = 1 << 20; // 1 MiB
 
-        public TextSearcher(MemoryMappedFile file, long fileSize)
+        private readonly IByteSource source;
+        private readonly int chunkSize;
+
+        public long FileSize => source.Length;
+
+        public TextSearcher(IByteSource source) : this(source, DefaultChunkSize)
         {
-            this.mFile = file;
-            FileSize = fileSize;
         }
 
-        public async IAsyncEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress, [EnumeratorCancellation] CancellationToken token)
+        internal TextSearcher(IByteSource source, int chunkSize)
         {
-            int lastReportValue = 0;
-            progress.Report(lastReportValue);
+            this.source = source;
+            this.chunkSize = chunkSize;
+        }
 
-            int remaining = charsToSearch.Length - 1;
-            var buffer = new byte[remaining];
-
-            using (var stream = mFile.CreateViewStream(startOffset, 0, MemoryMappedFileAccess.Read))
+        /// <summary>
+        /// Yields the absolute offset of every occurrence of <paramref name="pattern"/> at or after
+        /// <paramref name="startOffset"/> (overlapping matches included, advancing one byte past each).
+        /// Cancellation is cooperative: a cancelled <paramref name="token"/> stops enumeration between
+        /// chunks <em>without throwing</em>, so callers can treat a cancelled search as an empty result.
+        /// </summary>
+        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, IProgress<int> progress, [EnumeratorCancellation] CancellationToken token = default)
+        {
+            if (pattern.Length == 0)
             {
-                int byteRead;
-                // TODO(perf): scanning one byte at a time via ReadByte is slow on large files. Replace with
-                // chunked buffered reads + vectorized ReadOnlySpan<byte>.IndexOf. Tracked as a separate task.
-                do
-                {
-                    byteRead = stream.ReadByte();
-                    long currentPosition = stream.Position;
-                    if (byteRead == charsToSearch[0])
-                    {
-                        // Read the remaining bytes fully; a short read (near EOF) cannot be a match.
-                        // The token is intentionally not forwarded: cancellation is cooperative (observed by
-                        // the loop guard below), so Search never throws and callers can treat a cancelled
-                        // search as a normal, empty result.
-                        int totalRead = await stream.ReadAtLeastAsync(buffer, remaining, throwOnEndOfStream: false);
-                        bool equals = totalRead >= remaining;
-
-                        for (int i = 0; equals && i < remaining; i++)
-                        {
-                            if (buffer[i] != charsToSearch[i + 1])//TODO case insensitive
-                            {
-                                equals = false;
-                            }
-                        }
-
-                        if (equals)
-                        {
-                            yield return startOffset + currentPosition - 1;
-                        }
-                        else
-                        {
-                            stream.Position = currentPosition;
-                        }
-                    }
-
-                    long totalBytes = FileSize - startOffset;
-                    long currentProgress = currentPosition - startOffset;
-                    int progressValue = (int)(currentProgress * 100 / totalBytes);
-                    if (lastReportValue != progressValue)
-                    {
-                        lastReportValue = progressValue;
-                        progress.Report(progressValue);
-                    }
-
-                } while (byteRead > -1 && token.IsCancellationRequested == false);
+                yield break;
             }
+
+            long length = source.Length;
+            if (startOffset < 0)
+            {
+                startOffset = 0;
+            }
+            if (startOffset >= length)
+            {
+                progress.Report(100);
+                yield break;
+            }
+
+            int overlap = pattern.Length - 1;
+            byte[] buffer = new byte[chunkSize + overlap];
+            var matches = new List<long>();
+
+            long readPos = startOffset;     // next absolute read position
+            int carry = 0;                  // bytes retained at the front of the buffer
+            long bufferBase = startOffset;  // absolute offset of buffer[0]
+            long total = length - startOffset;
+            int lastPercent = -1;
+            progress.Report(0);
+
+            while (true)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    yield break;
+                }
+
+                // The token is intentionally NOT forwarded to the read: cancellation stays cooperative
+                // (checked above) so the read never throws OperationCanceledException on the caller.
+                int read = await ReadFullAsync(readPos, buffer.AsMemory(carry, chunkSize));
+                int available = carry + read;
+                if (available == 0)
+                {
+                    break;
+                }
+
+                matches.Clear();
+                CollectForward(buffer.AsSpan(0, available), pattern, bufferBase, matches);
+                foreach (long match in matches)
+                {
+                    yield return match;
+                }
+
+                readPos += read;
+
+                bool eof = read < chunkSize;
+                int newCarry = eof ? 0 : Math.Min(overlap, available);
+                if (newCarry > 0)
+                {
+                    // Carry the last (pattern.Length - 1) bytes so a match straddling the chunk
+                    // boundary is found at the start of the next buffer.
+                    buffer.AsSpan(available - newCarry, newCarry).CopyTo(buffer);
+                }
+                bufferBase = readPos - newCarry;
+                carry = newCarry;
+
+                if (total > 0)
+                {
+                    int percent = (int)((readPos - startOffset) * 100 / total);
+                    if (percent != lastPercent)
+                    {
+                        lastPercent = percent;
+                        progress.Report(percent);
+                    }
+                }
+
+                if (eof)
+                {
+                    break;
+                }
+            }
+
+            progress.Report(100);
         }
 
-
-        public IEnumerable<long> SearchBackward(long startOffset, char charToSearch, IProgress<int> progress)
+        /// <summary>
+        /// Yields the absolute offset of every occurrence of <paramref name="value"/> strictly before
+        /// <paramref name="startOffset"/>, in descending order. For '\n' it additionally yields -1 at
+        /// the end (the implicit start-of-file line boundary the viewport relies on).
+        /// </summary>
+        public IEnumerable<long> SearchBackward(long startOffset, byte value, IProgress<int> progress)
         {
             if (startOffset < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(startOffset), $"{nameof(startOffset)} cannot be negative");
             }
 
-            int lastReportValue = 0;
-            progress.Report(lastReportValue);
+            progress.Report(0);
 
-            long searchBackOffset = startOffset;
+            byte[] buffer = new byte[chunkSize];
+            var matches = new List<long>();
+            long pos = Math.Min(startOffset, source.Length); // scan the range [0, pos)
 
-            do
+            while (pos > 0)
             {
-                long searchSizePerIteration = Math.Min(searchSize, searchBackOffset);
-                searchBackOffset = searchBackOffset - searchSizePerIteration;// Math.Max(searchBackOffset - searchSizePerIteration, 0);
+                int toRead = (int)Math.Min(chunkSize, pos);
+                long blockStart = pos - toRead;
+                int read = source.ReadFull(blockStart, buffer.AsSpan(0, toRead));
 
-                if (searchSizePerIteration > 0)
+                matches.Clear();
+                CollectBackward(buffer.AsSpan(0, read), value, blockStart, matches);
+                foreach (long match in matches)
                 {
-                    using (var stream = mFile.CreateViewStream(searchBackOffset, searchSizePerIteration, MemoryMappedFileAccess.Read))
-                    {
-                        stream.Seek(0, SeekOrigin.End);
-
-                        while (stream.Position > 0)
-                        {
-                            stream.Seek(-1, SeekOrigin.Current);
-                            if (stream.ReadByte() == charToSearch)
-                            {
-                                yield return searchBackOffset + stream.Position - 1;
-                            }
-                            stream.Seek(-1, SeekOrigin.Current);
-                        }
-                    }
+                    yield return match;
                 }
 
-                int progressValue = (int)((FileSize - startOffset) * 100 / FileSize);
-                if (lastReportValue != progressValue)
-                {
-                    lastReportValue = progressValue;
-                    progress.Report(progressValue);
-                }
+                pos = blockStart;
             }
-            while (searchBackOffset > 0);
 
-            //Implicit new line at file start
-            if (charToSearch == '\n')
+            if (value == (byte)'\n')
             {
                 yield return -1;
             }
+        }
+
+        private static void CollectForward(ReadOnlySpan<byte> span, ReadOnlySpan<byte> pattern, long baseOffset, List<long> results)
+        {
+            int from = 0;
+            while (true)
+            {
+                int idx = span.Slice(from).IndexOf(pattern);
+                if (idx < 0)
+                {
+                    break;
+                }
+                int matchAt = from + idx;
+                results.Add(baseOffset + matchAt);
+                from = matchAt + 1;
+            }
+        }
+
+        private static void CollectBackward(ReadOnlySpan<byte> span, byte value, long baseOffset, List<long> results)
+        {
+            int end = span.Length;
+            int idx;
+            while ((idx = span.Slice(0, end).LastIndexOf(value)) >= 0)
+            {
+                results.Add(baseOffset + idx);
+                end = idx;
+            }
+        }
+
+        private async ValueTask<int> ReadFullAsync(long offset, Memory<byte> buffer)
+        {
+            int total = 0;
+            while (total < buffer.Length)
+            {
+                int read = await source.ReadAsync(offset + total, buffer.Slice(total));
+                if (read == 0)
+                {
+                    break;
+                }
+                total += read;
+            }
+            return total;
         }
     }
 }

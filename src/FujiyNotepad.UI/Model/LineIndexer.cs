@@ -3,7 +3,7 @@
     public class LineIndexer
     {
         List<long> lineNumberIndex = new List<long>();
-        public static char[] LineBreakChar = new[] { '\n' };//ReadOnlySpan<char>
+        public static readonly byte[] LineBreak = { (byte)'\n' };
 
         private readonly TextSearcher searcher;
 
@@ -31,7 +31,7 @@
             // Pass None to Search so it keeps yielding line breaks; cancellation is observed here via
             // ThrowIfCancellationRequested, which signals a stop by throwing OperationCanceledException
             // (caught by the caller to re-enable resuming and to avoid marking a partial index complete).
-            await foreach (long result in searcher.Search(startOffset, LineBreakChar, progress, CancellationToken.None))
+            await foreach (long result in searcher.Search(startOffset, LineBreak, progress, CancellationToken.None))
             {
                 cancelToken.ThrowIfCancellationRequested();
                 lineNumberIndex.Add(result + 1);

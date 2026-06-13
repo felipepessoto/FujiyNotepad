@@ -9,10 +9,8 @@ namespace FujiyNotepad.UI.Tests
     {
         private static async Task<LineIndexer> BuildIndexAsync(string content)
         {
-            // The mapped file is only needed while indexing; the line offsets are cached in memory,
-            // so it is safe to dispose the file before the assertions run.
-            using var file = new TestMappedFile(content);
-            var searcher = new TextSearcher(file.Mmf, file.Size);
+            var source = new InMemoryByteSource(content);
+            var searcher = new TextSearcher(source);
             var indexer = new LineIndexer(searcher);
             await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
             return indexer;
@@ -41,11 +39,10 @@ namespace FujiyNotepad.UI.Tests
         [Fact]
         public async Task StartTaskToIndexLines_CancelledToken_ThrowsAndDoesNotComplete()
         {
-            // Regression for the Stop-indexing fix: a cancelled token must surface as an
-            // OperationCanceledException (so the UI re-enables resuming) and must not mark the
-            // partial index complete.
-            using var file = new TestMappedFile("a\nb\nc\nd\n");
-            var searcher = new TextSearcher(file.Mmf, file.Size);
+            // A cancelled token must surface as OperationCanceledException (so the UI re-enables
+            // resuming) and must not mark the partial index complete.
+            var source = new InMemoryByteSource("a\nb\nc\nd\n");
+            var searcher = new TextSearcher(source);
             var indexer = new LineIndexer(searcher);
             using var cts = new CancellationTokenSource();
             cts.Cancel();
