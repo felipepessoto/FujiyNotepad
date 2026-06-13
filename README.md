@@ -1,5 +1,7 @@
 # FujiyNotepad
 
+[![CI](https://github.com/felipepessoto/FujiyNotepad/actions/workflows/ci.yml/badge.svg)](https://github.com/felipepessoto/FujiyNotepad/actions/workflows/ci.yml)
+
 A lightweight Windows text viewer (WPF) built to open and navigate **very large text files**
 that would be slow or impossible to load in a conventional editor.
 
