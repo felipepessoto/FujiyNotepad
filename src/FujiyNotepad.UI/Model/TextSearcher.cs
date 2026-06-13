@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using System.IO;
 using System.IO.MemoryMappedFiles;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
 
 namespace FujiyNotepad.UI.Model
 {
@@ -21,39 +16,43 @@ namespace FujiyNotepad.UI.Model
             FileSize = fileSize;
         }
 
-        public async IAsyncEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress, CancellationToken token)
+        public async IAsyncEnumerable<long> Search(long startOffset, char[] charsToSearch, IProgress<int> progress, [EnumeratorCancellation] CancellationToken token)
         {
             int lastReportValue = 0;
             progress.Report(lastReportValue);
 
-            //long bytesToRead = Math.Min(searchSize, FileSize - startOffset);
-            var buffer = new byte[charsToSearch.Length - 1];
+            int remaining = charsToSearch.Length - 1;
+            var buffer = new byte[remaining];
 
             using (var stream = mFile.CreateViewStream(startOffset, 0, MemoryMappedFileAccess.Read))
-            using (var streamReader = new StreamReader(stream))
             {
                 int byteRead;
+                // TODO(perf): scanning one byte at a time via ReadByte is slow on large files. Replace with
+                // chunked buffered reads + vectorized ReadOnlySpan<byte>.IndexOf. Tracked as a separate task.
                 do
                 {
                     byteRead = stream.ReadByte();
-                    var currentPosition = stream.Position;
+                    long currentPosition = stream.Position;
                     if (byteRead == charsToSearch[0])
                     {
-                        bool equals = true;
-                        await stream.ReadAsync(buffer, 0, charsToSearch.Length - 1);
+                        // Read the remaining bytes fully; a short read (near EOF) cannot be a match.
+                        // The token is intentionally not forwarded: cancellation is cooperative (observed by
+                        // the loop guard below), so Search never throws and callers can treat a cancelled
+                        // search as a normal, empty result.
+                        int totalRead = await stream.ReadAtLeastAsync(buffer, remaining, throwOnEndOfStream: false);
+                        bool equals = totalRead >= remaining;
 
-                        for (int i = 0; i < charsToSearch.Length - 1; i++)
+                        for (int i = 0; equals && i < remaining; i++)
                         {
                             if (buffer[i] != charsToSearch[i + 1])//TODO case insensitive
                             {
                                 equals = false;
-                                break;
                             }
                         }
 
                         if (equals)
                         {
-                            yield return startOffset + currentPosition - 1;// stream.Position - 1;
+                            yield return startOffset + currentPosition - 1;
                         }
                         else
                         {
@@ -75,7 +74,6 @@ namespace FujiyNotepad.UI.Model
         }
 
 
-        //TODO mudar para search backward
         public IEnumerable<long> SearchBackward(long startOffset, char charToSearch, IProgress<int> progress)
         {
             if (startOffset < 0)
@@ -96,7 +94,6 @@ namespace FujiyNotepad.UI.Model
                 if (searchSizePerIteration > 0)
                 {
                     using (var stream = mFile.CreateViewStream(searchBackOffset, searchSizePerIteration, MemoryMappedFileAccess.Read))
-                    using (var streamReader = new StreamReader(stream))
                     {
                         stream.Seek(0, SeekOrigin.End);
 

@@ -1,35 +1,29 @@
 ﻿using FujiyNotepad.UI.Model;
-using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.MemoryMappedFiles;
-using System.Linq;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
 
 namespace FujiyNotepad.UI
 {
     public partial class FujiyTextBox : UserControl
     {
-        MemoryMappedFile mFile;
+        MemoryMappedFile? mFile;
         long fileSize;
-        string filePath;
-        StringBuilder sb = new StringBuilder();
+        string filePath = string.Empty;
+        readonly StringBuilder sb = new();
         long maximumStartOffset;
-        TextSearcher searcher;
-        public LineIndexer LineIndexer { get; set; }
+        TextSearcher searcher = null!;
+        public LineIndexer LineIndexer { get; private set; } = null!;
         long lastOffset;
 
         private bool IsChangingText { get; set; }
-        private long CarretSelectionOffset { get; set; }
-        private int CarretSelectionLength { get; set; }//TODO implement
+        private long CaretSelectionOffset { get; set; }
+        private int CaretSelectionLength { get; set; }//TODO implement
 
         public FujiyTextBox()
         {
@@ -41,15 +35,12 @@ namespace FujiyNotepad.UI
         public async Task OpenFile(string filePath)
         {
             IsEnabled = true;
-            if (mFile != null)
-            {
-                mFile.Dispose();//TODO pensar em uma forma melhor de clean, talvez remover todo o User Control
-            }
+            mFile?.Dispose();
 
             this.filePath = filePath;
             fileSize = new FileInfo(filePath).Length;
 
-            maximumStartOffset = GetMaximumStartOffset();//TODO precisa atualizar sempre que fizer resize
+            maximumStartOffset = GetMaximumStartOffset();//TODO: recompute whenever the control is resized
 
             mFile = MemoryMappedFile.CreateFromFile(filePath, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
 
@@ -58,6 +49,12 @@ namespace FujiyNotepad.UI
 
             await GoToOffset(0, true);
             TxtContent.Focus();
+        }
+
+        public void DisposeFile()
+        {
+            mFile?.Dispose();
+            mFile = null;
         }
 
         public async Task GoToLineNumber(int lineNumber)
@@ -71,11 +68,11 @@ namespace FujiyNotepad.UI
             {
                 if (LineIndexer.IsCompleted)
                 {
-                    //TODO mensagem
+                    //TODO: notify the user that the line number is out of range
                 }
                 else
                 {
-                    //TODO mensagem
+                    //TODO: notify the user that indexing is still in progress
                 }
 
             }
@@ -85,13 +82,13 @@ namespace FujiyNotepad.UI
         {
             return Task.Run(async () =>
             {
-                await foreach (var offsetOccurence in searcher.Search(CarretSelectionOffset + CarretSelectionLength, text.ToCharArray(), progress, token))
+                await foreach (var offsetOccurence in searcher.Search(CaretSelectionOffset + CaretSelectionLength, text.ToCharArray(), progress, token))
                 {
                     await await Dispatcher.InvokeAsync(async () =>
                     {
                         long lineBeginningOffset = await GoToOffset(offsetOccurence, true);
                         TxtContent.Select((int)(offsetOccurence - lineBeginningOffset), text.Length);
-                        App.Current.MainWindow.Activate();
+                        App.Current.MainWindow?.Activate();
                     });
                     break;
                 }
@@ -143,25 +140,31 @@ namespace FujiyNotepad.UI
 
             Debug.Assert(length > 0);
 
-            using (var stream = mFile.CreateViewStream(startOffset, length, MemoryMappedFileAccess.Read))
+            using (var stream = mFile!.CreateViewStream(startOffset, length, MemoryMappedFileAccess.Read))
             using (var streamReader = new StreamReader(stream))
             {
                 sb.Clear();
-                int linesInVewport = CountVisibleLines();
-                for (int i = 0; i < linesInVewport && streamReader.EndOfStream == false; i++)
+                int linesInViewport = CountVisibleLines();
+                for (int i = 0; i < linesInViewport; i++)
                 {
-                    if (i == linesInVewport - 1)
+                    string? line = streamReader.ReadLine();
+                    if (line is null)
                     {
-                        sb.Append(streamReader.ReadLine());
+                        break;
+                    }
+
+                    if (i == linesInViewport - 1)
+                    {
+                        sb.Append(line);
                     }
                     else
                     {
-                        sb.AppendLine(streamReader.ReadLine());
+                        sb.AppendLine(line);
                     }
                 }
                 IsChangingText = true;
                 TxtContent.Text = sb.ToString();
-                UpdateCarretSelection();
+                UpdateCaretSelection();
                 IsChangingText = false;
             }
 
@@ -174,13 +177,13 @@ namespace FujiyNotepad.UI
 
         private async Task<long> GetLengthToFillViewport(long startOffset)
         {
-            int linesInVewport = CountVisibleLines();
+            int linesInViewport = CountVisibleLines();
 
-            if (linesInVewport > 0)
+            if (linesInViewport > 0)
             {
                 await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>(), CancellationToken.None))
                 {
-                    if (--linesInVewport == 0)
+                    if (--linesInViewport == 0)
                     {
                         long nextLineOffset = offset + 1;
                         return nextLineOffset - startOffset;
@@ -189,17 +192,6 @@ namespace FujiyNotepad.UI
             }
 
             return fileSize - startOffset;
-
-
-
-
-            //int linesInVewport = CountVisibleLines();
-            //var nextLineOffset = searcher.Search(startOffset, LineIndexer.LineBreakChar, new Progress<int>()).Take(linesInVewport).Cast<long?>().LastOrDefault() + 1;
-            //if (nextLineOffset != null)
-            //{
-            //    return nextLineOffset.Value - startOffset;
-            //}
-            //return fileSize - startOffset;
         }
 
         private long GetMaximumStartOffset()
@@ -210,7 +202,7 @@ namespace FujiyNotepad.UI
                 int newLines = 0;
                 int visibleLines = CountVisibleLines() - 1;//TODO CountVisibleLines() - 2;//Rows behind horizontal scrollbar
 
-                while (newLines < visibleLines && fs.Position > 0)//TODO testar arquivo pequeno
+                while (newLines < visibleLines && fs.Position > 0)//TODO: test with a small file
                 {
                     fs.Seek(-2, SeekOrigin.Current);
                     newLines += fs.ReadByte() == '\n' ? 1 : 0;
@@ -222,32 +214,13 @@ namespace FujiyNotepad.UI
 
         private int CountVisibleLines()
         {
-            //TODO teste
             int lines = (int)Math.Floor((TxtContent.VerticalOffset + TxtContent.ViewportHeight - 1) / (TxtContent.FontFamily.LineSpacing * TxtContent.FontSize));
             return lines;
-
-            //Implement cache to the result. Refresh on resize.
-            int lineIndex;
-
-            if (TxtContent.Text != string.Empty)
-            {
-                lineIndex = TxtContent.GetLastVisibleLineIndex();
-            }
-            else
-            {
-                //TODO tratar casos onde tem texto mas não preenche a tela toda
-                string temp = TxtContent.Text;
-                TxtContent.Text = new string('\n', 500);
-                TxtContent.GetLineIndexFromCharacterIndex(0);//Workaround to GetLastVisibleLineIndex work at first
-                lineIndex = TxtContent.GetLastVisibleLineIndex();
-                TxtContent.Text = temp;
-            }
-            return lineIndex + 1;
         }
 
         private async void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            int lineIndex = GetCarretLineIndex();
+            int lineIndex = GetCaretLineIndex();
             int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
             int line = lineIndex + 1;
 
@@ -340,25 +313,25 @@ namespace FujiyNotepad.UI
             }
         }
 
-        private void UpdateCarretSelection()
+        private void UpdateCaretSelection()
         {
-            var lastSelectedCharOffset = CarretSelectionOffset + CarretSelectionLength;
+            var lastSelectedCharOffset = CaretSelectionOffset + CaretSelectionLength;
 
-            if (lastSelectedCharOffset < lastOffset || CarretSelectionOffset > (lastOffset + TxtContent.Text.Length))
+            if (lastSelectedCharOffset < lastOffset || CaretSelectionOffset > (lastOffset + TxtContent.Text.Length))
             {
                 TxtContent.IsReadOnlyCaretVisible = false;
             }
             else
             {
                 TxtContent.IsReadOnlyCaretVisible = true;
-                TxtContent.SelectionStart = Math.Max((int)(CarretSelectionOffset - lastOffset), 0);
+                TxtContent.SelectionStart = Math.Max((int)(CaretSelectionOffset - lastOffset), 0);
 
-                int countSelectedCharsNotVisible = Math.Max((int)(lastOffset - CarretSelectionOffset), 0);
-                TxtContent.SelectionLength = CarretSelectionLength - countSelectedCharsNotVisible;
+                int countSelectedCharsNotVisible = Math.Max((int)(lastOffset - CaretSelectionOffset), 0);
+                TxtContent.SelectionLength = CaretSelectionLength - countSelectedCharsNotVisible;
             }
         }
 
-        private int GetCarretLineIndex()
+        private int GetCaretLineIndex()
         {
             return TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex);
         }
@@ -369,9 +342,9 @@ namespace FujiyNotepad.UI
             {
                 TxtContent.IsReadOnlyCaretVisible = true;
                 var txtContent = ((TextBox)e.OriginalSource);
-                //TODO if the user changes the end selection while the selected text is only partially visible, it inadvertently recalculates the CarretSelectionOffset
-                CarretSelectionOffset = txtContent.SelectionStart + lastOffset;
-                CarretSelectionLength = txtContent.SelectionLength;
+                //TODO: if the user changes the end of the selection while the selected text is only partially visible, the CaretSelectionOffset is inadvertently recalculated
+                CaretSelectionOffset = txtContent.SelectionStart + lastOffset;
+                CaretSelectionLength = txtContent.SelectionLength;
             }
         }
     }

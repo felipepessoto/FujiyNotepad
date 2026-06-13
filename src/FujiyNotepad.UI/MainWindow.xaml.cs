@@ -1,9 +1,7 @@
 ﻿using Microsoft.Win32;
-using System;
 using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 
 namespace FujiyNotepad.UI
 {
@@ -12,23 +10,28 @@ namespace FujiyNotepad.UI
     /// </summary>
     public partial class MainWindow : Window
     {
-        CancellationTokenSource cancelIndexingTokenSource;
+        public static readonly RoutedUICommand FindCommand = new("Find", nameof(FindCommand), typeof(MainWindow),
+            new InputGestureCollection { new KeyGesture(Key.F, ModifierKeys.Control) });
+
+        public static readonly RoutedUICommand GoToCommand = new("Go To Line", nameof(GoToCommand), typeof(MainWindow),
+            new InputGestureCollection { new KeyGesture(Key.G, ModifierKeys.Control) });
+
+        private CancellationTokenSource? cancelIndexingTokenSource;
+        private bool isFileOpen;
+
         public MainWindow()
         {
             InitializeComponent();
         }
 
-        private async void MenuGoToLine_Click(object sender, RoutedEventArgs e)
+        private void EditCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
         {
-            await GoToLine();
+            e.CanExecute = isFileOpen;
         }
 
-        private async void GoToLineCommand_OnExecuted(object sender, object e)
+        private async void GoToCommand_Executed(object sender, ExecutedRoutedEventArgs e)
         {
-            if (EditMenu.IsEnabled)
-            {
-                await GoToLine();
-            }
+            await GoToLine();
         }
 
         private async Task GoToLine()
@@ -41,17 +44,9 @@ namespace FujiyNotepad.UI
             }
         }
 
-        private void MenuFind_Click(object sender, RoutedEventArgs e)
+        private void FindCommand_Executed(object sender, ExecutedRoutedEventArgs e)
         {
             FindText();
-        }
-
-        private void FindTextCommand_OnExecuted(object sender, object e)
-        {
-            if (EditMenu.IsEnabled)
-            {
-                FindText();
-            }
         }
 
         private void FindText()
@@ -79,12 +74,14 @@ namespace FujiyNotepad.UI
             cancelIndexingTokenSource?.Cancel();
             await TextControl.OpenFile(filePath);
             EnableMenu();
-            StartOrResumeIndexing();
+            _ = StartOrResumeIndexing();
         }
 
         private void EnableMenu()
         {
+            isFileOpen = true;
             EditMenu.IsEnabled = true;
+            CommandManager.InvalidateRequerySuggested();
         }
 
         private async void OpenSample_Click(object sender, RoutedEventArgs e)
@@ -113,18 +110,21 @@ namespace FujiyNotepad.UI
 
         private void StartIndexLineNumber_Click(object sender, RoutedEventArgs e)
         {
-            StartOrResumeIndexing();
+            _ = StartOrResumeIndexing();
         }
 
         private void StopIndexLineNumber_Click(object sender, RoutedEventArgs e)
         {
-            cancelIndexingTokenSource.Cancel();
+            cancelIndexingTokenSource?.Cancel();
         }
 
         private async Task StartOrResumeIndexing()
         {
             StartIndexLineNumber.IsEnabled = false;
             StopIndexLineNumber.IsEnabled = true;
+
+            cancelIndexingTokenSource = new CancellationTokenSource();
+            CancellationToken token = cancelIndexingTokenSource.Token;
             try
             {
                 var progress = new Progress<int>(percent =>
@@ -132,8 +132,7 @@ namespace FujiyNotepad.UI
                     LblStatus.Text = percent + "% indexed";
                 });
 
-                cancelIndexingTokenSource = new CancellationTokenSource();
-                await Task.Run(() => { TextControl.LineIndexer.StartTaskToIndexLines(cancelIndexingTokenSource.Token, progress); }, cancelIndexingTokenSource.Token);
+                await Task.Run(() => TextControl.LineIndexer.StartTaskToIndexLines(token, progress), token);
 
                 StopIndexLineNumber.IsEnabled = false;
             }
@@ -147,6 +146,13 @@ namespace FujiyNotepad.UI
         private void Exit_Click(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            cancelIndexingTokenSource?.Cancel();
+            TextControl.DisposeFile();
         }
     }
 }

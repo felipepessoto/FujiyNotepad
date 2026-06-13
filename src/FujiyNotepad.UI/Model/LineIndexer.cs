@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace FujiyNotepad.UI.Model
+﻿namespace FujiyNotepad.UI.Model
 {
     public class LineIndexer
     {
@@ -35,6 +28,9 @@ namespace FujiyNotepad.UI.Model
                 startOffset = lineNumberIndex[lineNumberIndex.Count - 1];
             }
 
+            // Pass None to Search so it keeps yielding line breaks; cancellation is observed here via
+            // ThrowIfCancellationRequested, which signals a stop by throwing OperationCanceledException
+            // (caught by the caller to re-enable resuming and to avoid marking a partial index complete).
             await foreach (long result in searcher.Search(startOffset, LineBreakChar, progress, CancellationToken.None))
             {
                 cancelToken.ThrowIfCancellationRequested();

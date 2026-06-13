@@ -1,7 +1,4 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows;
+﻿using System.Windows;
 
 namespace FujiyNotepad.UI
 {
@@ -10,12 +7,12 @@ namespace FujiyNotepad.UI
     /// </summary>
     public partial class FindTextWindow : Window
     {
-        private string TextToFind { get; set; }
+        private string? TextToFind { get; set; }
         private FujiyTextBox TextControl { get; }
 
         Progress<int> ProgressStatus { get; }
 
-        private CancellationTokenSource CancellationTokenSource { get; set; }
+        private CancellationTokenSource? CancellationTokenSource { get; set; }
 
         private bool Running { get; set; }
 
@@ -51,7 +48,7 @@ namespace FujiyNotepad.UI
         {
             if (Running)
             {
-                CancellationTokenSource.Cancel();
+                CancellationTokenSource?.Cancel();
             }
             else
             {
