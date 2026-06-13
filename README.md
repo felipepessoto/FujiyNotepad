@@ -11,6 +11,18 @@ visible in the viewport. Scrolling, paging, *Go To Line*, and *Find* all stream
 directly from disk using a vectorized byte search (`ReadOnlySpan<byte>.IndexOf`), so
 memory usage stays roughly constant regardless of file size.
 
+## Download
+
+Grab the latest build from the [Releases page](https://github.com/felipepessoto/FujiyNotepad/releases).
+Each release publishes two single-file builds (no installer):
+
+- **`FujiyNotepad-<version>-win-x64-self-contained.exe`** — larger (~130 MB); bundles the
+  .NET runtime, so it runs on a clean machine with **no prerequisites**.
+- **`FujiyNotepad-<version>-win-x64.exe`** — tiny (~0.2 MB); requires the
+  [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) to be installed.
+
+Both are unsigned, so Windows SmartScreen may warn on first run (*More info → Run anyway*).
+
 ## Features
 
 - Open multi-gigabyte text files with near-constant memory usage (virtualized viewport).
