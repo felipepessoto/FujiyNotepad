@@ -52,7 +52,6 @@ namespace FujiyNotepad.UI.Model
 
             int overlap = pattern.Length - 1;
             byte[] buffer = new byte[chunkSize + overlap];
-            var matches = new List<long>();
 
             long readPos = startOffset;     // next absolute read position
             int carry = 0;                  // bytes retained at the front of the buffer
@@ -77,11 +76,19 @@ namespace FujiyNotepad.UI.Model
                     break;
                 }
 
-                matches.Clear();
-                CollectForward(buffer.AsSpan(0, available), pattern, bufferBase, matches);
-                foreach (long match in matches)
+                // Yield each match as it is found. The span is a short-lived temporary (never a local
+                // held across the yield), so callers like Find can stop without scanning the whole chunk.
+                int from = 0;
+                while (from < available)
                 {
-                    yield return match;
+                    int idx = buffer.AsSpan(from, available - from).IndexOf(pattern);
+                    if (idx < 0)
+                    {
+                        break;
+                    }
+                    int matchAt = from + idx;
+                    yield return bufferBase + matchAt;
+                    from = matchAt + 1;
                 }
 
                 readPos += read;
@@ -131,7 +138,6 @@ namespace FujiyNotepad.UI.Model
             progress.Report(0);
 
             byte[] buffer = new byte[chunkSize];
-            var matches = new List<long>();
             long pos = Math.Min(startOffset, source.Length); // scan the range [0, pos)
 
             while (pos > 0)
@@ -140,11 +146,16 @@ namespace FujiyNotepad.UI.Model
                 long blockStart = pos - toRead;
                 int read = source.ReadFull(blockStart, buffer.AsSpan(0, toRead));
 
-                matches.Clear();
-                CollectBackward(buffer.AsSpan(0, read), value, blockStart, matches);
-                foreach (long match in matches)
+                int end = read;
+                while (end > 0)
                 {
-                    yield return match;
+                    int idx = buffer.AsSpan(0, end).LastIndexOf(value);
+                    if (idx < 0)
+                    {
+                        break;
+                    }
+                    yield return blockStart + idx;
+                    end = idx;
                 }
 
                 pos = blockStart;
@@ -153,33 +164,6 @@ namespace FujiyNotepad.UI.Model
             if (value == (byte)'\n')
             {
                 yield return -1;
-            }
-        }
-
-        private static void CollectForward(ReadOnlySpan<byte> span, ReadOnlySpan<byte> pattern, long baseOffset, List<long> results)
-        {
-            int from = 0;
-            while (true)
-            {
-                int idx = span.Slice(from).IndexOf(pattern);
-                if (idx < 0)
-                {
-                    break;
-                }
-                int matchAt = from + idx;
-                results.Add(baseOffset + matchAt);
-                from = matchAt + 1;
-            }
-        }
-
-        private static void CollectBackward(ReadOnlySpan<byte> span, byte value, long baseOffset, List<long> results)
-        {
-            int end = span.Length;
-            int idx;
-            while ((idx = span.Slice(0, end).LastIndexOf(value)) >= 0)
-            {
-                results.Add(baseOffset + idx);
-                end = idx;
             }
         }
 
