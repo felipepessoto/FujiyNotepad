@@ -1,0 +1,10 @@
+<Project>
+
+  <!-- Shared build settings inherited by every project in the repository. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>
