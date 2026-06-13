@@ -43,7 +43,7 @@ namespace FujiyNotepad.UI.Tests
                 var searcher = new TextSearcher(source);
 
                 var results = new List<long>();
-                await foreach (long offset in searcher.Search(0, new byte[] { (byte)'\n' }, new Progress<int>()))
+                await foreach (long offset in searcher.Search(0, new byte[] { (byte)'\n' }))
                 {
                     results.Add(offset);
                 }
@@ -72,7 +72,7 @@ namespace FujiyNotepad.UI.Tests
                 const int linesWanted = 3;
                 int remaining = linesWanted;
                 long length = source.Length - startOffset;
-                await foreach (long newline in searcher.Search(startOffset, new byte[] { (byte)'\n' }, new Progress<int>()))
+                await foreach (long newline in searcher.Search(startOffset, new byte[] { (byte)'\n' }))
                 {
                     if (--remaining == 0)
                     {

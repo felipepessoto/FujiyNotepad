@@ -14,8 +14,6 @@ namespace FujiyNotepad.UI.Model
         private readonly IByteSource source;
         private readonly int chunkSize;
 
-        public long FileSize => source.Length;
-
         public TextSearcher(IByteSource source) : this(source, DefaultChunkSize)
         {
         }
@@ -32,7 +30,7 @@ namespace FujiyNotepad.UI.Model
         /// Cancellation is cooperative: a cancelled <paramref name="token"/> stops enumeration between
         /// chunks <em>without throwing</em>, so callers can treat a cancelled search as an empty result.
         /// </summary>
-        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, IProgress<int> progress, [EnumeratorCancellation] CancellationToken token = default)
+        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default)
         {
             if (pattern.Length == 0)
             {
@@ -46,7 +44,7 @@ namespace FujiyNotepad.UI.Model
             }
             if (startOffset >= length)
             {
-                progress.Report(100);
+                progress?.Report(100);
                 yield break;
             }
 
@@ -58,7 +56,7 @@ namespace FujiyNotepad.UI.Model
             long bufferBase = startOffset;  // absolute offset of buffer[0]
             long total = length - startOffset;
             int lastPercent = -1;
-            progress.Report(0);
+            progress?.Report(0);
 
             while (true)
             {
@@ -104,7 +102,7 @@ namespace FujiyNotepad.UI.Model
                 bufferBase = readPos - newCarry;
                 carry = newCarry;
 
-                if (total > 0)
+                if (progress != null)
                 {
                     int percent = (int)((readPos - startOffset) * 100 / total);
                     if (percent != lastPercent)
@@ -120,7 +118,7 @@ namespace FujiyNotepad.UI.Model
                 }
             }
 
-            progress.Report(100);
+            progress?.Report(100);
         }
 
         /// <summary>
@@ -128,14 +126,12 @@ namespace FujiyNotepad.UI.Model
         /// <paramref name="startOffset"/>, in descending order. For '\n' it additionally yields -1 at
         /// the end (the implicit start-of-file line boundary the viewport relies on).
         /// </summary>
-        public IEnumerable<long> SearchBackward(long startOffset, byte value, IProgress<int> progress)
+        public IEnumerable<long> SearchBackward(long startOffset, byte value)
         {
             if (startOffset < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(startOffset), $"{nameof(startOffset)} cannot be negative");
             }
-
-            progress.Report(0);
 
             byte[] buffer = new byte[chunkSize];
             long pos = Math.Min(startOffset, source.Length); // scan the range [0, pos)

@@ -132,7 +132,7 @@ namespace FujiyNotepad.UI
         {
             startOffset = Math.Min(startOffset, maximumStartOffset);
 
-            startOffset = searcher.SearchBackward(startOffset, (byte)'\n', new Progress<int>()).FirstOrDefault() + 1;
+            startOffset = searcher.SearchBackward(startOffset, (byte)'\n').FirstOrDefault() + 1;
             lastOffset = startOffset;
             long length = await GetLengthToFillViewport(startOffset);
 
@@ -183,7 +183,7 @@ namespace FujiyNotepad.UI
 
             if (linesInViewport > 0)
             {
-                await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreak, new Progress<int>(), CancellationToken.None))
+                await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreak))
                 {
                     if (--linesInViewport == 0)
                     {
@@ -212,7 +212,7 @@ namespace FujiyNotepad.UI
             // The top-of-viewport offset when scrolled fully down: the start of the line that is
             // `linesFromEnd` newlines back from the end of the file. Scan from fileSize - 1 so the
             // file's terminating newline is not itself counted as a line from the end.
-            long offsetAfterLastNewlines = searcher.SearchBackward(fileSize - 1, (byte)'\n', new Progress<int>())
+            long offsetAfterLastNewlines = searcher.SearchBackward(fileSize - 1, (byte)'\n')
                 .Where(offset => offset >= 0)
                 .Take(linesFromEnd)
                 .DefaultIfEmpty(-1)
@@ -295,16 +295,15 @@ namespace FujiyNotepad.UI
                 if (linesToScroll < 0)
                 {
                     long startOffset = Math.Max(lastOffset - 1, 0);
-                    nextLineOffset = searcher.SearchBackward(startOffset, (byte)'\n', new Progress<int>()).Take(-linesToScroll).Cast<long?>().LastOrDefault() + 1;
+                    nextLineOffset = searcher.SearchBackward(startOffset, (byte)'\n').Take(-linesToScroll).Cast<long?>().LastOrDefault() + 1;
                 }
                 else
                 {
-                    //nextLineOffset = searcher.Search(lastOffset, LineIndexer.LineBreakChar, new Progress<int>()).Take(linesToScroll).Cast<long?>().LastOrDefault() + 1;
                     nextLineOffset = 1;
 
                     if (linesToScroll > 0)
                     {
-                        await foreach (var offset in searcher.Search(lastOffset, LineIndexer.LineBreak, new Progress<int>(), CancellationToken.None))
+                        await foreach (var offset in searcher.Search(lastOffset, LineIndexer.LineBreak))
                         {
                             if (--linesToScroll == 0)
                             {

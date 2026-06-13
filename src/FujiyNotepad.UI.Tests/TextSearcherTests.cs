@@ -15,7 +15,7 @@ namespace FujiyNotepad.UI.Tests
             var source = new InMemoryByteSource(content);
             var searcher = chunkSize is int cs ? new TextSearcher(source, cs) : new TextSearcher(source);
             var results = new List<long>();
-            await foreach (long offset in searcher.Search(startOffset, Encoding.ASCII.GetBytes(pattern), new Progress<int>(), token))
+            await foreach (long offset in searcher.Search(startOffset, Encoding.ASCII.GetBytes(pattern), token: token))
             {
                 results.Add(offset);
             }
@@ -95,7 +95,7 @@ namespace FujiyNotepad.UI.Tests
             // "a\nbc\nd" -> '\n' at 1 and 4. Backward scan yields 4, 1, then -1 (implicit start-of-file).
             var source = new InMemoryByteSource("a\nbc\nd");
             var searcher = new TextSearcher(source);
-            var offsets = searcher.SearchBackward(source.Length, (byte)'\n', new Progress<int>()).ToList();
+            var offsets = searcher.SearchBackward(source.Length, (byte)'\n').ToList();
             Assert.Equal(new long[] { 4, 1, -1 }, offsets);
         }
 
@@ -105,7 +105,7 @@ namespace FujiyNotepad.UI.Tests
             // Tiny chunk forces multiple backward blocks; order must stay strictly descending.
             var source = new InMemoryByteSource("a\nb\nc\nd");
             var searcher = new TextSearcher(source, chunkSize: 2);
-            var offsets = searcher.SearchBackward(source.Length, (byte)'\n', new Progress<int>()).ToList();
+            var offsets = searcher.SearchBackward(source.Length, (byte)'\n').ToList();
             Assert.Equal(new long[] { 5, 3, 1, -1 }, offsets);
         }
 
@@ -115,7 +115,7 @@ namespace FujiyNotepad.UI.Tests
             var source = new InMemoryByteSource("a\nbc\nd");
             var searcher = new TextSearcher(source);
             // From offset 3 the nearest preceding '\n' is at offset 1.
-            long nearest = searcher.SearchBackward(3, (byte)'\n', new Progress<int>()).First();
+            long nearest = searcher.SearchBackward(3, (byte)'\n').First();
             Assert.Equal(1, nearest);
         }
     }
