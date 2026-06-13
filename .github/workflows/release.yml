@@ -41,11 +41,16 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/self-contained
 
+      # No ReadyToRun for the framework-dependent build: an R2R image is tied to the exact runtime
+      # version it was crossgen'd against, so it can fail (coreclr fail-fast, 0xC0000602) on a machine
+      # whose installed .NET runtime patch differs from the build runner's. Plain IL stays portable
+      # and is JIT-compiled against whatever .NET 10 runtime the user has. (Self-contained keeps R2R
+      # because it ships its own matching runtime.)
       - name: Publish framework-dependent (requires the .NET 10 Desktop Runtime)
         run: >
           dotnet publish src/FujiyNotepad.UI/FujiyNotepad.UI.csproj
           -c Release -r win-x64 --self-contained false
-          -p:PublishSingleFile=true -p:PublishReadyToRun=true
+          -p:PublishSingleFile=true
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/framework-dependent
 
