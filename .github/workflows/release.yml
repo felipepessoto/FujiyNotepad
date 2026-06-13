@@ -38,6 +38,7 @@ jobs:
           -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -p:PublishReadyToRun=true
+          -p:Version=${{ steps.version.outputs.version }}
           -o publish/self-contained
 
       - name: Publish framework-dependent (requires the .NET 10 Desktop Runtime)
@@ -45,6 +46,7 @@ jobs:
           dotnet publish src/FujiyNotepad.UI/FujiyNotepad.UI.csproj
           -c Release -r win-x64 --self-contained false
           -p:PublishSingleFile=true -p:PublishReadyToRun=true
+          -p:Version=${{ steps.version.outputs.version }}
           -o publish/framework-dependent
 
       - name: Stage release assets
