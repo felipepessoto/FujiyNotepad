@@ -140,6 +140,7 @@ namespace FujiyNotepad.WinUI
             find.Reset();
 
             View.SetProvider(provider);
+            Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
             EditMenu.IsEnabled = true;
             indexRefreshTimer.Start();
             StartIndexing();
