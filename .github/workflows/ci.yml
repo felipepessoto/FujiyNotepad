@@ -34,3 +34,27 @@ jobs:
 
       - name: Test
         run: dotnet test src/FujiyNotepad.sln --configuration Release --no-build --verbosity normal
+
+  build-winui:
+    name: Build WinUI
+    # WinUI 3 (Windows App SDK) targets net10.0-windows10.0.19041.0 and only builds on Windows.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore src/FujiyNotepad.WinUI.sln
+
+      # Builds the shared engine (FujiyNotepad.Core) and the WinUI app. The WinUI project pins
+      # RuntimeIdentifier=win-x64, so no explicit -r is required here. The engine's tests run in the
+      # build-and-test job above (via FujiyNotepad.sln), so they are not repeated here.
+      - name: Build
+        run: dotnet build src/FujiyNotepad.WinUI.sln --configuration Release --no-restore
+
