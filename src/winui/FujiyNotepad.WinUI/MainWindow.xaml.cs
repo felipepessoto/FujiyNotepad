@@ -284,11 +284,24 @@ namespace FujiyNotepad.WinUI
                 Content = input,
                 PrimaryButtonText = "Go",
                 CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = Content.XamlRoot,
             };
 
+            // Pressing Enter in the box confirms the dialog, the same as clicking "Go".
+            bool confirmedByEnter = false;
+            input.KeyDown += (_, args) =>
+            {
+                if (args.Key == Windows.System.VirtualKey.Enter)
+                {
+                    args.Handled = true;
+                    confirmedByEnter = true;
+                    dialog.Hide();
+                }
+            };
+
             ContentDialogResult result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary && int.TryParse(input.Text, out int line))
+            if ((confirmedByEnter || result == ContentDialogResult.Primary) && int.TryParse(input.Text, out int line))
             {
                 View.GoToLine(line - 1);
                 View.FocusCanvas();
