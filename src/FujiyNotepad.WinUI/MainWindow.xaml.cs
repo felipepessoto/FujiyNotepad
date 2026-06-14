@@ -3,10 +3,12 @@ using FujiyNotepad.Core;
 using FujiyNotepad.WinUI.Controls;
 using FujiyNotepad.WinUI.Logic;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Windows.Graphics;
 using Windows.Storage.Pickers;
 
 namespace FujiyNotepad.WinUI
@@ -22,6 +24,10 @@ namespace FujiyNotepad.WinUI
         private CancellationTokenSource? cancelIndexing;
         private Task indexingTask = Task.CompletedTask;
         private bool syncingScroll;
+
+        private readonly SettingsStore settingsStore = SettingsStore.Default();
+        private AppSettings settings = new();
+        private SizeInt32 lastNormalSize;
 
         // Find state: the controller decides where each forward "find next" starts; findCts cancels an
         // in-progress search; isFinding guards against starting a second search while one runs.
@@ -39,6 +45,9 @@ namespace FujiyNotepad.WinUI
                 AppWindow.SetIcon(iconPath);
             }
 
+            settings = settingsStore.Load();
+            ApplyStartupSettings();
+
             View.ViewChanged += SyncScrollBars;
             View.CaretChanged += pos => LblCursor.Text = $"Ln {pos.Line + 1}, Col {pos.Column + 1}";
 
@@ -46,7 +55,13 @@ namespace FujiyNotepad.WinUI
             indexRefreshTimer.Interval = TimeSpan.FromMilliseconds(150);
             indexRefreshTimer.Tick += IndexRefreshTimer_Tick;
 
-            Closed += (_, _) => { cancelIndexing?.Cancel(); findCts?.Cancel(); source?.Dispose(); };
+            Closed += (_, _) =>
+            {
+                SaveWindowState();
+                cancelIndexing?.Cancel();
+                findCts?.Cancel();
+                source?.Dispose();
+            };
 
             // Open a file passed on the command line (file association / "open with" / drag-onto-exe).
             string? fileArg = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(File.Exists);
@@ -79,7 +94,7 @@ namespace FujiyNotepad.WinUI
                 LblStatus.Text = "Generating sample...";
                 await Task.Run(() => CreateSampleFile(path));
             }
-            await OpenFile(path);
+            await OpenFile(path, addToRecent: false);
         }
 
         private static void CreateSampleFile(string path)
@@ -134,7 +149,7 @@ namespace FujiyNotepad.WinUI
             };
         }
 
-        private async Task OpenFile(string path)
+        private async Task OpenFile(string path, bool addToRecent = true)
         {
             await StopIndexingAsync();
 
@@ -148,6 +163,14 @@ namespace FujiyNotepad.WinUI
             View.SetProvider(provider);
             Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
             EditMenu.IsEnabled = true;
+
+            if (addToRecent)
+            {
+                settings.RecentFiles = RecentFiles.Add(settings.RecentFiles, path);
+                settingsStore.Save(settings);
+                RebuildRecentMenu();
+            }
+
             indexRefreshTimer.Start();
             StartIndexing();
             SyncScrollBars();
@@ -512,7 +535,89 @@ namespace FujiyNotepad.WinUI
             if (sender is RadioMenuFlyoutItem item && int.TryParse(item.Tag?.ToString(), out int width))
             {
                 View.TabSize = width;
+                settings.TabWidth = width;
+                settingsStore.Save(settings);
             }
+        }
+
+        // Apply persisted settings on startup: tab width, the saved window size/maximized state, and the
+        // recent-files menu.
+        private void ApplyStartupSettings()
+        {
+            int tab = settings.TabWidth is 2 or 4 or 8 ? settings.TabWidth : 4;
+            View.TabSize = tab;
+            (tab switch { 2 => TabWidth2, 8 => TabWidth8, _ => TabWidth4 }).IsChecked = true;
+
+            if (settings.WindowWidth >= 320 && settings.WindowHeight >= 240)
+            {
+                AppWindow.Resize(new SizeInt32(settings.WindowWidth, settings.WindowHeight));
+            }
+            lastNormalSize = AppWindow.Size;
+
+            if (settings.WindowMaximized && AppWindow.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.Maximize();
+            }
+
+            // Track the most recent non-maximized size so we restore to it, not the maximized bounds.
+            AppWindow.Changed += (s, args) =>
+            {
+                if (args.DidSizeChange &&
+                    s.Presenter is OverlappedPresenter p &&
+                    p.State != OverlappedPresenterState.Maximized)
+                {
+                    lastNormalSize = s.Size;
+                }
+            };
+
+            RebuildRecentMenu();
+        }
+
+        private void SaveWindowState()
+        {
+            bool maximized = AppWindow.Presenter is OverlappedPresenter p &&
+                             p.State == OverlappedPresenterState.Maximized;
+            settings.WindowMaximized = maximized;
+
+            SizeInt32 size = maximized ? lastNormalSize : AppWindow.Size;
+            if (size.Width > 0 && size.Height > 0)
+            {
+                settings.WindowWidth = size.Width;
+                settings.WindowHeight = size.Height;
+            }
+
+            settingsStore.Save(settings);
+        }
+
+        // Rebuild the File > Open Recent submenu from the saved list, dropping entries that no longer exist.
+        private void RebuildRecentMenu()
+        {
+            RecentMenu.Items.Clear();
+            settings.RecentFiles = RecentFiles.Prune(settings.RecentFiles, File.Exists);
+
+            if (settings.RecentFiles.Count == 0)
+            {
+                RecentMenu.Items.Add(new MenuFlyoutItem { Text = "(No recent files)", IsEnabled = false });
+                return;
+            }
+
+            foreach (string path in settings.RecentFiles)
+            {
+                var item = new MenuFlyoutItem { Text = Path.GetFileName(path) };
+                ToolTipService.SetToolTip(item, path);
+                item.Click += (_, _) => { _ = OpenFile(path); };
+                RecentMenu.Items.Add(item);
+            }
+
+            RecentMenu.Items.Add(new MenuFlyoutSeparator());
+            var clear = new MenuFlyoutItem { Text = "Clear Recently Opened" };
+            clear.Click += (_, _) =>
+            {
+                settings.RecentFiles.Clear();
+                settingsStore.Save(settings);
+                RebuildRecentMenu();
+            };
+            RecentMenu.Items.Add(clear);
         }
     }
 }

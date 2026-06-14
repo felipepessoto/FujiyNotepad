@@ -30,6 +30,7 @@
             <MenuBarItem Title="File">
                 <MenuFlyoutItem Text="Open..." Click="Open_Click" />
                 <MenuFlyoutItem Text="Open Sample" Click="OpenSample_Click" />
+                <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click" />
             </MenuBarItem>
@@ -49,9 +50,9 @@
                 <MenuFlyoutItem x:Name="StopIndexingItem" Text="Stop indexing" Click="StopIndexing_Click" IsEnabled="False" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutSubItem Text="Tab Width">
-                    <RadioMenuFlyoutItem Text="2" GroupName="TabWidth" Tag="2" Click="TabWidth_Click" />
-                    <RadioMenuFlyoutItem Text="4" GroupName="TabWidth" Tag="4" IsChecked="True" Click="TabWidth_Click" />
-                    <RadioMenuFlyoutItem Text="8" GroupName="TabWidth" Tag="8" Click="TabWidth_Click" />
+                    <RadioMenuFlyoutItem x:Name="TabWidth2" Text="2" GroupName="TabWidth" Tag="2" Click="TabWidth_Click" />
+                    <RadioMenuFlyoutItem x:Name="TabWidth4" Text="4" GroupName="TabWidth" Tag="4" Click="TabWidth_Click" />
+                    <RadioMenuFlyoutItem x:Name="TabWidth8" Text="8" GroupName="TabWidth" Tag="8" Click="TabWidth_Click" />
                 </MenuFlyoutSubItem>
             </MenuBarItem>
         </MenuBar>
