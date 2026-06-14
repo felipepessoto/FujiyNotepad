@@ -30,9 +30,25 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.Equal(0, lines[0].LineIndex);
             Assert.Equal(0.0, lines[0].Y);
             Assert.Equal("ABCDE", lines[0].Display);
-            Assert.Equal(0.0, lines[0].TextX);
+            Assert.Equal(TextLayoutEngine.TextPadding, lines[0].TextX);
             Assert.Equal(5, lines[5].LineIndex);
             Assert.Equal(100.0, lines[5].Y);
+        }
+
+        [Fact]
+        public async Task GetVisibleLines_AppliesLeftPadding()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDEFGHIJKLMNOPQRST", 5), cw: 10, lh: 20, vw: 100, vh: 100);
+
+            VisibleLine notScrolled = e.GetVisibleLines(hasFocus: false, caretVisible: false)[0];
+            // Text is inset by the padding instead of being flush against the left border (x = 0).
+            Assert.Equal(TextLayoutEngine.TextPadding, notScrolled.TextX);
+            Assert.True(notScrolled.TextX > 0);
+
+            // The inset rides along with the horizontal scroll offset (extent was computed by the call above).
+            e.HorizontalOffset = 30;
+            VisibleLine scrolled = e.GetVisibleLines(hasFocus: false, caretVisible: false)[0];
+            Assert.Equal(TextLayoutEngine.TextPadding - 30, scrolled.TextX);
         }
 
         [Fact]
@@ -77,7 +93,7 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             VisibleLine line = e.GetVisibleLines(hasFocus: true, caretVisible: true)[0];
 
             Assert.True(line.HasCaret);
-            Assert.Equal(30.0, line.CaretX); // column 3 * 10 px
+            Assert.Equal(30.0 + TextLayoutEngine.TextPadding, line.CaretX); // column 3 * 10 px + left padding
             Assert.False(line.HasSelection);
         }
 
@@ -90,7 +106,7 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             VisibleLine line = e.GetVisibleLines(hasFocus: true, caretVisible: true)[0];
 
             Assert.True(line.HasSelection);
-            Assert.Equal(10.0, line.SelectionX);     // column 1 * 10
+            Assert.Equal(10.0 + TextLayoutEngine.TextPadding, line.SelectionX); // column 1 * 10 + left padding
             Assert.Equal(30.0, line.SelectionWidth); // (4 - 1) * 10
         }
 
@@ -105,12 +121,12 @@ namespace FujiyNotepad.WinUI.Logic.Tests
 
             // Middle line is fully highlighted: from column 0 to one past the last column (5 + 1).
             Assert.True(lines[1].HasSelection);
-            Assert.Equal(0.0, lines[1].SelectionX);
+            Assert.Equal(TextLayoutEngine.TextPadding, lines[1].SelectionX);
             Assert.Equal(60.0, lines[1].SelectionWidth);
             // First and last lines are partially highlighted.
-            Assert.Equal(20.0, lines[0].SelectionX); // from column 2
+            Assert.Equal(20.0 + TextLayoutEngine.TextPadding, lines[0].SelectionX); // from column 2 + left padding
             Assert.True(lines[2].HasSelection);
-            Assert.Equal(0.0, lines[2].SelectionX);
+            Assert.Equal(TextLayoutEngine.TextPadding, lines[2].SelectionX);
             Assert.Equal(30.0, lines[2].SelectionWidth); // up to column 3
         }
 
@@ -135,7 +151,7 @@ namespace FujiyNotepad.WinUI.Logic.Tests
 
             e.GetVisibleLines(hasFocus: false, caretVisible: false);
 
-            Assert.Equal(100.0, e.HorizontalExtentPx); // widest line: 10 columns * 10 px
+            Assert.Equal(100.0 + 2 * TextLayoutEngine.TextPadding, e.HorizontalExtentPx); // widest line 10*10 + left/right padding
             Assert.True(viewChanged >= 1);
         }
     }
