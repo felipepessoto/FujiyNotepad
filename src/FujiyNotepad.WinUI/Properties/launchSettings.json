@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "FujiyNotepad.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    },
+    "FujiyNotepad.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    }
+  }
+}

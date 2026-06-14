@@ -38,14 +38,13 @@ jobs:
         run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release
 
       # Native AOT (PublishAot=true in the WinUI csproj) compiles the app to native code: smaller, faster
-      # startup, no JIT, and no .NET runtime to install. WindowsAppSDKSelfContained bundles the Windows App
-      # SDK runtime so the unpackaged app needs no separate runtime install — the produced folder is fully
-      # standalone. AOT linking uses the hosted runner's C++ toolchain.
+      # startup, no JIT, and no .NET runtime to install. The csproj also sets WindowsAppSDKSelfContained, so
+      # the Windows App SDK runtime is bundled and the unpackaged app needs no separate runtime install — the
+      # produced folder is fully standalone. AOT linking uses the hosted runner's C++ toolchain.
       - name: Publish (Native AOT, self-contained)
         run: >
           dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
           -c Release -r win-x64
-          -p:WindowsAppSDKSelfContained=true
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/app
 
