@@ -420,5 +420,13 @@ namespace FujiyNotepad.WinUI
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+
+        private void TabWidth_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioMenuFlyoutItem item && int.TryParse(item.Tag?.ToString(), out int width))
+            {
+                View.TabSize = width;
+            }
+        }
     }
 }
