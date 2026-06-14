@@ -6,6 +6,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>FujiyNotepad.WinUI</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\FujiyNotepad.ico</ApplicationIcon>
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
@@ -25,6 +26,14 @@
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!-- ApplicationIcon (above) embeds the icon in the exe for Explorer/taskbar; also copy it next to the
+       exe so the window can set its title-bar / Alt+Tab icon at runtime via AppWindow.SetIcon. -->
+  <ItemGroup>
+    <None Update="Assets\FujiyNotepad.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!--
