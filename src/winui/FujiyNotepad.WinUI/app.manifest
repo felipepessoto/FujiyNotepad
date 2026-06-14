@@ -3,6 +3,16 @@
   <assemblyIdentity version="1.0.0.0" name="FujiyNotepad.WinUI.app" />
 
   <!--
+    Declare Windows 10+ OS compatibility. Unpackaged Windows App SDK apps need this to opt into OS
+    features introduced after Windows 8, matching what the WinUI project template emits.
+  -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+
+  <!--
     Declare Per-Monitor-V2 DPI awareness. Without this an unpackaged WinUI app runs DPI-unaware, so
     Windows bitmap-stretches the whole window on high-DPI / scaled displays and the UI (menus and text)
     looks blurry. Per-Monitor-V2 lets the framework render crisply at the monitor's real scale factor.
