@@ -60,5 +60,38 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(0, lc.CharIndexOfColumn(1)); // closer to the tab's start (col 0)
             Assert.Equal(1, lc.CharIndexOfColumn(3)); // closer to 'x' (col 4)
         }
+
+        [Fact]
+        public void WideChars_AdvanceTwoColumns()
+        {
+            // "a中b": 'a' is 1 cell, the CJK ideograph '中' is 2 cells, 'b' is 1 cell.
+            var lc = LineColumns.Build("a中b", 4);
+
+            Assert.Equal(4, lc.TotalColumns);
+            Assert.Equal(0, lc.ColumnOfCharIndex(0)); // before 'a'
+            Assert.Equal(1, lc.ColumnOfCharIndex(1)); // before '中'
+            Assert.Equal(3, lc.ColumnOfCharIndex(2)); // before 'b' (after the 2-wide '中')
+            Assert.Equal(4, lc.ColumnOfCharIndex(3)); // end
+        }
+
+        [Fact]
+        public void WideChars_HitTestMapsColumnsToChars()
+        {
+            var lc = LineColumns.Build("a中b", 4); // columnAt = [0, 1, 3, 4]
+
+            Assert.Equal(0, lc.CharIndexOfColumn(0)); // 'a'
+            Assert.Equal(1, lc.CharIndexOfColumn(1)); // '中'
+            Assert.Equal(2, lc.CharIndexOfColumn(3)); // 'b'
+        }
+
+        [Fact]
+        public void FullwidthChars_AreTwoCellsWide()
+        {
+            // 'Ａ' is U+FF21 (fullwidth Latin A), a 2-cell glyph.
+            var lc = LineColumns.Build("Ａb", 4);
+
+            Assert.Equal(3, lc.TotalColumns);
+            Assert.Equal(2, lc.ColumnOfCharIndex(1)); // 'b' starts after the 2-wide fullwidth 'Ａ'
+        }
     }
 }

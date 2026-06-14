@@ -54,7 +54,7 @@ namespace FujiyNotepad.Core
                 }
                 else
                 {
-                    col += 1;
+                    col += IsWide(c) ? 2 : 1;
                     display.Append(c);
                 }
             }
@@ -62,6 +62,22 @@ namespace FujiyNotepad.Core
 
             return new LineColumns(source, display.ToString(), columnAt);
         }
+
+        // East Asian Wide / Fullwidth code points (BMP) that a monospace font renders two cells wide:
+        // CJK ideographs, kana, Hangul, fullwidth forms, etc. Surrogate-pair code points (e.g. most emoji
+        // and CJK Ext-B) are treated as one cell per code unit and are not handled here.
+        private static bool IsWide(char c) =>
+            (c >= '\u1100' && c <= '\u115F') || // Hangul Jamo
+            (c >= '\u2E80' && c <= '\u303E') || // CJK radicals / Kangxi / CJK symbols
+            (c >= '\u3041' && c <= '\u33FF') || // Hiragana, Katakana, CJK symbols & punctuation, etc.
+            (c >= '\u3400' && c <= '\u4DBF') || // CJK Unified Ideographs Extension A
+            (c >= '\u4E00' && c <= '\u9FFF') || // CJK Unified Ideographs
+            (c >= '\uA000' && c <= '\uA4CF') || // Yi syllables
+            (c >= '\uAC00' && c <= '\uD7A3') || // Hangul syllables
+            (c >= '\uF900' && c <= '\uFAFF') || // CJK Compatibility Ideographs
+            (c >= '\uFE30' && c <= '\uFE4F') || // CJK Compatibility Forms
+            (c >= '\uFF00' && c <= '\uFF60') || // Fullwidth forms
+            (c >= '\uFFE0' && c <= '\uFFE6');    // Fullwidth signs
 
         /// <summary>Display column where the caret sits before source character <paramref name="charIndex"/>.</summary>
         public int ColumnOfCharIndex(int charIndex)
