@@ -19,9 +19,20 @@
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click" />
             </MenuBarItem>
-            <MenuBarItem Title="Edit">
-                <MenuFlyoutItem Text="Go To Line..." Click="GoTo_Click" />
-                <MenuFlyoutItem Text="Find..." Click="Find_Click" />
+            <MenuBarItem x:Name="EditMenu" Title="Edit" IsEnabled="False">
+                <MenuFlyoutItem Text="Go To Line..." Click="GoTo_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="G" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Find..." Click="Find_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="F" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="StartIndexingItem" Text="Start indexing" Click="StartIndexing_Click" IsEnabled="False" />
+                <MenuFlyoutItem x:Name="StopIndexingItem" Text="Stop indexing" Click="StopIndexing_Click" IsEnabled="False" />
             </MenuBarItem>
         </MenuBar>
 
