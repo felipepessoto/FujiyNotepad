@@ -32,7 +32,6 @@ namespace FujiyNotepad.WinUI
         public MainWindow()
         {
             this.InitializeComponent();
-            Title = "Fujiy Notepad (WinUI)";
 
             View.ViewChanged += SyncScrollBars;
             View.CaretChanged += pos => LblCursor.Text = $"Ln {pos.Line + 1}, Col {pos.Column + 1}";
