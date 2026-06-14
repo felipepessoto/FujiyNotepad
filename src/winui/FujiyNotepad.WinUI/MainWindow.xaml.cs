@@ -96,6 +96,7 @@ namespace FujiyNotepad.WinUI
             lastFoundOffset = -1;
 
             View.SetProvider(provider);
+            EditMenu.IsEnabled = true;
             indexRefreshTimer.Start();
             StartIndexing();
             SyncScrollBars();
@@ -104,6 +105,8 @@ namespace FujiyNotepad.WinUI
 
         private void StartIndexing()
         {
+            StartIndexingItem.IsEnabled = false;
+            StopIndexingItem.IsEnabled = true;
             cancelIndexing = new CancellationTokenSource();
             CancellationToken token = cancelIndexing.Token;
             var progress = new Progress<int>(p => LblStatus.Text = $"{p}% indexed");
@@ -146,7 +149,31 @@ namespace FujiyNotepad.WinUI
             if (LineIndexer.IsCompleted)
             {
                 indexRefreshTimer.Stop();
+                StopIndexingItem.IsEnabled = false;
                 LblStatus.Text = $"{provider.LineCount:N0} lines";
+            }
+        }
+
+        private void StartIndexing_Click(object sender, RoutedEventArgs e)
+        {
+            // Resume indexing from where it was stopped (the index is append-only and continues).
+            if (provider is null || LineIndexer.IsCompleted)
+            {
+                return;
+            }
+            indexRefreshTimer.Start();
+            StartIndexing();
+        }
+
+        private void StopIndexing_Click(object sender, RoutedEventArgs e)
+        {
+            cancelIndexing?.Cancel();
+            indexRefreshTimer.Stop();
+            StartIndexingItem.IsEnabled = true;
+            StopIndexingItem.IsEnabled = false;
+            if (provider is not null)
+            {
+                LblStatus.Text = $"{provider.LineCount:N0} lines (indexing stopped)";
             }
         }
 
@@ -252,14 +279,31 @@ namespace FujiyNotepad.WinUI
             long start = GetSearchStartOffset();
             byte[] pattern = Encoding.UTF8.GetBytes(text);
 
+            // Capture the provider so a concurrent file switch/close can be detected after the search
+            // and its (stale) result ignored; the try/catch handles a torn-down read mid-search.
+            LineProvider activeProvider = provider!;
+
             long? match = await Task.Run(async () =>
             {
-                await foreach (long m in searcher.Search(start, pattern))
+                try
                 {
-                    return (long?)m;
+                    await foreach (long m in searcher.Search(start, pattern))
+                    {
+                        return (long?)m;
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The file was closed/switched while searching; abandon this search.
                 }
                 return (long?)null;
             });
+
+            // If the file changed while searching, the result is stale.
+            if (!ReferenceEquals(provider, activeProvider))
+            {
+                return;
+            }
 
             if (match.HasValue)
             {
