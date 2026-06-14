@@ -84,6 +84,7 @@ namespace FujiyNotepad.UI.Controls
             Focusable = true;
             FocusVisualStyle = null;
             ClipToBounds = true;
+            Cursor = Cursors.IBeam; // show the text I-beam over the text area, like a TextBox
             selectionActiveBrush.Freeze();
             selectionInactiveBrush.Freeze();
 

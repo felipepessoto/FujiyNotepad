@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Input;
 using FujiyNotepad.UI.Controls;
 using FujiyNotepad.UI.Model;
 using Xunit;
@@ -95,6 +96,12 @@ namespace FujiyNotepad.UI.Tests
                 Assert.True(view.FullyVisibleLineCount > 1, "viewport should span multiple lines");
                 Assert.True(nonWhite > 200, $"expected drawn text pixels, got {nonWhite}");
             });
+        }
+
+        [Fact]
+        public void TextView_UsesIBeamCursor()
+        {
+            RunSta(() => Assert.Equal(Cursors.IBeam, new TextView().Cursor));
         }
 
         [Fact]
