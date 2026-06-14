@@ -205,6 +205,9 @@ namespace FujiyNotepad.WinUI.Logic
         public double HorizontalExtentPx => Math.Max(horizontalExtentPx, ViewportWidth);
         public TextPosition CaretPosition => caret;
 
+        /// <summary>True when there is a non-empty selection (the anchor and caret differ).</summary>
+        public bool HasSelection => anchor != caret;
+
         public void SetProvider(LineProvider? newProvider)
         {
             provider = newProvider;

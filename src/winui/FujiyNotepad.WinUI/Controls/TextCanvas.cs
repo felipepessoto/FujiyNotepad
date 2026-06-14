@@ -99,6 +99,26 @@ namespace FujiyNotepad.WinUI.Controls
             GotFocus += (_, _) => { hasFocusInternal = true; RestartCaretBlink(); canvas.Invalidate(); };
             LostFocus += (_, _) => { hasFocusInternal = false; caretTimer.Stop(); canvas.Invalidate(); };
             SizeChanged += (_, _) => { SyncViewport(); ViewChanged?.Invoke(); canvas.Invalidate(); };
+
+            BuildContextMenu();
+        }
+
+        // A right-click / long-press / Shift+F10 context menu for the read-only surface.
+        private void BuildContextMenu()
+        {
+            var copyItem = new MenuFlyoutItem { Text = "Copy", KeyboardAcceleratorTextOverride = "Ctrl+C" };
+            copyItem.Click += (_, _) => CopySelection();
+
+            var selectAllItem = new MenuFlyoutItem { Text = "Select All", KeyboardAcceleratorTextOverride = "Ctrl+A" };
+            selectAllItem.Click += (_, _) => SelectAllText();
+
+            var flyout = new MenuFlyout();
+            flyout.Items.Add(copyItem);
+            flyout.Items.Add(selectAllItem);
+            // Copy is only meaningful when something is selected.
+            flyout.Opening += (_, _) => copyItem.IsEnabled = engine.HasSelection;
+
+            ContextFlyout = flyout;
         }
 
         // Push the live control size + measured font metrics into the engine before any op that depends on
@@ -169,12 +189,36 @@ namespace FujiyNotepad.WinUI.Controls
 
         public void FocusCanvas() => Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
 
+        /// <summary>Copies the current selection to the clipboard (no-op when nothing is selected).</summary>
+        public void CopySelection()
+        {
+            string? text = engine.BuildCopyText();
+            if (text != null)
+            {
+                CopyToClipboard(text);
+            }
+        }
+
+        /// <summary>Selects the whole document.</summary>
+        public void SelectAllText()
+        {
+            Ready();
+            engine.HandleKey(NavKey.SelectAll, false);
+            FocusCanvas();
+        }
+
         #endregion
 
         #region Pointer
 
         private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
         {
+            // Let non-left buttons through (e.g. right-click, which raises the context menu).
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
             Focus(Microsoft.UI.Xaml.FocusState.Pointer);
             Ready();
             lastPointer = e.GetCurrentPoint(this).Position;
