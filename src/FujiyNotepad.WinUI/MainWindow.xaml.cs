@@ -33,6 +33,12 @@ namespace FujiyNotepad.WinUI
         {
             this.InitializeComponent();
 
+            string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "FujiyNotepad.ico");
+            if (File.Exists(iconPath))
+            {
+                AppWindow.SetIcon(iconPath);
+            }
+
             View.ViewChanged += SyncScrollBars;
             View.CaretChanged += pos => LblCursor.Text = $"Ln {pos.Line + 1}, Col {pos.Column + 1}";
 
