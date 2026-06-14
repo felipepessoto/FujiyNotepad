@@ -7,8 +7,9 @@
   <Project Path="FujiyNotepad.Core/FujiyNotepad.Core.csproj" />
   <Project Path="FujiyNotepad.Core.Tests/FujiyNotepad.Core.Tests.csproj" />
   <Project Path="FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj">
-    <Platform Project="x64" />
     <Platform Solution="*|ARM64" Project="ARM64" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="*|x86" Project="x86" />
   </Project>
   <Project Path="FujiyNotepad.WinUI.Logic/FujiyNotepad.WinUI.Logic.csproj" />
   <Project Path="FujiyNotepad.WinUI.Logic.Tests/FujiyNotepad.WinUI.Logic.Tests.csproj" />
