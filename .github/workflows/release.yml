@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual dry-run: builds and uploads the AOT artifact without creating a GitHub Release.
+  # Useful for verifying the Native AOT publish on the runner before tagging.
+  workflow_dispatch:
 
 permissions:
   contents: write   # required to create the GitHub Release and upload assets
@@ -12,6 +15,7 @@ jobs:
   release:
     name: Publish & Release
     runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -26,49 +30,48 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
+          # On a tag push, ref_name is the tag (e.g. v1.2.3); on a manual dry-run it is the branch.
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart('v') } else { "0.0.0-dev" }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Test
-        run: dotnet test src/FujiyNotepad.sln --configuration Release
+        run: dotnet test src/FujiyNotepad.WinUI.sln --configuration Release
 
-      - name: Publish self-contained (no .NET install required)
+      # Native AOT (PublishAot=true in the WinUI csproj) compiles the app to native code: smaller, faster
+      # startup, no JIT, and no .NET runtime to install. WindowsAppSDKSelfContained bundles the Windows App
+      # SDK runtime so the unpackaged app needs no separate runtime install — the produced folder is fully
+      # standalone. AOT linking uses the hosted runner's C++ toolchain.
+      - name: Publish (Native AOT, self-contained)
         run: >
-          dotnet publish src/FujiyNotepad.UI/FujiyNotepad.UI.csproj
-          -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:PublishReadyToRun=true
+          dotnet publish src/winui/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
+          -c Release -r win-x64
+          -p:WindowsAppSDKSelfContained=true
           -p:Version=${{ steps.version.outputs.version }}
-          -o publish/self-contained
+          -o publish/winui
 
-      # No ReadyToRun for the framework-dependent build: an R2R image is tied to the exact runtime
-      # version it was crossgen'd against, so it can fail (coreclr fail-fast, 0xC0000602) on a machine
-      # whose installed .NET runtime patch differs from the build runner's. Plain IL stays portable
-      # and is JIT-compiled against whatever .NET 10 runtime the user has. (Self-contained keeps R2R
-      # because it ships its own matching runtime.)
-      - name: Publish framework-dependent (requires the .NET 10 Desktop Runtime)
-        run: >
-          dotnet publish src/FujiyNotepad.UI/FujiyNotepad.UI.csproj
-          -c Release -r win-x64 --self-contained false
-          -p:PublishSingleFile=true
-          -p:Version=${{ steps.version.outputs.version }}
-          -o publish/framework-dependent
-
-      - name: Stage release assets
+      - name: Package
+        id: package
         shell: pwsh
         run: |
           $v = "${{ steps.version.outputs.version }}"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          # Only the single .exe from each variant (skip the .pdb).
-          Copy-Item publish/self-contained/FujiyNotepad.UI.exe "dist/FujiyNotepad-$v-win-x64-self-contained.exe"
-          Copy-Item publish/framework-dependent/FujiyNotepad.UI.exe "dist/FujiyNotepad-$v-win-x64.exe"
+          $zip = "dist/FujiyNotepad-$v-win-x64.zip"
+          Compress-Archive -Path publish/winui/* -DestinationPath $zip -Force
+          "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # Always uploaded (including on the manual dry-run) so the AOT build can be inspected without a release.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FujiyNotepad-win-x64
+          path: ${{ steps.package.outputs.zip }}
 
       - name: Create GitHub Release
+        if: github.ref_type == 'tag'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $assets = Get-ChildItem dist/*.exe | ForEach-Object { $_.FullName }
-          gh release create "${{ github.ref_name }}" $assets `
+          gh release create "${{ github.ref_name }}" "${{ steps.package.outputs.zip }}" `
             --title "FujiyNotepad ${{ github.ref_name }}" `
             --generate-notes
