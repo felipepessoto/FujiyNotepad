@@ -13,6 +13,9 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <PublishAot>true</PublishAot>
+    <!-- Ship the Windows App SDK runtime inside the app (unpackaged, self-contained), so a publish is
+         always standalone regardless of whether -p:WindowsAppSDKSelfContained is passed on the command line. -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
