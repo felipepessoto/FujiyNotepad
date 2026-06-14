@@ -31,7 +31,8 @@ jobs:
         run: dotnet restore src/FujiyNotepad.WinUI.slnx
 
       # Builds the shared engine (FujiyNotepad.Core), the WinUI text-view logic library and its tests, and
-      # the WinUI app. The WinUI app pins RuntimeIdentifier=win-x64, so no explicit -r is required here.
+      # the WinUI app as a managed (RID-agnostic) build. The publish RID is selected at publish time by the
+      # per-architecture publish profiles (Properties/PublishProfiles/win-*.pubxml), so no -r is needed here.
       - name: Build
         run: dotnet build src/FujiyNotepad.WinUI.slnx --configuration Release --no-restore
 

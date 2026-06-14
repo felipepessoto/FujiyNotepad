@@ -4,18 +4,51 @@ on:
   push:
     tags:
       - 'v*'
-  # Manual dry-run: builds and uploads the AOT artifact without creating a GitHub Release.
-  # Useful for verifying the Native AOT publish on the runner before tagging.
+  # Manual dry-run: builds and uploads the AOT artifacts for every architecture without creating a
+  # GitHub Release. Useful for verifying the multi-arch Native AOT publish on the runners before tagging.
   workflow_dispatch:
 
 permissions:
   contents: write   # required to create the GitHub Release and upload assets
 
 jobs:
-  release:
-    name: Publish & Release
+  test:
+    name: Test
     runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release
+
+  build:
+    name: Publish ${{ matrix.rid }}
+    needs: test
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x64 and x86 are built on the x64 image; arm64 is built natively on the Windows-on-Arm
+          # image, so Native AOT needs no x64 -> arm64 cross-compilation.
+          - rid: win-x64
+            platform: x64
+            os: windows-latest
+          - rid: win-x86
+            platform: x86
+            os: windows-latest
+          - rid: win-arm64
+            platform: ARM64
+            os: windows-11-arm
 
     steps:
       - name: Checkout
@@ -34,17 +67,17 @@ jobs:
           $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart('v') } else { "0.0.0-dev" }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Test
-        run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release
-
       # Native AOT (PublishAot=true in the WinUI csproj) compiles the app to native code: smaller, faster
-      # startup, no JIT, and no .NET runtime to install. The csproj also sets WindowsAppSDKSelfContained, so
-      # the Windows App SDK runtime is bundled and the unpackaged app needs no separate runtime install — the
-      # produced folder is fully standalone. AOT linking uses the hosted runner's C++ toolchain.
+      # startup, no JIT, and no .NET runtime to install. The app's publish profile
+      # (Properties/PublishProfiles/win-<rid>.pubxml) selects the RID and a self-contained publish; passing
+      # -p:Platform keeps the RID resolution consistent. WindowsAppSDKSelfContained bundles the Windows App
+      # SDK, so each unpackaged build is fully standalone. AOT linking uses the runner's C++ toolchain.
       - name: Publish (Native AOT, self-contained)
         run: >
           dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
-          -c Release -r win-x64
+          -c Release
+          -p:Platform=${{ matrix.platform }}
+          -p:PublishProfile=${{ matrix.rid }}
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/app
 
@@ -54,23 +87,35 @@ jobs:
         run: |
           $v = "${{ steps.version.outputs.version }}"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $zip = "dist/FujiyNotepad-$v-win-x64.zip"
+          $zip = "dist/FujiyNotepad-$v-${{ matrix.rid }}.zip"
           Compress-Archive -Path publish/app/* -DestinationPath $zip -Force
           "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      # Always uploaded (including on the manual dry-run) so the AOT build can be inspected without a release.
+      # Always uploaded (including on the manual dry-run) so each AOT build can be inspected without a release.
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FujiyNotepad-win-x64
+          name: FujiyNotepad-${{ matrix.rid }}
           path: ${{ steps.package.outputs.zip }}
 
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
       - name: Create GitHub Release
-        if: github.ref_type == 'tag'
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${{ github.ref_name }}" "${{ steps.package.outputs.zip }}" `
-            --title "FujiyNotepad ${{ github.ref_name }}" `
-            --generate-notes
+        run: >
+          gh release create "${{ github.ref_name }}" artifacts/*.zip
+          --repo ${{ github.repository }}
+          --title "FujiyNotepad ${{ github.ref_name }}"
+          --generate-notes
