@@ -1,6 +1,7 @@
 using System.Text;
 using FujiyNotepad.Core;
 using FujiyNotepad.WinUI.Controls;
+using FujiyNotepad.WinUI.Logic;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
