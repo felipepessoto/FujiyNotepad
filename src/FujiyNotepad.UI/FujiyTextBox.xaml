@@ -3,11 +3,28 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:controls="clr-namespace:FujiyNotepad.UI.Controls"
              xmlns:local="clr-namespace:FujiyNotepad.UI"
              mc:Ignorable="d" 
              d:DesignHeight="300" d:DesignWidth="300">
-    <Grid>
-        <TextBox Name="TxtContent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalScrollBarVisibility="Visible" IsUndoEnabled="False" VerticalScrollBarVisibility="Disabled" PreviewKeyDown="TxtContent_PreviewKeyDown" IsReadOnly="True" IsReadOnlyCaretVisible="True" SelectionChanged="TxtContent_SelectionChanged" />
-        <ScrollBar Name="ContentScrollBar" HorizontalAlignment="Right" VerticalAlignment="Stretch" Maximum="1000" Scroll="ScrollBar_Scroll" />
+    <Grid Background="White">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <controls:TextView x:Name="View" Grid.Row="0" Grid.Column="0" ClipToBounds="True" />
+
+        <ScrollBar x:Name="VScroll" Grid.Row="0" Grid.Column="1" Orientation="Vertical"
+                   Minimum="0" SmallChange="1" Scroll="VScroll_Scroll" />
+
+        <ScrollBar x:Name="HScroll" Grid.Row="1" Grid.Column="0" Orientation="Horizontal"
+                   Minimum="0" Scroll="HScroll_Scroll" />
+
+        <Border Grid.Row="1" Grid.Column="1" Background="{x:Static SystemColors.ControlBrush}" />
     </Grid>
 </UserControl>

@@ -1,359 +1,201 @@
-﻿using FujiyNotepad.UI.Model;
-using System.Diagnostics;
-using System.IO;
+using FujiyNotepad.UI.Controls;
+using FujiyNotepad.UI.Model;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace FujiyNotepad.UI
 {
     public partial class FujiyTextBox : UserControl
     {
         IByteSource? source;
-        long fileSize;
-        readonly StringBuilder sb = new();
-        long maximumStartOffset;
         TextSearcher searcher = null!;
+        LineProvider? provider;
+
+        readonly DispatcherTimer indexRefreshTimer;
+        bool syncingScroll;
+
+        // Where the next Find should start. -1 means "no previous match", so the search anchors on the
+        // caret instead; after a hit it advances past that match so repeated Find walks occurrences.
+        long lastFoundOffset = -1;
+
         public LineIndexer LineIndexer { get; private set; } = null!;
-        long lastOffset;
 
-        private const int MaxViewportBytes = 8 * 1024 * 1024;
-
-        private bool IsChangingText { get; set; }
-        private long CaretSelectionOffset { get; set; }
-        private int CaretSelectionLength { get; set; }//TODO implement
+        /// <summary>Raised with the 1-based caret line and column whenever the caret moves.</summary>
+        public event Action<int, int>? CaretPositionChanged;
 
         public FujiyTextBox()
         {
             InitializeComponent();
-            TxtContent.Margin = new Thickness(0, 0, ContentScrollBar.Width, 0);
             IsEnabled = false;
+
+            View.ViewChanged += SyncScrollBars;
+            View.CaretChanged += pos => CaretPositionChanged?.Invoke(pos.Line + 1, pos.Column + 1);
+
+            indexRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(150)
+            };
+            indexRefreshTimer.Tick += IndexRefreshTimer_Tick;
         }
 
-        public async Task OpenFile(string filePath)
+        public Task OpenFile(string filePath)
         {
             IsEnabled = true;
+            indexRefreshTimer.Stop();
             source?.Dispose();
 
             source = new FileByteSource(filePath);
-            fileSize = source.Length;
-
             searcher = new TextSearcher(source);
             LineIndexer = new LineIndexer(searcher);
+            provider = new LineProvider(source, LineIndexer);
 
-            maximumStartOffset = GetMaximumStartOffset();//TODO: recompute whenever the control is resized
+            lastFoundOffset = -1;
+            View.SetProvider(provider);
 
-            await GoToOffset(0, true);
-            TxtContent.Focus();
+            // The line count (and so the scrollbar extent) grows as the background indexer discovers
+            // lines; poll for that and stop once indexing completes.
+            indexRefreshTimer.Start();
+
+            View.Focus();
+            return Task.CompletedTask;
         }
 
         public void DisposeFile()
         {
+            indexRefreshTimer.Stop();
+            View.SetProvider(null);
+            provider = null;
             source?.Dispose();
             source = null;
         }
 
-        public async Task GoToLineNumber(int lineNumber)
+        private void IndexRefreshTimer_Tick(object? sender, EventArgs e)
         {
-            if (LineIndexer.GetNumberOfLinesIndexed() > lineNumber)
+            if (provider is null)
             {
-                long offset = LineIndexer.GetOffsetFromLineNumber(lineNumber);
-                await GoToOffset(offset, true);
+                indexRefreshTimer.Stop();
+                return;
             }
-            else
-            {
-                if (LineIndexer.IsCompleted)
-                {
-                    //TODO: notify the user that the line number is out of range
-                }
-                else
-                {
-                    //TODO: notify the user that indexing is still in progress
-                }
 
+            View.UpdateTotalLines(provider.LineCount);
+
+            if (LineIndexer.IsCompleted)
+            {
+                indexRefreshTimer.Stop();
             }
+        }
+
+        public Task GoToLineNumber(int lineNumber)
+        {
+            if (provider is null)
+            {
+                return Task.CompletedTask;
+            }
+
+            int target = Math.Max(0, lineNumber - 1);
+            if (target < provider.LineCount)
+            {
+                View.GoToLine(target);
+                lastFoundOffset = -1;
+            }
+
+            return Task.CompletedTask;
         }
 
         public Task FindText(string text, Progress<int> progress, CancellationToken token)
         {
+            long startOffset = GetSearchStartOffset();
+            byte[] pattern = Encoding.UTF8.GetBytes(text);
+
             return Task.Run(async () =>
             {
-                await foreach (var offsetOccurence in searcher.Search(CaretSelectionOffset + CaretSelectionLength, Encoding.UTF8.GetBytes(text), progress, token))
+                await foreach (var matchOffset in searcher.Search(startOffset, pattern, progress, token))
                 {
-                    await await Dispatcher.InvokeAsync(async () =>
+                    await Dispatcher.InvokeAsync(() =>
                     {
-                        long lineBeginningOffset = await GoToOffset(offsetOccurence, true);
-                        TxtContent.Select((int)(offsetOccurence - lineBeginningOffset), text.Length);
-                        App.Current.MainWindow?.Activate();
+                        int line = LineIndexer.GetLineNumberFromOffset(matchOffset);
+                        long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
+                        int charColumn = provider!.ByteColumnToCharColumn(line, matchOffset - lineStart);
+                        lastFoundOffset = matchOffset;
+                        View.SelectMatch(line, charColumn, text.Length);
+                        Application.Current.MainWindow?.Activate();
                     });
                     break;
                 }
             });
         }
 
-        private void UpdateScrollBarFromOffset(long offset)
+        private long GetSearchStartOffset()
         {
-            double newScrollValue = offset * ContentScrollBar.Maximum / fileSize;
-            ContentScrollBar.Value = newScrollValue;
-        }
-
-        private async void ScrollBar_Scroll(object sender, ScrollEventArgs e)
-        {
-            //TODO evitar que seja chamado varias vezes em menos de 100ms
-
-            int linesToScroll;
-
-            switch (e.ScrollEventType)
+            if (lastFoundOffset >= 0)
             {
-                case ScrollEventType.SmallDecrement:
-                    linesToScroll = -1;
-                    break;
-                case ScrollEventType.SmallIncrement:
-                    linesToScroll = 1;
-                    break;
-                case ScrollEventType.LargeDecrement:
-                    linesToScroll = -(CountVisibleLines() - 1);//TODO -(CountVisibleLines() - 2);
-                    break;
-                case ScrollEventType.LargeIncrement:
-                    linesToScroll = CountVisibleLines() - 1;//TODO CountVisibleLines() - 2;
-                    break;
-                default:
-                    long startOffset = (long)(fileSize * e.NewValue / ContentScrollBar.Maximum);
-                    await GoToOffset(startOffset, false);
-                    return;
+                return lastFoundOffset + 1;
             }
 
-            await ScrollContent(linesToScroll, true);
-        }
-
-        private async Task<long> GoToOffset(long startOffset, bool updateScrollBar)
-        {
-            startOffset = Math.Min(startOffset, maximumStartOffset);
-
-            startOffset = searcher.SearchBackward(startOffset, (byte)'\n').FirstOrDefault() + 1;
-            lastOffset = startOffset;
-            long length = await GetLengthToFillViewport(startOffset);
-
-            Debug.Assert(length > 0 || fileSize == 0);
-
-            int windowLength = (int)Math.Min(length, MaxViewportBytes);
-            byte[] window = new byte[windowLength];
-            int bytesRead = source!.ReadFull(startOffset, window);
-
-            using (var stream = new MemoryStream(window, 0, bytesRead))
-            using (var streamReader = new StreamReader(stream))
+            TextPosition caret = View.CaretPosition;
+            if (provider != null && caret.Line >= 0 && caret.Line < provider.LineCount)
             {
-                sb.Clear();
-                int linesInViewport = CountVisibleLines();
-                for (int i = 0; i < linesInViewport; i++)
+                try
                 {
-                    string? line = streamReader.ReadLine();
-                    if (line is null)
-                    {
-                        break;
-                    }
-
-                    if (i == linesInViewport - 1)
-                    {
-                        sb.Append(line);
-                    }
-                    else
-                    {
-                        sb.AppendLine(line);
-                    }
+                    return LineIndexer.GetOffsetFromLineNumber(caret.Line + 1);
                 }
-                IsChangingText = true;
-                TxtContent.Text = sb.ToString();
-                UpdateCaretSelection();
-                IsChangingText = false;
-            }
-
-            if (updateScrollBar)
-            {
-                UpdateScrollBarFromOffset(startOffset);
-            }
-            return startOffset;
-        }
-
-        private async Task<long> GetLengthToFillViewport(long startOffset)
-        {
-            int linesInViewport = CountVisibleLines();
-
-            if (linesInViewport > 0)
-            {
-                await foreach (var offset in searcher.Search(startOffset, LineIndexer.LineBreak))
+                catch (InvalidOperationException)
                 {
-                    if (--linesInViewport == 0)
-                    {
-                        long nextLineOffset = offset + 1;
-                        return nextLineOffset - startOffset;
-                    }
+                    return 0;
                 }
             }
 
-            return fileSize - startOffset;
+            return 0;
         }
 
-        private long GetMaximumStartOffset()
+        private void SyncScrollBars()
         {
-            if (fileSize <= 0)
+            if (syncingScroll)
             {
-                return 0;
+                return;
             }
 
-            int linesFromEnd = CountVisibleLines() - 1;//Rows behind horizontal scrollbar
-            if (linesFromEnd <= 0)
+            syncingScroll = true;
+            try
             {
-                return fileSize - 1;
+                int viewportLines = View.FullyVisibleLineCount;
+                VScroll.Maximum = View.MaxFirstLine;
+                VScroll.ViewportSize = viewportLines;
+                VScroll.LargeChange = viewportLines;
+                VScroll.Value = View.FirstVisibleLine;
+
+                double viewportWidth = View.ViewportWidthPx;
+                HScroll.Maximum = Math.Max(0, View.HorizontalExtentPx - viewportWidth);
+                HScroll.ViewportSize = viewportWidth;
+                HScroll.SmallChange = View.CharWidthPx > 0 ? View.CharWidthPx : 8;
+                HScroll.LargeChange = viewportWidth;
+                HScroll.Value = View.HorizontalOffset;
             }
-
-            // The top-of-viewport offset when scrolled fully down: the start of the line that is
-            // `linesFromEnd` newlines back from the end of the file. Scan from fileSize - 1 so the
-            // file's terminating newline is not itself counted as a line from the end.
-            long offsetAfterLastNewlines = searcher.SearchBackward(fileSize - 1, (byte)'\n')
-                .Where(offset => offset >= 0)
-                .Take(linesFromEnd)
-                .DefaultIfEmpty(-1)
-                .Last() + 1;
-
-            return Math.Min(offsetAfterLastNewlines, fileSize - 1);
-        }
-
-        private int CountVisibleLines()
-        {
-            int lines = (int)Math.Floor((TxtContent.VerticalOffset + TxtContent.ViewportHeight - 1) / (TxtContent.FontFamily.LineSpacing * TxtContent.FontSize));
-            return lines;
-        }
-
-        private async void TxtContent_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            int lineIndex = GetCaretLineIndex();
-            int column = TxtContent.SelectionStart - TxtContent.GetCharacterIndexFromLineIndex(lineIndex);
-            int line = lineIndex + 1;
-
-            int linesToScroll;
-
-            switch (e.Key)
+            finally
             {
-                case Key.Up:
-                    if (line > 1)
-                    {
-                        return;
-                    }
-                    linesToScroll = -1;
-                    break;
-                case Key.Down:
-                    if (line < CountVisibleLines())
-                    {
-                        return;
-                    }
-                    linesToScroll = 1;
-
-                    break;
-                case Key.PageUp:
-                    linesToScroll = -(CountVisibleLines() - 1);//TODO -(CountVisibleLines() - 2);
-                    break;
-                case Key.PageDown:
-                    linesToScroll = CountVisibleLines() - 1;//TODO CountVisibleLines() - 2;
-                    break;
-                case Key.Home:
-                    if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
-                    {
-                        await GoToOffset(0, true);
-                    }
-                    return;
-                case Key.End:
-                    if (e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Control))
-                    {
-                        await GoToOffset(maximumStartOffset, true);
-                    }
-                    return;
-                default:
-                    return;
-            }
-
-            await ScrollContent(linesToScroll, false);
-
-            switch (e.Key)
-            {
-                case Key.PageUp:
-                case Key.PageDown:
-                    int newColumn = Math.Min(column, TxtContent.GetLineLength(lineIndex));
-                    TxtContent.CaretIndex = TxtContent.GetCharacterIndexFromLineIndex(lineIndex) + newColumn;
-                    e.Handled = true;
-                    break;
+                syncingScroll = false;
             }
         }
 
-        private async Task ScrollContent(int linesToScroll, bool keepCaretAtSameLine)
+        private void VScroll_Scroll(object sender, ScrollEventArgs e)
         {
-            if (linesToScroll != 0)
+            if (syncingScroll)
             {
-                long? nextLineOffset;
-                if (linesToScroll < 0)
-                {
-                    long startOffset = Math.Max(lastOffset - 1, 0);
-                    nextLineOffset = searcher.SearchBackward(startOffset, (byte)'\n').Take(-linesToScroll).Cast<long?>().LastOrDefault() + 1;
-                }
-                else
-                {
-                    nextLineOffset = 1;
-
-                    if (linesToScroll > 0)
-                    {
-                        await foreach (var offset in searcher.Search(lastOffset, LineIndexer.LineBreak))
-                        {
-                            if (--linesToScroll == 0)
-                            {
-                                nextLineOffset = offset + 1;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (nextLineOffset != null)
-                {
-                    await GoToOffset(nextLineOffset.Value, true);
-                }
+                return;
             }
+            View.FirstVisibleLine = (int)Math.Round(VScroll.Value);
         }
 
-        private void UpdateCaretSelection()
+        private void HScroll_Scroll(object sender, ScrollEventArgs e)
         {
-            var lastSelectedCharOffset = CaretSelectionOffset + CaretSelectionLength;
-
-            if (lastSelectedCharOffset < lastOffset || CaretSelectionOffset > (lastOffset + TxtContent.Text.Length))
+            if (syncingScroll)
             {
-                TxtContent.IsReadOnlyCaretVisible = false;
+                return;
             }
-            else
-            {
-                TxtContent.IsReadOnlyCaretVisible = true;
-                TxtContent.SelectionStart = Math.Max((int)(CaretSelectionOffset - lastOffset), 0);
-
-                int countSelectedCharsNotVisible = Math.Max((int)(lastOffset - CaretSelectionOffset), 0);
-                TxtContent.SelectionLength = CaretSelectionLength - countSelectedCharsNotVisible;
-            }
-        }
-
-        private int GetCaretLineIndex()
-        {
-            return TxtContent.GetLineIndexFromCharacterIndex(TxtContent.CaretIndex);
-        }
-
-        private void TxtContent_SelectionChanged(object sender, RoutedEventArgs e)
-        {
-            if (IsChangingText == false)
-            {
-                TxtContent.IsReadOnlyCaretVisible = true;
-                var txtContent = ((TextBox)e.OriginalSource);
-                //TODO: if the user changes the end of the selection while the selected text is only partially visible, the CaretSelectionOffset is inadvertently recalculated
-                CaretSelectionOffset = txtContent.SelectionStart + lastOffset;
-                CaretSelectionLength = txtContent.SelectionLength;
-            }
+            View.HorizontalOffset = HScroll.Value;
         }
     }
 }

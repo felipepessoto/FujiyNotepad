@@ -23,6 +23,8 @@ namespace FujiyNotepad.UI
         public MainWindow()
         {
             InitializeComponent();
+            TextControl.CaretPositionChanged += (line, column) =>
+                LblCursorPosition.Text = $"Ln {line}, Col {column}";
         }
 
         private void EditCommand_CanExecute(object sender, CanExecuteRoutedEventArgs e)
