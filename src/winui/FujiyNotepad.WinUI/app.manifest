@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="FujiyNotepad.WinUI.app" />
+
+  <!--
+    Declare Per-Monitor-V2 DPI awareness. Without this an unpackaged WinUI app runs DPI-unaware, so
+    Windows bitmap-stretches the whole window on high-DPI / scaled displays and the UI (menus and text)
+    looks blurry. Per-Monitor-V2 lets the framework render crisply at the monitor's real scale factor.
+  -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>
