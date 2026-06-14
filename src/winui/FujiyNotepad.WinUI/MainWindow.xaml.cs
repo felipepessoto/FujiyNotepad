@@ -279,14 +279,31 @@ namespace FujiyNotepad.WinUI
             long start = GetSearchStartOffset();
             byte[] pattern = Encoding.UTF8.GetBytes(text);
 
+            // Capture the provider so a concurrent file switch/close can be detected after the search
+            // and its (stale) result ignored; the try/catch handles a torn-down read mid-search.
+            LineProvider activeProvider = provider!;
+
             long? match = await Task.Run(async () =>
             {
-                await foreach (long m in searcher.Search(start, pattern))
+                try
                 {
-                    return (long?)m;
+                    await foreach (long m in searcher.Search(start, pattern))
+                    {
+                        return (long?)m;
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The file was closed/switched while searching; abandon this search.
                 }
                 return (long?)null;
             });
+
+            // If the file changed while searching, the result is stale.
+            if (!ReferenceEquals(provider, activeProvider))
+            {
+                return;
+            }
 
             if (match.HasValue)
             {

@@ -577,6 +577,12 @@ namespace FujiyNotepad.WinUI.Controls
                 using var probe = new CanvasTextLayout(device, new string('0', 10), textFormat, 0, 0);
                 charWidth = probe.LayoutBounds.Width / 10.0;
                 lineHeight = probe.LayoutBounds.Height;
+                // Only latch the metrics once a real probe succeeds, so a transient device failure on
+                // the first call falls back for this draw but is recomputed on the next.
+                if (charWidth > 0 && lineHeight > 0)
+                {
+                    metricsValid = true;
+                }
             }
             catch (Exception)
             {
@@ -592,7 +598,6 @@ namespace FujiyNotepad.WinUI.Controls
             {
                 lineHeight = 18.0;
             }
-            metricsValid = true;
         }
 
         private LineColumns GetColumns(int lineIndex)
