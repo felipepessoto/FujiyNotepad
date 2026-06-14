@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace FujiyNotepad.UI.Model
+namespace FujiyNotepad.Core
 {
     /// <summary>
     /// Forward/backward byte-pattern search over an <see cref="IByteSource"/>. Reads the source in

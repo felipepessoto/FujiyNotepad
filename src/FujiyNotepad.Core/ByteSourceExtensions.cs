@@ -1,4 +1,4 @@
-namespace FujiyNotepad.UI.Model
+namespace FujiyNotepad.Core
 {
     public static class ByteSourceExtensions
     {

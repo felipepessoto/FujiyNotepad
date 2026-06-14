@@ -1,5 +1,5 @@
 using FujiyNotepad.UI.Controls;
-using FujiyNotepad.UI.Model;
+using FujiyNotepad.Core;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;

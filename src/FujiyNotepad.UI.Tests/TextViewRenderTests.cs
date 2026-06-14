@@ -6,7 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Input;
 using FujiyNotepad.UI.Controls;
-using FujiyNotepad.UI.Model;
+using FujiyNotepad.Core;
 using Xunit;
 
 namespace FujiyNotepad.UI.Tests

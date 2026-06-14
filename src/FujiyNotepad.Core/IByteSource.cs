@@ -1,4 +1,4 @@
-namespace FujiyNotepad.UI.Model
+namespace FujiyNotepad.Core
 {
     /// <summary>
     /// Read-only positional access to a byte store (a file on disk, or in-memory data for tests).

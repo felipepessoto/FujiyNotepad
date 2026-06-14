@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using FujiyNotepad.UI.Model;
+using FujiyNotepad.Core;
 
 namespace FujiyNotepad.UI.Controls
 {

@@ -1,7 +1,6 @@
-using System.IO;
 using Microsoft.Win32.SafeHandles;
 
-namespace FujiyNotepad.UI.Model
+namespace FujiyNotepad.Core
 {
     /// <summary>
     /// <see cref="IByteSource"/> over a file, using the positional <see cref="RandomAccess"/> API
