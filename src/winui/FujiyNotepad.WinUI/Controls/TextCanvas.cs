@@ -87,6 +87,9 @@ namespace FujiyNotepad.WinUI.Controls
             UseSystemFocusVisuals = false;
             IsDoubleTapEnabled = true;
 
+            // Show the text (I-beam) cursor while hovering the surface, like a real text control.
+            ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.IBeam);
+
             PointerPressed += OnPointerPressed;
             PointerMoved += OnPointerMoved;
             PointerReleased += OnPointerReleased;
