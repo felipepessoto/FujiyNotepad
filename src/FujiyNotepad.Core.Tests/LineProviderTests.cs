@@ -110,5 +110,19 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(2, provider.ByteColumnToCharColumn(0, 3)); // after 'a'+'é' (3 bytes) -> 2 chars
             Assert.Equal(3, provider.ByteColumnToCharColumn(0, 4)); // after 'a'+'é'+'b' (4 bytes) -> 3 chars
         }
+
+        [Fact]
+        public async Task ByteColumnToCharColumn_FarByteColumnIntoGiantLine_IsBoundedNotProportional()
+        {
+            // A single line far longer than the per-line cap (no newline). A Find match deep into it must
+            // not allocate/read the whole distance; the column is bounded by the capped, truncated line.
+            const int maxLineBytes = 64 * 1024;
+            var provider = await BuildAsync(new string('a', maxLineBytes * 4));
+
+            int column = provider.ByteColumnToCharColumn(0, 50_000_000);
+
+            Assert.True(column > 0);
+            Assert.True(column <= maxLineBytes, $"expected a bounded column, got {column}");
+        }
     }
 }

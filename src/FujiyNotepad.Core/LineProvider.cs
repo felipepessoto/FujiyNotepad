@@ -146,7 +146,11 @@ namespace FujiyNotepad.Core
 
             (long start, long end) = GetByteRange(lineIndex);
             long available = end - start;
-            long count = Math.Min(byteColumn, available);
+            // Never decode more than one capped line's worth. A Find match far into a not-yet-indexed line
+            // (or a single giant line) makes byteColumn/available huge; without this cap the allocation and
+            // read below would be proportional to that distance — up to gigabytes on the calling thread.
+            // The result is clamped to the (also-capped) rendered line length, so this matches GetLine.
+            long count = Math.Min(Math.Min(byteColumn, available), MaxLineBytes);
             if (count <= 0)
             {
                 return 0;
