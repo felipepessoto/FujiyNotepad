@@ -1,11 +1,10 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using FujiyNotepad.UI.Model;
+using FujiyNotepad.Core;
 
-namespace FujiyNotepad.UI.Tests
+namespace FujiyNotepad.Core.Tests
 {
     public class FileByteSourceTests
     {
@@ -57,47 +56,36 @@ namespace FujiyNotepad.UI.Tests
         }
 
         [Fact]
-        public async Task ViewportWindow_ReadsAndDecodesVisibleLines()
+        public async Task LineProvider_OverRealFile_RandomAccessAcrossManyChunks()
         {
-            // Mirrors the viewport read path (GetLengthToFillViewport + GoToOffset's decode): locate
-            // the window covering the first N lines, read it, and decode via StreamReader.
             string path = Path.GetTempFileName();
             try
             {
-                File.WriteAllText(path, "line one\nline two\nline three\nline four\nline five\n");
+                const int lineCount = 5000;
+                var expected = new string[lineCount];
+                var builder = new StringBuilder();
+                for (int i = 0; i < lineCount; i++)
+                {
+                    string line = $"line {i} " + new string('x', i % 200);
+                    expected[i] = line;
+                    builder.Append(line).Append('\n');
+                }
+                File.WriteAllText(path, builder.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
                 using var source = new FileByteSource(path);
                 var searcher = new TextSearcher(source);
+                var indexer = new LineIndexer(searcher);
+                await indexer.StartTaskToIndexLines(System.Threading.CancellationToken.None, new System.Progress<int>());
 
-                const long startOffset = 0;
-                const int linesWanted = 3;
-                int remaining = linesWanted;
-                long length = source.Length - startOffset;
-                await foreach (long newline in searcher.Search(startOffset, new byte[] { (byte)'\n' }))
-                {
-                    if (--remaining == 0)
-                    {
-                        length = newline + 1 - startOffset;
-                        break;
-                    }
-                }
+                var provider = new LineProvider(source, indexer);
 
-                var window = new byte[(int)length];
-                int got = source.ReadFull(startOffset, window);
-                using var stream = new MemoryStream(window, 0, got);
-                using var reader = new StreamReader(stream);
+                Assert.Equal(lineCount, provider.LineCount);
+                Assert.Equal(expected[0], provider.GetLine(0));
+                Assert.Equal(expected[2499], provider.GetLine(2499));
+                Assert.Equal(expected[lineCount - 1], provider.GetLine(lineCount - 1));
 
-                var lines = new List<string>();
-                for (int i = 0; i < linesWanted; i++)
-                {
-                    string? line = reader.ReadLine();
-                    if (line is null)
-                    {
-                        break;
-                    }
-                    lines.Add(line);
-                }
-
-                Assert.Equal(new[] { "line one", "line two", "line three" }, lines);
+                long midOffset = indexer.GetOffsetFromLineNumber(2500); // 1-based start of display line 2499
+                Assert.Equal(2499, indexer.GetLineNumberFromOffset(midOffset));
             }
             finally
             {

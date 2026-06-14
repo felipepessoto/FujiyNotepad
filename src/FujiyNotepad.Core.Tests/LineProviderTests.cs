@@ -2,10 +2,9 @@ using System;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using FujiyNotepad.UI.Model;
-using Xunit;
+using FujiyNotepad.Core;
 
-namespace FujiyNotepad.UI.Tests
+namespace FujiyNotepad.Core.Tests
 {
     public class LineProviderTests
     {
@@ -110,23 +109,6 @@ namespace FujiyNotepad.UI.Tests
             Assert.Equal(1, provider.ByteColumnToCharColumn(0, 1)); // after 'a' (1 byte) -> 1 char
             Assert.Equal(2, provider.ByteColumnToCharColumn(0, 3)); // after 'a'+'é' (3 bytes) -> 2 chars
             Assert.Equal(3, provider.ByteColumnToCharColumn(0, 4)); // after 'a'+'é'+'b' (4 bytes) -> 3 chars
-        }
-
-        [Fact]
-        public async Task GetLineNumberFromOffset_MapsOffsetsToLines()
-        {
-            // "ab\ncd\nef": lines start at 0, 3, 6; the '\n' bytes (2 and 5) belong to the line they end.
-            var source = new InMemoryByteSource("ab\ncd\nef");
-            var searcher = new TextSearcher(source);
-            var indexer = new LineIndexer(searcher);
-            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
-
-            Assert.Equal(0, indexer.GetLineNumberFromOffset(0));
-            Assert.Equal(0, indexer.GetLineNumberFromOffset(2));
-            Assert.Equal(1, indexer.GetLineNumberFromOffset(3));
-            Assert.Equal(1, indexer.GetLineNumberFromOffset(5));
-            Assert.Equal(2, indexer.GetLineNumberFromOffset(6));
-            Assert.Equal(2, indexer.GetLineNumberFromOffset(7));
         }
     }
 }

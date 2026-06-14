@@ -1,9 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using FujiyNotepad.UI.Model;
+using FujiyNotepad.Core;
 
-namespace FujiyNotepad.UI.Tests
+namespace FujiyNotepad.Core.Tests
 {
     public class LineIndexerTests
     {
@@ -39,8 +39,6 @@ namespace FujiyNotepad.UI.Tests
         [Fact]
         public async Task StartTaskToIndexLines_CancelledToken_ThrowsAndDoesNotComplete()
         {
-            // A cancelled token must surface as OperationCanceledException (so the UI re-enables
-            // resuming) and must not mark the partial index complete.
             var source = new InMemoryByteSource("a\nb\nc\nd\n");
             var searcher = new TextSearcher(source);
             var indexer = new LineIndexer(searcher);
@@ -50,6 +48,20 @@ namespace FujiyNotepad.UI.Tests
             await Assert.ThrowsAnyAsync<OperationCanceledException>(
                 () => indexer.StartTaskToIndexLines(cts.Token, new Progress<int>()));
             Assert.False(indexer.IsCompleted);
+        }
+
+        [Fact]
+        public async Task GetLineNumberFromOffset_MapsOffsetsToLines()
+        {
+            // "ab\ncd\nef": lines start at 0, 3, 6; the '\n' bytes (2 and 5) belong to the line they end.
+            var indexer = await BuildIndexAsync("ab\ncd\nef");
+
+            Assert.Equal(0, indexer.GetLineNumberFromOffset(0));
+            Assert.Equal(0, indexer.GetLineNumberFromOffset(2));
+            Assert.Equal(1, indexer.GetLineNumberFromOffset(3));
+            Assert.Equal(1, indexer.GetLineNumberFromOffset(5));
+            Assert.Equal(2, indexer.GetLineNumberFromOffset(6));
+            Assert.Equal(2, indexer.GetLineNumberFromOffset(7));
         }
     }
 }

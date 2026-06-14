@@ -1,9 +1,8 @@
-using FujiyNotepad.UI.Controls;
-using Xunit;
+using FujiyNotepad.Core;
 
-namespace FujiyNotepad.UI.Tests
+namespace FujiyNotepad.Core.Tests
 {
-    public class TextColumnsTests
+    public class LineColumnsTests
     {
         [Fact]
         public void PlainAscii_ColumnsAreOneToOne()

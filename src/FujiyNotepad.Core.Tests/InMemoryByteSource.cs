@@ -1,10 +1,7 @@
-using System;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using FujiyNotepad.Core;
 
-namespace FujiyNotepad.UI.Tests
+namespace FujiyNotepad.Core.Tests
 {
     /// <summary>
     /// In-memory <see cref="IByteSource"/> for fast, file-free engine tests. ASCII content keeps a

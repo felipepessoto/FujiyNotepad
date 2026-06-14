@@ -9,4 +9,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="FujiyNotepad.UI.Tests" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FujiyNotepad.Core\FujiyNotepad.Core.csproj" />
+  </ItemGroup>
 </Project>

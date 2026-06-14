@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace FujiyNotepad.UI.Controls
+namespace FujiyNotepad.Core
 {
     /// <summary>
     /// Maps a source line to its on-screen representation under a fixed tab size: the display string

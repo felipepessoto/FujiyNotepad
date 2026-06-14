@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace FujiyNotepad.UI.Model
+namespace FujiyNotepad.Core
 {
     /// <summary>
     /// Supplies the decoded text of individual file lines on demand, reading only the requested line
