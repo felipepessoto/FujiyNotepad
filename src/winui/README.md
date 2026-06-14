@@ -47,7 +47,7 @@ dev machines; otherwise install the [Windows App SDK runtime](https://learn.micr
 Released builds are self-contained (Native AOT + Windows App SDK) and need nothing installed.
 
 ```powershell
-dotnet build src/FujiyNotepad.WinUI.sln -c Debug
+dotnet build src/FujiyNotepad.WinUI.slnx -c Debug
 dotnet run --project src/winui/FujiyNotepad.WinUI -c Debug
 ```
 

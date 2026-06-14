@@ -35,7 +35,7 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Test
-        run: dotnet test src/FujiyNotepad.WinUI.sln --configuration Release
+        run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release
 
       # Native AOT (PublishAot=true in the WinUI csproj) compiles the app to native code: smaller, faster
       # startup, no JIT, and no .NET runtime to install. WindowsAppSDKSelfContained bundles the Windows App
