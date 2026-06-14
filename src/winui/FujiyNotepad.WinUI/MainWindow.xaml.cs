@@ -6,6 +6,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Windows.Storage.Pickers;
 
 namespace FujiyNotepad.WinUI
@@ -22,9 +23,11 @@ namespace FujiyNotepad.WinUI
         private Task indexingTask = Task.CompletedTask;
         private bool syncingScroll;
 
-        // Where the next Find should start. -1 means "no previous match", so the search anchors on the
-        // caret instead; after a hit it advances past that match so repeated Find walks occurrences.
-        private long lastFoundOffset = -1;
+        // Find state: the controller decides where each forward "find next" starts; findCts cancels an
+        // in-progress search; isFinding guards against starting a second search while one runs.
+        private readonly FindController find = new();
+        private CancellationTokenSource? findCts;
+        private bool isFinding;
 
         public MainWindow()
         {
@@ -38,7 +41,7 @@ namespace FujiyNotepad.WinUI
             indexRefreshTimer.Interval = TimeSpan.FromMilliseconds(150);
             indexRefreshTimer.Tick += IndexRefreshTimer_Tick;
 
-            Closed += (_, _) => { cancelIndexing?.Cancel(); source?.Dispose(); };
+            Closed += (_, _) => { cancelIndexing?.Cancel(); findCts?.Cancel(); source?.Dispose(); };
 
             // Open a file passed on the command line (file association / "open with" / drag-onto-exe).
             string? fileArg = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(File.Exists);
@@ -94,7 +97,7 @@ namespace FujiyNotepad.WinUI
             searcher = new TextSearcher(source);
             LineIndexer = new LineIndexer(searcher);
             provider = new LineProvider(source, LineIndexer);
-            lastFoundOffset = -1;
+            find.Reset();
 
             View.SetProvider(provider);
             EditMenu.IsEnabled = true;
@@ -251,44 +254,86 @@ namespace FujiyNotepad.WinUI
             }
         }
 
-        private async void Find_Click(object sender, RoutedEventArgs e)
+        private void Find_Click(object sender, RoutedEventArgs e)
         {
             if (provider is null)
             {
                 return;
             }
 
-            var input = new TextBox { PlaceholderText = "Find text" };
-            var dialog = new ContentDialog
-            {
-                Title = "Find",
-                Content = input,
-                PrimaryButtonText = "Find next",
-                CloseButtonText = "Close",
-                XamlRoot = Content.XamlRoot,
-            };
+            FindBar.Visibility = Visibility.Visible;
+            FindBox.Focus(FocusState.Programmatic);
+            FindBox.SelectAll();
+        }
 
-            ContentDialogResult result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary && !string.IsNullOrEmpty(input.Text))
+        private async void FindBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter)
             {
-                await FindNext(input.Text);
+                e.Handled = true;
+                await RunFindNext();
+            }
+            else if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                e.Handled = true;
+                if (isFinding)
+                {
+                    findCts?.Cancel();
+                }
+                else
+                {
+                    CloseFindBar();
+                }
             }
         }
 
-        private async Task FindNext(string text)
+        private async void FindNext_Click(object sender, RoutedEventArgs e) => await RunFindNext();
+
+        private void FindCancel_Click(object sender, RoutedEventArgs e) => findCts?.Cancel();
+
+        private void FindClose_Click(object sender, RoutedEventArgs e) => CloseFindBar();
+
+        private void CloseFindBar()
         {
-            long start = GetSearchStartOffset();
+            findCts?.Cancel();
+            FindBar.Visibility = Visibility.Collapsed;
+            View.FocusCanvas();
+        }
+
+        // Runs a forward "find next" off the UI thread, reporting progress and honouring cancellation. The
+        // FindController decides where to start (past the last hit, or from the caret when the term changed
+        // or the previous search wrapped).
+        private async Task RunFindNext()
+        {
+            if (provider is null || isFinding)
+            {
+                return;
+            }
+
+            string text = FindBox.Text;
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            long start = find.PrepareForwardSearch(text, GetCaretAnchorOffset());
             byte[] pattern = Encoding.UTF8.GetBytes(text);
 
-            // Capture the provider so a concurrent file switch/close can be detected after the search
-            // and its (stale) result ignored; the try/catch handles a torn-down read mid-search.
-            LineProvider activeProvider = provider!;
+            // Capture the provider so a concurrent file switch/close can be detected after the search and
+            // its (stale) result ignored; the try/catch handles a torn-down read mid-search.
+            LineProvider activeProvider = provider;
+
+            using var cts = new CancellationTokenSource();
+            findCts = cts;
+            CancellationToken token = cts.Token;
+            SetFindBusy(true);
+            var progress = new Progress<int>(p => FindProgress.Value = p);
 
             long? match = await Task.Run(async () =>
             {
                 try
                 {
-                    await foreach (long m in searcher.Search(start, pattern))
+                    await foreach (long m in searcher.Search(start, pattern, progress, token))
                     {
                         return (long?)m;
                     }
@@ -300,9 +345,18 @@ namespace FujiyNotepad.WinUI
                 return (long?)null;
             });
 
+            SetFindBusy(false);
+            findCts = null;
+
             // If the file changed while searching, the result is stale.
             if (!ReferenceEquals(provider, activeProvider))
             {
+                return;
+            }
+
+            if (token.IsCancellationRequested)
+            {
+                FindStatus.Text = "Cancelled";
                 return;
             }
 
@@ -311,24 +365,33 @@ namespace FujiyNotepad.WinUI
                 int line = LineIndexer.GetLineNumberFromOffset(match.Value);
                 long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
                 int charColumn = provider!.ByteColumnToCharColumn(line, match.Value - lineStart);
-                lastFoundOffset = match.Value;
+                find.RecordMatch(match.Value);
                 View.SelectMatch(line, charColumn, text.Length);
-                View.FocusCanvas();
+                FindStatus.Text = $"Ln {line + 1}";
             }
             else
             {
                 // No match from here on; let the next search wrap to the caret again.
-                lastFoundOffset = -1;
+                find.RecordNoMatch();
+                FindStatus.Text = "No matches";
             }
         }
 
-        private long GetSearchStartOffset()
+        private void SetFindBusy(bool busy)
         {
-            if (lastFoundOffset >= 0)
+            isFinding = busy;
+            FindNextButton.IsEnabled = !busy;
+            FindCancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            FindProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            if (busy)
             {
-                return lastFoundOffset + 1;
+                FindProgress.Value = 0;
+                FindStatus.Text = "Searching\u2026";
             }
+        }
 
+        private long GetCaretAnchorOffset()
+        {
             TextPosition caret = View.CaretPosition;
             if (provider != null && caret.Line >= 0 && caret.Line < provider.LineCount)
             {
