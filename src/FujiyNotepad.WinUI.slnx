@@ -1,6 +1,7 @@
 <Solution>
   <Configurations>
     <Platform Name="Any CPU" />
+    <Platform Name="ARM64" />
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
@@ -8,6 +9,7 @@
   <Project Path="FujiyNotepad.Core.Tests/FujiyNotepad.Core.Tests.csproj" />
   <Project Path="FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj">
     <Platform Project="x64" />
+    <Platform Solution="*|ARM64" Project="ARM64" />
   </Project>
   <Project Path="FujiyNotepad.WinUI.Logic/FujiyNotepad.WinUI.Logic.csproj" />
   <Project Path="FujiyNotepad.WinUI.Logic.Tests/FujiyNotepad.WinUI.Logic.Tests.csproj" />
