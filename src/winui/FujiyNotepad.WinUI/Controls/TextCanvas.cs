@@ -47,6 +47,7 @@ namespace FujiyNotepad.WinUI.Controls
         private bool hasFocusInternal;
         private bool caretBlinkOn = true;
         private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer caretTimer;
+        private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer autoScrollTimer;
 
         private bool isSelecting;
         private Point lastPointer;
@@ -72,6 +73,11 @@ namespace FujiyNotepad.WinUI.Controls
             caretTimer.Interval = TimeSpan.FromMilliseconds(530);
             caretTimer.Tick += (_, _) => { caretBlinkOn = !caretBlinkOn; canvas.Invalidate(); };
 
+            // Repeats the drag while the pointer is held past the top/bottom edge during a selection.
+            autoScrollTimer = DispatcherQueue.CreateTimer();
+            autoScrollTimer.Interval = TimeSpan.FromMilliseconds(50);
+            autoScrollTimer.Tick += AutoScrollTick;
+
             engine.ViewChanged += () => ViewChanged?.Invoke();
             engine.CaretChanged += pos => CaretChanged?.Invoke(pos);
             engine.RedrawRequested += () => canvas.Invalidate();
@@ -79,11 +85,13 @@ namespace FujiyNotepad.WinUI.Controls
 
             IsTabStop = true;
             UseSystemFocusVisuals = false;
+            IsDoubleTapEnabled = true;
 
             PointerPressed += OnPointerPressed;
             PointerMoved += OnPointerMoved;
             PointerReleased += OnPointerReleased;
             PointerWheelChanged += OnPointerWheelChanged;
+            DoubleTapped += OnDoubleTapped;
             KeyDown += OnKeyDown;
             GotFocus += (_, _) => { hasFocusInternal = true; RestartCaretBlink(); canvas.Invalidate(); };
             LostFocus += (_, _) => { hasFocusInternal = false; caretTimer.Stop(); canvas.Invalidate(); };
@@ -125,6 +133,12 @@ namespace FujiyNotepad.WinUI.Controls
         public double ViewportWidthPx => ActualWidth;
         public double HorizontalExtentPx { get { Ready(); return engine.HorizontalExtentPx; } }
         public TextPosition CaretPosition => engine.CaretPosition;
+
+        public int TabSize
+        {
+            get => engine.TabSize;
+            set => engine.TabSize = value;
+        }
 
         public void SetProvider(LineProvider? newProvider)
         {
@@ -177,6 +191,7 @@ namespace FujiyNotepad.WinUI.Controls
             Ready();
             lastPointer = e.GetCurrentPoint(this).Position;
             engine.PointerDrag(lastPointer.X, lastPointer.Y);
+            UpdateAutoScroll();
         }
 
         private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -184,6 +199,7 @@ namespace FujiyNotepad.WinUI.Controls
             if (isSelecting)
             {
                 isSelecting = false;
+                autoScrollTimer.Stop();
                 ReleasePointerCapture(e.Pointer);
             }
         }
@@ -194,6 +210,39 @@ namespace FujiyNotepad.WinUI.Controls
             int delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
             engine.ScrollByWheelDelta(delta);
             e.Handled = true;
+        }
+
+        private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            Ready();
+            Point p = e.GetPosition(this);
+            engine.SelectWordAt(p.X, p.Y);
+            e.Handled = true;
+        }
+
+        // While the pointer is held past the top/bottom edge during a selection, keep scrolling (and
+        // extending the selection) on a timer even if the pointer stops moving.
+        private void UpdateAutoScroll()
+        {
+            if (isSelecting && (lastPointer.Y < 0 || lastPointer.Y > ActualHeight))
+            {
+                autoScrollTimer.Start();
+            }
+            else
+            {
+                autoScrollTimer.Stop();
+            }
+        }
+
+        private void AutoScrollTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+        {
+            if (!isSelecting || (lastPointer.Y >= 0 && lastPointer.Y <= ActualHeight))
+            {
+                autoScrollTimer.Stop();
+                return;
+            }
+            Ready();
+            engine.PointerDrag(lastPointer.X, lastPointer.Y);
         }
 
         #endregion

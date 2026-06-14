@@ -34,6 +34,12 @@
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem x:Name="StartIndexingItem" Text="Start indexing" Click="StartIndexing_Click" IsEnabled="False" />
                 <MenuFlyoutItem x:Name="StopIndexingItem" Text="Stop indexing" Click="StopIndexing_Click" IsEnabled="False" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutSubItem Text="Tab Width">
+                    <RadioMenuFlyoutItem Text="2" GroupName="TabWidth" Tag="2" Click="TabWidth_Click" />
+                    <RadioMenuFlyoutItem Text="4" GroupName="TabWidth" Tag="4" IsChecked="True" Click="TabWidth_Click" />
+                    <RadioMenuFlyoutItem Text="8" GroupName="TabWidth" Tag="8" Click="TabWidth_Click" />
+                </MenuFlyoutSubItem>
             </MenuBarItem>
         </MenuBar>
 

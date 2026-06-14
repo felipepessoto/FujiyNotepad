@@ -107,8 +107,9 @@ namespace FujiyNotepad.WinUI.Logic
     /// </summary>
     public sealed class TextLayoutEngine
     {
-        private const int TabSize = 4;
         private const int MaxCopyChars = 25_000_000;
+
+        private int tabSize = 4;
 
         private double lineHeight;
         private double charWidth;
@@ -150,6 +151,27 @@ namespace FujiyNotepad.WinUI.Logic
         {
             charWidth = charWidthPx;
             lineHeight = lineHeightPx;
+        }
+
+        /// <summary>
+        /// Tab width in columns (default 4, minimum 1). Changing it re-expands every line, so the cached
+        /// column maps are cleared and the surface is refreshed.
+        /// </summary>
+        public int TabSize
+        {
+            get => tabSize;
+            set
+            {
+                int clamped = Math.Max(1, value);
+                if (clamped == tabSize)
+                {
+                    return;
+                }
+                tabSize = clamped;
+                columnsCache.Clear();
+                RaiseViewChanged();
+                RaiseRedraw();
+            }
         }
 
         #endregion
@@ -298,6 +320,57 @@ namespace FujiyNotepad.WinUI.Logic
             RaiseRedraw();
         }
 
+        /// <summary>Selects the whole word (or run of same-class characters) under a double-clicked point.</summary>
+        public void SelectWordAt(double x, double y)
+        {
+            if (provider == null || totalLines == 0 || lineHeight <= 0)
+            {
+                return;
+            }
+
+            TextPosition pos = HitTest(x, y);
+            string line = GetColumns(pos.Line).Source;
+            (int start, int end) = WordBoundaries(line, pos.Column);
+            anchor = new TextPosition(pos.Line, start);
+            caret = new TextPosition(pos.Line, end);
+            desiredColumn = -1;
+            RaiseBlinkReset();
+            RaiseCaretChanged();
+            RaiseRedraw();
+        }
+
+        private enum CharClass { Word, Whitespace, Other }
+
+        private static CharClass ClassOf(char c)
+        {
+            if (char.IsWhiteSpace(c)) return CharClass.Whitespace;
+            if (char.IsLetterOrDigit(c) || c == '_') return CharClass.Word;
+            return CharClass.Other;
+        }
+
+        // Expands from a character index to the surrounding run of same-class characters (word, whitespace,
+        // or other), giving familiar double-click word selection. Returns [start, end) source-char columns.
+        internal static (int start, int end) WordBoundaries(string line, int index)
+        {
+            if (line.Length == 0)
+            {
+                return (0, 0);
+            }
+            index = Math.Clamp(index, 0, line.Length - 1);
+
+            CharClass cls = ClassOf(line[index]);
+            int start = index;
+            while (start > 0 && ClassOf(line[start - 1]) == cls)
+            {
+                start--;
+            }
+            int end = index + 1;
+            while (end < line.Length && ClassOf(line[end]) == cls)
+            {
+                end++;
+            }
+            return (start, end);
+        }
         /// <summary>Extends the selection to a dragged point, auto-scrolling past the top/bottom edges.</summary>
         public void PointerDrag(double x, double y)
         {
@@ -648,7 +721,7 @@ namespace FujiyNotepad.WinUI.Logic
             }
 
             string text = provider!.GetLine(lineIndex);
-            LineColumns columns = LineColumns.Build(text, TabSize);
+            LineColumns columns = LineColumns.Build(text, tabSize);
             if (columnsCache.Count >= 4096)
             {
                 columnsCache.Clear();

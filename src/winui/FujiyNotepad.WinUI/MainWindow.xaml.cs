@@ -67,7 +67,8 @@ namespace FujiyNotepad.WinUI
 
         private async void OpenSample_Click(object sender, RoutedEventArgs e)
         {
-            string path = Path.Combine(Path.GetTempPath(), "FujiyNotepadSample.txt");
+            // Versioned name so an existing cached copy from a previous build is not reused.
+            string path = Path.Combine(Path.GetTempPath(), "FujiyNotepadSample-v2.txt");
             if (!File.Exists(path))
             {
                 LblStatus.Text = "Generating sample...";
@@ -79,6 +80,14 @@ namespace FujiyNotepad.WinUI
         private static void CreateSampleFile(string path)
         {
             using var writer = new StreamWriter(path);
+
+            // A short, self-describing header exercises the text-view features; the large body below also
+            // demonstrates big-file handling.
+            foreach (string line in SampleHeaderLines())
+            {
+                writer.WriteLine(line);
+            }
+
             var random = new Random(1);
             for (int i = 1; i <= 10_000_000; i++)
             {
@@ -86,6 +95,38 @@ namespace FujiyNotepad.WinUI
                 writer.Write(" - ");
                 writer.WriteLine(new string('x', random.Next(300, 500)));
             }
+        }
+
+        private static IEnumerable<string> SampleHeaderLines()
+        {
+            const string tab = "\t";
+            return new[]
+            {
+                "Fujiy Notepad sample - try the features below, then scroll for 10,000,000 more lines.",
+                "===================================================================================",
+                "",
+                "[Wide / CJK glyphs] Each CJK or fullwidth glyph spans two columns, so these 8-cell",
+                "rows share the same '|' marker column as the ASCII row:",
+                "12345678|",
+                "\u4E2D\u6587\u5B57\u7B26|", // 中文字符 (4 CJK ideographs)
+                "\u65E5\u672C\u8A9E\u5B66|", // 日本語学 (kanji)
+                "\uD55C\uAD6D\uC5B4\uAE00|", // 한국어글 (Hangul)
+                "\uFF26\uFF35\uFF2C\uFF2C|", // ＦＵＬＬ (fullwidth Latin)
+                "Mixed a\u4E2Db\u65E5c\uD55Cd - each wide glyph counts as two cells.",
+                "",
+                "[Tab Width] Switch Edit \u25B8 Tab Width (2 / 4 / 8) and watch these columns realign:",
+                "name" + tab + "type" + tab + "notes",
+                "id" + tab + "int" + tab + "primary key",
+                "x" + tab + "y" + tab + "z",
+                "",
+                "[Double-click word-select] Double-click a token to select the whole word or run:",
+                "double_click selects snake_case_words and CamelCaseWords as single words",
+                "punctuation, like; commas. and-hyphens form their own runs",
+                "spaces      between      words (double-click a gap to select the run of spaces)",
+                "",
+                "-----------------------------------------------------------------------------------",
+                "Below: 10,000,000 generated lines (large-file demo).",
+            };
         }
 
         private async Task OpenFile(string path)
@@ -420,5 +461,13 @@ namespace FujiyNotepad.WinUI
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+
+        private void TabWidth_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioMenuFlyoutItem item && int.TryParse(item.Tag?.ToString(), out int width))
+            {
+                View.TabSize = width;
+            }
+        }
     }
 }
