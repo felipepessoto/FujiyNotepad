@@ -107,5 +107,40 @@ namespace FujiyNotepad.Core
                 return result - 1; // Convert 1-based index entry to 0-based display line.
             }
         }
+
+        /// <summary>
+        /// True if a match at <paramref name="offset"/> can be resolved to its exact line without reading
+        /// past the indexed region: either indexing has completed, or the offset lies before the last
+        /// indexed line start (so the line containing it has a known end). When this is false the offset is
+        /// beyond the indexed frontier; the caller should wait for indexing to catch up rather than resolve
+        /// it, which would clamp to the last indexed line and read up to the rest of the file.
+        /// </summary>
+        public bool CanResolveOffset(long offset)
+        {
+            if (isCompleted)
+            {
+                return true;
+            }
+
+            lock (indexLock)
+            {
+                return lineNumberIndex.Count >= 2 && offset < lineNumberIndex[lineNumberIndex.Count - 1];
+            }
+        }
+
+        // Test-only: installs a partial, not-completed index (the [0, 0] seed plus the given line-start
+        // offsets) so the index-readiness guard can be exercised deterministically without racing a
+        // background indexing task.
+        internal void SetPartialIndexForTest(params long[] lineStarts)
+        {
+            lock (indexLock)
+            {
+                lineNumberIndex.Clear();
+                lineNumberIndex.Add(0);
+                lineNumberIndex.Add(0);
+                lineNumberIndex.AddRange(lineStarts);
+                isCompleted = false;
+            }
+        }
     }
 }

@@ -63,5 +63,49 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(2, indexer.GetLineNumberFromOffset(6));
             Assert.Equal(2, indexer.GetLineNumberFromOffset(7));
         }
+
+        private static LineIndexer NewIndexer() =>
+            new LineIndexer(new TextSearcher(new InMemoryByteSource("")));
+
+        [Fact]
+        public void CanResolveOffset_NotCompleted_OffsetBeforeFrontier_IsTrue()
+        {
+            var indexer = NewIndexer();
+            indexer.SetPartialIndexForTest(10, 20, 30); // index = [0, 0, 10, 20, 30], frontier = 30
+
+            Assert.True(indexer.CanResolveOffset(0));
+            Assert.True(indexer.CanResolveOffset(25));
+            Assert.True(indexer.CanResolveOffset(29));
+        }
+
+        [Fact]
+        public void CanResolveOffset_NotCompleted_OffsetAtOrBeyondFrontier_IsFalse()
+        {
+            var indexer = NewIndexer();
+            indexer.SetPartialIndexForTest(10, 20, 30);
+
+            Assert.False(indexer.CanResolveOffset(30));            // at the frontier: last line's end unknown
+            Assert.False(indexer.CanResolveOffset(1_000_000_000)); // far beyond the indexed region
+        }
+
+        [Fact]
+        public void CanResolveOffset_SeedOnly_IsFalse()
+        {
+            var indexer = NewIndexer();
+            indexer.SetPartialIndexForTest(); // only the [0, 0] seed; nothing reliably indexed yet
+
+            Assert.False(indexer.CanResolveOffset(0));
+            Assert.False(indexer.CanResolveOffset(5));
+        }
+
+        [Fact]
+        public void CanResolveOffset_Completed_IsAlwaysTrue()
+        {
+            var indexer = NewIndexer();
+            indexer.SetPartialIndexForTest(10, 20, 30);
+            indexer.IsCompleted = true;
+
+            Assert.True(indexer.CanResolveOffset(1_000_000_000));
+        }
     }
 }

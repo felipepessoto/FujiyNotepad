@@ -362,10 +362,21 @@ namespace FujiyNotepad.WinUI
 
             if (match.HasValue)
             {
-                int line = LineIndexer.GetLineNumberFromOffset(match.Value);
+                long matchOffset = match.Value;
+
+                // Index-readiness guard: if the match is beyond the indexed frontier its line isn't known
+                // yet, and resolving it would clamp to the wrong line and read up to the rest of the file on
+                // the UI thread. Leave the Find state unchanged so the user can retry as indexing catches up.
+                if (!LineIndexer.CanResolveOffset(matchOffset))
+                {
+                    FindStatus.Text = "Match found past the indexed area — try again as indexing continues";
+                    return;
+                }
+
+                int line = LineIndexer.GetLineNumberFromOffset(matchOffset);
                 long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
-                int charColumn = provider!.ByteColumnToCharColumn(line, match.Value - lineStart);
-                find.RecordMatch(match.Value);
+                int charColumn = provider!.ByteColumnToCharColumn(line, matchOffset - lineStart);
+                find.RecordMatch(matchOffset);
                 View.SelectMatch(line, charColumn, text.Length);
                 FindStatus.Text = $"Ln {line + 1}";
             }
