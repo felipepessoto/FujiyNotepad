@@ -330,6 +330,32 @@ namespace FujiyNotepad.WinUI
 
         private async void FindNext_Click(object sender, RoutedEventArgs e) => await RunFindNext();
 
+        // F3 is a window-wide shortcut (like Ctrl+F): open the find bar if it's closed, then repeat the
+        // search — or focus the box for input when no term has been entered yet.
+        private async void FindNextAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+            args.Handled = true;
+
+            if (FindBar.Visibility != Visibility.Visible)
+            {
+                FindBar.Visibility = Visibility.Visible;
+            }
+
+            if (string.IsNullOrEmpty(FindBox.Text))
+            {
+                FindBox.Focus(FocusState.Programmatic);
+                FindBox.SelectAll();
+            }
+            else
+            {
+                await RunFindNext();
+            }
+        }
+
         private void FindCancel_Click(object sender, RoutedEventArgs e) => findCts?.Cancel();
 
         private void FindClose_Click(object sender, RoutedEventArgs e) => CloseFindBar();

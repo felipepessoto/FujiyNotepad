@@ -6,6 +6,9 @@
     xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives">
 
     <Grid>
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="F3" Invoked="FindNextAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -58,11 +61,7 @@
                      KeyDown="FindBox_KeyDown" />
 
             <Button x:Name="FindNextButton" Grid.Column="1" Content="Find Next" VerticalAlignment="Center"
-                    Click="FindNext_Click">
-                <Button.KeyboardAccelerators>
-                    <KeyboardAccelerator Key="F3" />
-                </Button.KeyboardAccelerators>
-            </Button>
+                    Click="FindNext_Click" />
 
             <ProgressBar x:Name="FindProgress" Grid.Column="2" Width="120" Minimum="0" Maximum="100"
                          VerticalAlignment="Center" Visibility="Collapsed" />
