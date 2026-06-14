@@ -36,9 +36,10 @@ jobs:
         run: dotnet test src/FujiyNotepad.sln --configuration Release --no-build --verbosity normal
 
   build-winui:
-    name: Build WinUI
+    name: Build & Test WinUI
     # WinUI 3 (Windows App SDK) targets net10.0-windows10.0.19041.0 and only builds on Windows.
     runs-on: windows-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -52,9 +53,17 @@ jobs:
       - name: Restore
         run: dotnet restore src/FujiyNotepad.WinUI.sln
 
-      # Builds the shared engine (FujiyNotepad.Core) and the WinUI app. The WinUI project pins
-      # RuntimeIdentifier=win-x64, so no explicit -r is required here. The engine's tests run in the
-      # build-and-test job above (via FujiyNotepad.sln), so they are not repeated here.
+      # Builds the shared engine (FujiyNotepad.Core), the WinUI text-view logic library and its tests, and
+      # the WinUI app. The WinUI app pins RuntimeIdentifier=win-x64, so no explicit -r is required here.
       - name: Build
         run: dotnet build src/FujiyNotepad.WinUI.sln --configuration Release --no-restore
+
+      # Runs the WinUI solution's tests: the shared engine (FujiyNotepad.Core) tests and the WinUI text-view
+      # logic tests (FujiyNotepad.WinUI.Logic, including the render-model tests). Both are plain .NET test
+      # projects, so they run on the hosted runner. The WinUI app itself is not unit-tested here: Windows
+      # App SDK test hosts can't start on headless GitHub-hosted runners, so all testable logic lives in the
+      # device-free logic library. The WinUI solution is kept self-sufficient — covering Core too — because
+      # the WPF app and its build-and-test job are planned for removal in favour of the WinUI edition.
+      - name: Test
+        run: dotnet test src/FujiyNotepad.WinUI.sln --configuration Release --no-build --verbosity normal
 
