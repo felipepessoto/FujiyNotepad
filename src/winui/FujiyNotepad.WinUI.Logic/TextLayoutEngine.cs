@@ -109,6 +109,14 @@ namespace FujiyNotepad.WinUI.Logic
     {
         private const int MaxCopyChars = 25_000_000;
 
+        /// <summary>
+        /// Inner horizontal padding (viewport pixels) between the control's left/right border and the text,
+        /// so the first character of each line isn't pressed against the edge. It is applied to the rendered
+        /// text/caret/selection X, subtracted back out in hit-testing, and added to the horizontal extent so
+        /// every coordinate calculation stays consistent.
+        /// </summary>
+        public const double TextPadding = 8d;
+
         private int tabSize = 4;
 
         private double lineHeight;
@@ -401,7 +409,7 @@ namespace FujiyNotepad.WinUI.Logic
             line = Math.Clamp(line, 0, totalLines - 1);
 
             LineColumns columns = GetColumns(line);
-            double column = (x + horizontalOffset) / charWidth;
+            double column = (x - TextPadding + horizontalOffset) / charWidth;
             int charIndex = columns.CharIndexOfColumn(column);
             return new TextPosition(line, charIndex);
         }
@@ -573,13 +581,15 @@ namespace FujiyNotepad.WinUI.Logic
                 return;
             }
             double caretX = GetColumns(caret.Line).ColumnOfCharIndex(caret.Column) * charWidth;
+            // Keep a padding-sized gap on whichever edge the caret is scrolled to, matching the rendered inset.
+            double rightInset = charWidth + TextPadding * 2;
             if (caretX < horizontalOffset)
             {
                 SetHorizontalOffset(caretX);
             }
-            else if (caretX > horizontalOffset + ViewportWidth - charWidth)
+            else if (caretX > horizontalOffset + ViewportWidth - rightInset)
             {
-                SetHorizontalOffset(caretX - ViewportWidth + charWidth);
+                SetHorizontalOffset(caretX - ViewportWidth + rightInset);
             }
         }
 
@@ -677,8 +687,8 @@ namespace FujiyNotepad.WinUI.Logic
                 {
                     int startCol = lineIndex == selStart.Line ? columns.ColumnOfCharIndex(selStart.Column) : 0;
                     int endCol = lineIndex == selEnd.Line ? columns.ColumnOfCharIndex(selEnd.Column) : columns.TotalColumns + 1;
-                    double x0 = startCol * charWidth - horizontalOffset;
-                    double x1 = endCol * charWidth - horizontalOffset;
+                    double x0 = startCol * charWidth - horizontalOffset + TextPadding;
+                    double x1 = endCol * charWidth - horizontalOffset + TextPadding;
                     if (x1 > x0)
                     {
                         lineHasSelection = true;
@@ -688,14 +698,14 @@ namespace FujiyNotepad.WinUI.Logic
                 }
 
                 bool hasCaret = hasFocus && caretVisible && caret.Line == lineIndex;
-                double caretX = hasCaret ? columns.ColumnOfCharIndex(caret.Column) * charWidth - horizontalOffset : 0;
+                double caretX = hasCaret ? columns.ColumnOfCharIndex(caret.Column) * charWidth - horizontalOffset + TextPadding : 0;
 
                 lines.Add(new VisibleLine
                 {
                     LineIndex = lineIndex,
                     Y = y,
                     Display = columns.Display,
-                    TextX = -horizontalOffset,
+                    TextX = TextPadding - horizontalOffset,
                     HasSelection = lineHasSelection,
                     SelectionX = selectionX,
                     SelectionWidth = selectionWidth,
@@ -704,7 +714,7 @@ namespace FujiyNotepad.WinUI.Logic
                 });
             }
 
-            double newExtent = Math.Max(maxWidth, ViewportWidth);
+            double newExtent = Math.Max(maxWidth + TextPadding * 2, ViewportWidth);
             if (Math.Abs(newExtent - horizontalExtentPx) > 0.5)
             {
                 horizontalExtentPx = newExtent;

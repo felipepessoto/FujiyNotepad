@@ -159,8 +159,8 @@ namespace FujiyNotepad.WinUI.Logic.Tests
         {
             TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDEFGHIJ", 5), cw: 10, lh: 20);
 
-            Assert.Equal(new TextPosition(1, 3), e.HitTest(35, 25));   // x 3.5 rounds down
-            Assert.Equal(new TextPosition(1, 4), e.HitTest(36, 25));   // x 3.6 rounds up
+            Assert.Equal(new TextPosition(1, 3), e.HitTest(35 + TextLayoutEngine.TextPadding, 25)); // content x 3.5 rounds down
+            Assert.Equal(new TextPosition(1, 4), e.HitTest(36 + TextLayoutEngine.TextPadding, 25)); // content x 3.6 rounds up
             Assert.Equal(new TextPosition(0, 0), e.HitTest(-5, -5));   // clamps to origin
             Assert.Equal(new TextPosition(0, 10), e.HitTest(1000, 5)); // past end of line
         }
@@ -176,6 +176,18 @@ namespace FujiyNotepad.WinUI.Logic.Tests
         }
 
         // ----- Pointer selection -----
+
+        [Fact]
+        public async Task HitTest_AccountsForLeftPadding()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDEFGHIJ", 5), cw: 10, lh: 20);
+
+            // A click within the left padding still resolves to the first column (never a negative column).
+            Assert.Equal(new TextPosition(0, 0), e.HitTest(TextLayoutEngine.TextPadding - 2, 5));
+            // Column n begins one padding in: padding + n * charWidth.
+            Assert.Equal(new TextPosition(0, 2), e.HitTest(TextLayoutEngine.TextPadding + 20, 5));
+            Assert.Equal(new TextPosition(0, 5), e.HitTest(TextLayoutEngine.TextPadding + 50, 5));
+        }
 
         [Fact]
         public async Task PointerPress_NoShift_SetsCaretAndAnchor()
