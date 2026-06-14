@@ -18,8 +18,6 @@
     <Nullable>enable</Nullable>
     <PublishAot>true</PublishAot>
     <WindowsPackageType>None</WindowsPackageType>
-    <!-- Ship the Windows App SDK runtime inside the app (unpackaged, self-contained), so a publish is
-         always standalone regardless of whether -p:WindowsAppSDKSelfContained is passed on the command line. -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
 
