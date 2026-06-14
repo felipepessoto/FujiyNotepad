@@ -175,6 +175,18 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.Equal(new TextPosition(7, 0), e.HitTest(0, 40));
         }
 
+        [Fact]
+        public async Task HasSelection_TrueOnlyWhenAnchorAndCaretDiffer()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 5), cw: 10, lh: 20);
+
+            Assert.False(e.HasSelection);        // fresh document: caret == anchor
+            e.PointerPress(5, 5, shift: false);  // a plain click stays collapsed
+            Assert.False(e.HasSelection);
+            e.SelectMatch(0, 1, 3);              // selecting a range
+            Assert.True(e.HasSelection);
+        }
+
         // ----- Pointer selection -----
 
         [Fact]
