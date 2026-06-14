@@ -54,7 +54,7 @@ The build is unsigned, so Windows SmartScreen may warn on first run (*More info 
 ```powershell
 # From the repository root
 dotnet build src/FujiyNotepad.WinUI.slnx -c Release
-dotnet run --project src/winui/FujiyNotepad.WinUI -c Release
+dotnet run --project src/FujiyNotepad.WinUI -c Release
 ```
 
 Or open `src/FujiyNotepad.WinUI.slnx` in Visual Studio 2022 (17.13+, for the `.slnx` solution format) and press F5.
@@ -69,11 +69,11 @@ the *Desktop development with C++* workload (the CI runner already has it).
 | --- | --- |
 | `src/FujiyNotepad.Core` | UI-agnostic engine: `FileByteSource` (positional `RandomAccess` I/O), `TextSearcher` (chunked, vectorized byte search), `LineIndexer` (background line-offset index), `LineProvider` (decode a line on demand), `LineColumns` (tab/column + wide-glyph mapping). |
 | `src/FujiyNotepad.Core.Tests` | xUnit tests for the engine (run headless, no UI). |
-| `src/winui/FujiyNotepad.WinUI.Logic` | Framework-independent text-view logic: scroll/caret/selection, hit-testing, word selection, copy, and the per-line render model. No Win2D/WinUI dependency, so it unit-tests on a normal test host. |
-| `src/winui/FujiyNotepad.WinUI.Logic.Tests` | xUnit tests for the view logic and render model. |
-| `src/winui/FujiyNotepad.WinUI` | The WinUI 3 app: `Controls/TextCanvas.cs` (Win2D surface that paints the engine's render model and forwards input) and `MainWindow` (menus, scrollbars, status bar, Go To Line, Find bar). |
+| `src/FujiyNotepad.WinUI.Logic` | Framework-independent text-view logic: scroll/caret/selection, hit-testing, word selection, copy, and the per-line render model. No Win2D/WinUI dependency, so it unit-tests on a normal test host. |
+| `src/FujiyNotepad.WinUI.Logic.Tests` | xUnit tests for the view logic and render model. |
+| `src/FujiyNotepad.WinUI` | The WinUI 3 app: `Controls/TextCanvas.cs` (Win2D surface that paints the engine's render model and forwards input) and `MainWindow` (menus, scrollbars, status bar, Go To Line, Find bar). |
 
-See [`src/winui/README.md`](src/winui/README.md) for architecture details.
+See [`src/FujiyNotepad.WinUI/README.md`](src/FujiyNotepad.WinUI/README.md) for architecture details.
 
 ## License
 

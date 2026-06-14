@@ -14,9 +14,9 @@ on a normal .NET test host (Windows App SDK test hosts can't run on headless CI 
 | --- | --- |
 | `src/FujiyNotepad.Core` | Engine: `FileByteSource` (positional `RandomAccess` I/O), `TextSearcher` (chunked, vectorized byte search), `LineIndexer` (background line-offset index), `LineProvider` (decode a line on demand), `LineColumns` (tab/column + wide-glyph mapping). No UI dependency. |
 | `src/FujiyNotepad.Core.Tests` | xUnit tests for the engine (run headless, no UI). |
-| `src/winui/FujiyNotepad.WinUI.Logic` | `TextLayoutEngine` — scroll/caret/selection, hit-testing, word selection, copy, and the per-line render model (`GetVisibleLines`). Plus `FindController` (find-next state) and the `TextPosition`/`NavKey` types. No Win2D/WinUI/WinRT dependency. |
-| `src/winui/FujiyNotepad.WinUI.Logic.Tests` | xUnit tests for the view logic and render model. |
-| `src/winui/FujiyNotepad.WinUI` | The WinUI 3 app. |
+| `src/FujiyNotepad.WinUI.Logic` | `TextLayoutEngine` — scroll/caret/selection, hit-testing, word selection, copy, and the per-line render model (`GetVisibleLines`). Plus `FindController` (find-next state) and the `TextPosition`/`NavKey` types. No Win2D/WinUI/WinRT dependency. |
+| `src/FujiyNotepad.WinUI.Logic.Tests` | xUnit tests for the view logic and render model. |
+| `src/FujiyNotepad.WinUI` | The WinUI 3 app. |
 
 The view is a **custom text surface drawn with [Win2D](https://github.com/microsoft/Win2D)**
 (`CanvasControl` + DirectWrite), not a `TextBox`/`ListView`. WinUI has no text control that
@@ -48,7 +48,7 @@ Released builds are self-contained (Native AOT + Windows App SDK) and need nothi
 
 ```powershell
 dotnet build src/FujiyNotepad.WinUI.slnx -c Debug
-dotnet run --project src/winui/FujiyNotepad.WinUI -c Debug
+dotnet run --project src/FujiyNotepad.WinUI -c Debug
 ```
 
 The app is **unpackaged** (`WindowsPackageType=None`), so the produced `.exe` runs directly.

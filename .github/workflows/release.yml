@@ -43,11 +43,11 @@ jobs:
       # standalone. AOT linking uses the hosted runner's C++ toolchain.
       - name: Publish (Native AOT, self-contained)
         run: >
-          dotnet publish src/winui/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
+          dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
           -c Release -r win-x64
           -p:WindowsAppSDKSelfContained=true
           -p:Version=${{ steps.version.outputs.version }}
-          -o publish/winui
+          -o publish/app
 
       - name: Package
         id: package
@@ -56,7 +56,7 @@ jobs:
           $v = "${{ steps.version.outputs.version }}"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           $zip = "dist/FujiyNotepad-$v-win-x64.zip"
-          Compress-Archive -Path publish/winui/* -DestinationPath $zip -Force
+          Compress-Archive -Path publish/app/* -DestinationPath $zip -Force
           "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       # Always uploaded (including on the manual dry-run) so the AOT build can be inspected without a release.

@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FujiyNotepad.WinUI.Logic\FujiyNotepad.WinUI.Logic.csproj" />
-    <ProjectReference Include="..\..\FujiyNotepad.Core\FujiyNotepad.Core.csproj" />
+    <ProjectReference Include="..\FujiyNotepad.Core\FujiyNotepad.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,13 +4,11 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Folder Name="/winui/">
-    <Project Path="winui/FujiyNotepad.WinUI.Logic.Tests/FujiyNotepad.WinUI.Logic.Tests.csproj" />
-    <Project Path="winui/FujiyNotepad.WinUI.Logic/FujiyNotepad.WinUI.Logic.csproj" />
-    <Project Path="winui/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj">
-      <Platform Project="x64" />
-    </Project>
-  </Folder>
-  <Project Path="FujiyNotepad.Core.Tests/FujiyNotepad.Core.Tests.csproj" />
   <Project Path="FujiyNotepad.Core/FujiyNotepad.Core.csproj" />
+  <Project Path="FujiyNotepad.Core.Tests/FujiyNotepad.Core.Tests.csproj" />
+  <Project Path="FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="FujiyNotepad.WinUI.Logic/FujiyNotepad.WinUI.Logic.csproj" />
+  <Project Path="FujiyNotepad.WinUI.Logic.Tests/FujiyNotepad.WinUI.Logic.Tests.csproj" />
 </Solution>
