@@ -9,6 +9,7 @@
     <WindowsPackageType>None</WindowsPackageType>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishAot>true</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>

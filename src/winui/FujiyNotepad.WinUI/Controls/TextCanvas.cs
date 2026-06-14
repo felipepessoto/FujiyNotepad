@@ -28,7 +28,7 @@ namespace FujiyNotepad.WinUI.Controls
     /// math and the per-line render model live in the framework-independent <see cref="TextLayoutEngine"/>
     /// (a plain .NET library), so that logic unit-tests on a normal test host.
     /// </summary>
-    public sealed class TextCanvas : UserControl
+    public sealed partial class TextCanvas : UserControl
     {
         private readonly TextLayoutEngine engine = new();
         private readonly CanvasControl canvas;
