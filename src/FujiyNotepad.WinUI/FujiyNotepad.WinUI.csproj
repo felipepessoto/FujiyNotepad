@@ -8,7 +8,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
-    <!-- Build/publish the RID matching the selected Platform (default x64). An explicit -r always wins. -->
+    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <!-- Resolve the RID from the selected Platform early, so every publish path (-r, -p:Platform,
+         or -p:PublishProfile=win-*.pubxml) is consistent. An explicit -r always wins. -->
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'x86'">win-x86</RuntimeIdentifier>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
