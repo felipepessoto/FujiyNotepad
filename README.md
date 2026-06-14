@@ -18,18 +18,24 @@ constant regardless of file size.
 ## Download
 
 Grab the latest build from the [Releases page](https://github.com/felipepessoto/FujiyNotepad/releases).
-Each release publishes one **self-contained** build:
+Each release publishes a **self-contained** [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
+build for every Windows architecture — each bundles the .NET runtime **and** the Windows App SDK runtime,
+so you just unzip and run `FujiyNotepad.WinUI.exe` with **no prerequisites**, nothing to install:
 
-- **`FujiyNotepad-<version>-win-x64.zip`** — a [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
-  build that bundles the .NET runtime **and** the Windows App SDK runtime. Unzip and run
-  `FujiyNotepad.WinUI.exe` — **no prerequisites**, nothing to install.
+| Your PC | Download |
+| --- | --- |
+| Most desktops & laptops (Intel/AMD, 64-bit) | **`FujiyNotepad-<version>-win-x64.zip`** |
+| Windows on Arm (e.g. Snapdragon, Surface Pro X) | **`FujiyNotepad-<version>-win-arm64.zip`** |
+| 32-bit Windows | **`FujiyNotepad-<version>-win-x86.zip`** |
 
-The build is unsigned, so Windows SmartScreen may warn on first run (*More info → Run anyway*).
+The builds are unsigned, so Windows SmartScreen may warn on first run (*More info → Run anyway*).
 
 ## Features
 
 - Open multi-gigabyte text files with near-constant memory usage — a custom view draws only the
   lines currently on screen, reading each on demand.
+- **Looks at home on Windows**: a Mica backdrop on Windows 11, the open file's name in the title bar,
+  and a text view that follows the system **light / dark** theme.
 - Native-style navigation: mouse wheel, a line-based vertical scrollbar, a horizontal scrollbar,
   and the keyboard (arrows, `PageUp`/`PageDown`, `Home`/`End`, `Ctrl+Home`/`Ctrl+End`).
 - Character-level **selection** (mouse drag with continuous edge auto-scroll, `Shift`+click/arrows,
@@ -45,7 +51,7 @@ The build is unsigned, so Windows SmartScreen may warn on first run (*More info 
 
 ## Requirements
 
-- Windows 10 or Windows 11 (x64)
+- Windows 10 (version 1809 / build 17763) or Windows 11 — **x64, Arm64, or x86**.
 - Released builds need **nothing** installed (self-contained Native AOT).
 - To build from source: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
