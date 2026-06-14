@@ -9,6 +9,11 @@
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <!-- A bare `dotnet build`/`dotnet run` on this project evaluates Platform as AnyCPU, which is not a
+         valid target for a self-contained WinUI app. Default only that case to win-x64 so running the
+         project directly works; the .slnx and the release workflow select a real Platform/RID, so this
+         never applies to them (and so never overrides an arm64/x86 build). -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'AnyCPU'">win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <ImplicitUsings>enable</ImplicitUsings>

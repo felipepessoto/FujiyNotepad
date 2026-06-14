@@ -38,11 +38,13 @@ namespace FujiyNotepad.WinUI.Controls
         private double lineHeight;
         private bool metricsValid;
 
-        private readonly Color backgroundColor = Colors.White;
-        private readonly Color textColor = Colors.Black;
-        private readonly Color caretColor = Colors.Black;
-        private readonly Color selectionActiveColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
-        private readonly Color selectionInactiveColor = Color.FromArgb(255, 0xDC, 0xDC, 0xDC);
+        // Theme-dependent colors for the Win2D surface (which paints its own pixels instead of using XAML
+        // brushes). Updated by ApplyTheme() from the control's resolved ActualTheme; default to light.
+        private Color backgroundColor = Colors.White;
+        private Color textColor = Colors.Black;
+        private Color caretColor = Colors.Black;
+        private Color selectionActiveColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
+        private Color selectionInactiveColor = Color.FromArgb(255, 0xDC, 0xDC, 0xDC);
 
         private bool hasFocusInternal;
         private bool caretBlinkOn = true;
@@ -99,6 +101,11 @@ namespace FujiyNotepad.WinUI.Controls
             GotFocus += (_, _) => { hasFocusInternal = true; RestartCaretBlink(); canvas.Invalidate(); };
             LostFocus += (_, _) => { hasFocusInternal = false; caretTimer.Stop(); canvas.Invalidate(); };
             SizeChanged += (_, _) => { SyncViewport(); ViewChanged?.Invoke(); canvas.Invalidate(); };
+
+            // The Win2D surface paints its own colors, so re-theme it whenever the app theme changes.
+            ApplyTheme();
+            ActualThemeChanged += (_, _) => ApplyTheme();
+            Loaded += (_, _) => ApplyTheme();
 
             BuildContextMenu();
         }
@@ -431,6 +438,29 @@ namespace FujiyNotepad.WinUI.Controls
                 caretTimer.Stop();
                 caretTimer.Start();
             }
+        }
+
+        // Light/dark palette for the Win2D surface, selected from the control's resolved ActualTheme.
+        private void ApplyTheme()
+        {
+            if (ActualTheme == Microsoft.UI.Xaml.ElementTheme.Dark)
+            {
+                backgroundColor = Color.FromArgb(255, 0x1E, 0x1E, 0x1E);
+                textColor = Color.FromArgb(255, 0xF1, 0xF1, 0xF1);
+                caretColor = Color.FromArgb(255, 0xF1, 0xF1, 0xF1);
+                selectionActiveColor = Color.FromArgb(255, 0x26, 0x4F, 0x78);
+                selectionInactiveColor = Color.FromArgb(255, 0x3A, 0x3D, 0x41);
+            }
+            else
+            {
+                backgroundColor = Colors.White;
+                textColor = Colors.Black;
+                caretColor = Colors.Black;
+                selectionActiveColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
+                selectionInactiveColor = Color.FromArgb(255, 0xDC, 0xDC, 0xDC);
+            }
+
+            canvas?.Invalidate();
         }
 
         #endregion
