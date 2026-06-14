@@ -8,6 +8,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -36,7 +37,40 @@
             </MenuBarItem>
         </MenuBar>
 
-        <Grid Grid.Row="1">
+        <Grid x:Name="FindBar" Grid.Row="1" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"
+              Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBox x:Name="FindBox" Grid.Column="0" PlaceholderText="Find" VerticalAlignment="Center"
+                     KeyDown="FindBox_KeyDown" />
+
+            <Button x:Name="FindNextButton" Grid.Column="1" Content="Find Next" VerticalAlignment="Center"
+                    Click="FindNext_Click">
+                <Button.KeyboardAccelerators>
+                    <KeyboardAccelerator Key="F3" />
+                </Button.KeyboardAccelerators>
+            </Button>
+
+            <ProgressBar x:Name="FindProgress" Grid.Column="2" Width="120" Minimum="0" Maximum="100"
+                         VerticalAlignment="Center" Visibility="Collapsed" />
+
+            <Button x:Name="FindCancelButton" Grid.Column="3" Content="Cancel" VerticalAlignment="Center"
+                    Visibility="Collapsed" Click="FindCancel_Click" />
+
+            <TextBlock x:Name="FindStatus" Grid.Column="4" VerticalAlignment="Center" Margin="4,0" />
+
+            <Button Grid.Column="5" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
+                    ToolTipService.ToolTip="Close" />
+        </Grid>
+
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -61,7 +95,7 @@
             <Border Grid.Row="1" Grid.Column="1" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" />
         </Grid>
 
-        <Grid Grid.Row="2" Padding="8,3" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+        <Grid Grid.Row="3" Padding="8,3" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

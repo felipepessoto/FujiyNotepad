@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using FujiyNotepad.Core;
 
@@ -6,6 +8,14 @@ namespace FujiyNotepad.Core.Tests
 {
     public class TextSearcherTests
     {
+        private sealed class SyncProgress : IProgress<int>
+        {
+            public readonly List<int> Values = new();
+
+            // Synchronous so tests observe every report deterministically (unlike Progress<T>, which posts).
+            public void Report(int value) => Values.Add(value);
+        }
+
         private static async Task<List<long>> SearchAll(IByteSource source, string pattern, int chunkSize = 1 << 20)
         {
             var searcher = new TextSearcher(source, chunkSize);
@@ -73,6 +83,59 @@ namespace FujiyNotepad.Core.Tests
             var source = new InMemoryByteSource("axbxc");
             var searcher = new TextSearcher(source);
             Assert.Equal(new long[] { 3, 1 }, new List<long>(searcher.SearchBackward(5, (byte)'x')));
+        }
+
+        [Fact]
+        public async Task Search_ReportsProgress_FromZeroToHundredMonotonically()
+        {
+            // No match, so the search scans the whole source and reports progress to completion.
+            var source = new InMemoryByteSource(new string('.', 100));
+            var searcher = new TextSearcher(source, chunkSize: 10);
+            var progress = new SyncProgress();
+
+            await foreach (long _ in searcher.Search(0, System.Text.Encoding.ASCII.GetBytes("zzz"), progress))
+            {
+            }
+
+            Assert.Equal(0, progress.Values.First());
+            Assert.Equal(100, progress.Values.Last());
+            Assert.Equal(progress.Values.OrderBy(v => v), progress.Values); // non-decreasing
+        }
+
+        [Fact]
+        public async Task Search_PreCancelledToken_YieldsNothing()
+        {
+            var source = new InMemoryByteSource("abcabcabc");
+            var searcher = new TextSearcher(source);
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            var results = new List<long>();
+            await foreach (long m in searcher.Search(0, System.Text.Encoding.ASCII.GetBytes("abc"), token: cts.Token))
+            {
+                results.Add(m);
+            }
+
+            Assert.Empty(results);
+        }
+
+        [Fact]
+        public async Task Search_CancelDuringEnumeration_StopsEarlyWithoutThrowing()
+        {
+            // "abab..." has 1000 matches; cancelling after the first stops between chunks (cooperatively).
+            var source = new InMemoryByteSource(string.Concat(Enumerable.Repeat("ab", 1000)));
+            var searcher = new TextSearcher(source, chunkSize: 8);
+            using var cts = new CancellationTokenSource();
+
+            var results = new List<long>();
+            await foreach (long m in searcher.Search(0, System.Text.Encoding.ASCII.GetBytes("ab"), token: cts.Token))
+            {
+                results.Add(m);
+                cts.Cancel();
+            }
+
+            Assert.NotEmpty(results);
+            Assert.True(results.Count < 1000, $"expected an early stop, got {results.Count} matches");
         }
     }
 }
