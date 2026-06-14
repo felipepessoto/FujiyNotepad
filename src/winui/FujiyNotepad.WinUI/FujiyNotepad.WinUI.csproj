@@ -9,16 +9,36 @@
     <WindowsPackageType>None</WindowsPackageType>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishAot>true</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.3.2" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\FujiyNotepad.Core\FujiyNotepad.Core.csproj" />
     <ProjectReference Include="..\FujiyNotepad.WinUI.Logic\FujiyNotepad.WinUI.Logic.csproj" />
   </ItemGroup>
+
+  <!--
+    The Windows App SDK generates the app's resources.pri (which contains the compiled XAML)
+    into the build output, but for an unpackaged app `dotnet publish` does not copy it into the
+    publish folder: the SDK's Publish override only runs for MSIX-packaged apps (AppxPackage=true).
+    Without resources.pri next to the exe, ms-appx:///*.xaml resources fail to resolve at runtime
+    (XamlParseException), which is a hard crash under Native AOT. Add the generated PRI to the
+    publish file set explicitly so it ships alongside the executable.
+  -->
+  <Target Name="IncludeProjectPriInPublish"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(WindowsPackageType)' == 'None' and Exists('$(ProjectPriFullPath)')">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(ProjectPriFullPath)">
+        <RelativePath>$(ProjectPriFileName)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
 </Project>
