@@ -277,5 +277,68 @@ namespace FujiyNotepad.WinUI.Logic.Tests
 
             Assert.True(redraws >= 1);
         }
+
+        // ----- Selection statistics (status bar) -----
+
+        [Fact]
+        public async Task GetSelectionStats_NoSelection_ReturnsZero()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 5), cw: 10, lh: 20);
+
+            SelectionStats stats = e.GetSelectionStats();
+
+            Assert.Equal(0, stats.Characters);
+            Assert.Equal(0, stats.Lines);
+        }
+
+        [Fact]
+        public void GetSelectionStats_WithoutProvider_ReturnsZero()
+        {
+            var e = new TextLayoutEngine { ViewportWidth = 100, ViewportHeight = 100 };
+            e.SetMetrics(10, 20);
+
+            SelectionStats stats = e.GetSelectionStats();
+
+            Assert.Equal(0, stats.Characters);
+            Assert.Equal(0, stats.Lines);
+        }
+
+        [Fact]
+        public async Task GetSelectionStats_SingleLine_CountsSelectedCharacters()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 5), cw: 10, lh: 20);
+            e.SelectMatch(1, 1, 3); // select "BCD" on line 1
+
+            SelectionStats stats = e.GetSelectionStats();
+
+            Assert.Equal(3, stats.Characters);
+            Assert.Equal(1, stats.Lines);
+        }
+
+        [Fact]
+        public async Task GetSelectionStats_MultiLine_CountsCharactersIncludingNewlines()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 3), cw: 10, lh: 20, vw: 200, vh: 200);
+            e.PointerPress(25, 5, shift: false); // (0,2)
+            e.PointerDrag(35, 45);               // (2,3)
+
+            SelectionStats stats = e.GetSelectionStats();
+
+            // line 0: chars 2..5 (3) + newline (1); line 1: all 5 + newline (1); line 2: chars 0..3 (3) = 13.
+            Assert.Equal(13, stats.Characters);
+            Assert.Equal(3, stats.Lines);
+        }
+
+        [Fact]
+        public async Task GetSelectionStats_VeryLargeSelection_ReportsLinesButNotCharacters()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 6000), cw: 10, lh: 20);
+            e.HandleKey(NavKey.SelectAll, shift: false);
+
+            SelectionStats stats = e.GetSelectionStats();
+
+            Assert.Equal(-1, stats.Characters); // too large to count cheaply
+            Assert.Equal(6000, stats.Lines);
+        }
     }
 }
