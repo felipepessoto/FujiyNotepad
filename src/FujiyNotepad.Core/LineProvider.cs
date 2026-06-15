@@ -9,7 +9,7 @@ namespace FujiyNotepad.Core
     /// re-read the disk. Line text never changes once its line is indexed (the index is append-only and
     /// only fully-terminated lines are exposed), so cached values stay valid.
     /// </summary>
-    public sealed class LineProvider
+    public sealed class LineProvider : ILineSource
     {
         // Cap the bytes decoded for any one line so a pathologically long line cannot allocate without
         // bound; the remainder is elided with a marker (this is a viewer, not an editor).
