@@ -34,12 +34,20 @@ namespace FujiyNotepad.Core
         /// </summary>
         public int CodeUnitSize => NewLineBytes.Length;
 
-        private TextEncoding(string id, string displayName, Encoding encoding, byte[] bom)
+        /// <summary>
+        /// True for the big-endian multi-byte codecs (UTF-16 BE / UTF-32 BE). The whole-word Find check needs
+        /// it to combine a neighbour code unit's bytes into the right value; it is meaningless (and false) for
+        /// the single-byte encodings.
+        /// </summary>
+        public bool IsBigEndian { get; }
+
+        private TextEncoding(string id, string displayName, Encoding encoding, byte[] bom, bool isBigEndian = false)
         {
             Id = id;
             DisplayName = displayName;
             Encoding = encoding;
             Bom = bom;
+            IsBigEndian = isBigEndian;
             NewLineBytes = encoding.GetBytes("\n");
             CarriageReturnBytes = encoding.GetBytes("\r");
         }
@@ -50,9 +58,9 @@ namespace FujiyNotepad.Core
         public static readonly TextEncoding Utf8 = new("utf-8", "UTF-8", new UTF8Encoding(false), Array.Empty<byte>());
         public static readonly TextEncoding Utf8Bom = new("utf-8-bom", "UTF-8 with BOM", new UTF8Encoding(false), new byte[] { 0xEF, 0xBB, 0xBF });
         public static readonly TextEncoding Utf16Le = new("utf-16le", "UTF-16 LE", new UnicodeEncoding(false, false), new byte[] { 0xFF, 0xFE });
-        public static readonly TextEncoding Utf16Be = new("utf-16be", "UTF-16 BE", new UnicodeEncoding(true, false), new byte[] { 0xFE, 0xFF });
+        public static readonly TextEncoding Utf16Be = new("utf-16be", "UTF-16 BE", new UnicodeEncoding(true, false), new byte[] { 0xFE, 0xFF }, isBigEndian: true);
         public static readonly TextEncoding Utf32Le = new("utf-32le", "UTF-32 LE", new UTF32Encoding(false, false), new byte[] { 0xFF, 0xFE, 0x00, 0x00 });
-        public static readonly TextEncoding Utf32Be = new("utf-32be", "UTF-32 BE", new UTF32Encoding(true, false), new byte[] { 0x00, 0x00, 0xFE, 0xFF });
+        public static readonly TextEncoding Utf32Be = new("utf-32be", "UTF-32 BE", new UTF32Encoding(true, false), new byte[] { 0x00, 0x00, 0xFE, 0xFF }, isBigEndian: true);
         public static readonly TextEncoding Windows1252 = new("windows-1252", "Windows-1252 (ANSI)", Windows1252Encoding.Instance, Array.Empty<byte>());
 
         /// <summary>All encodings offered in the menu, in display order.</summary>

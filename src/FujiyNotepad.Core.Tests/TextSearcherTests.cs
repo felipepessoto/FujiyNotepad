@@ -322,5 +322,96 @@ namespace FujiyNotepad.Core.Tests
             var searcher = new TextSearcher(new InMemoryByteSource("xAxAAx"));
             Assert.Equal(2, searcher.FindLastBefore(long.MaxValue, System.Text.Encoding.ASCII.GetBytes("x"), new SearchOptions { UnitAlignment = 2 }));
         }
+
+        // ----- Whole-word find in multi-byte encodings (issue #38) -----
+        //
+        // In UTF-16/UTF-32 the byte immediately next to a match is the high/low byte of an adjacent code unit
+        // (zero for an ASCII neighbour), not the neighbour character. A byte-level boundary check would mistake
+        // that zero byte for a word boundary and wrongly accept a match inside a word; the code-unit-aware check
+        // reconstructs the whole neighbour unit (honouring endianness) and classifies the real character.
+
+        private static async Task<List<long>> SearchAll(IByteSource source, byte[] pattern, SearchOptions options, int chunkSize = 1 << 20)
+        {
+            var searcher = new TextSearcher(source, chunkSize);
+            var results = new List<long>();
+            await foreach (long offset in searcher.Search(0, pattern, options))
+            {
+                results.Add(offset);
+            }
+            return results;
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_Utf16Le_ExcludesEmbeddedViaCodeUnitNeighbour()
+        {
+            // "scat cat": the inner "cat" is preceded by 's'. In UTF-16LE the byte before it is the zero high
+            // byte of 's', so only a code-unit-aware check rejects it; the standalone "cat" (at char 5) wins.
+            var enc = System.Text.Encoding.Unicode; // UTF-16 LE
+            var source = new InMemoryByteSource(enc.GetBytes("scat cat"));
+            var options = new SearchOptions { WholeWord = true, UnitAlignment = 2 };
+            Assert.Equal(new long[] { 5 * 2 }, await SearchAll(source, enc.GetBytes("cat"), options));
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_Utf16Be_ExcludesEmbeddedViaCodeUnitNeighbour()
+        {
+            // "cats cat": the inner "cat" is followed by 's'. In UTF-16BE the byte after it is the zero high
+            // byte of 's', so the byte-level check used to accept it; the standalone "cat" (at char 5) wins.
+            var enc = System.Text.Encoding.BigEndianUnicode; // UTF-16 BE
+            var source = new InMemoryByteSource(enc.GetBytes("cats cat"));
+            var options = new SearchOptions { WholeWord = true, UnitAlignment = 2, BigEndian = true };
+            Assert.Equal(new long[] { 5 * 2 }, await SearchAll(source, enc.GetBytes("cat"), options));
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_Utf32Le_ExcludesEmbeddedViaCodeUnitNeighbour()
+        {
+            var enc = new System.Text.UTF32Encoding(false, false); // UTF-32 LE
+            var source = new InMemoryByteSource(enc.GetBytes("scat cat"));
+            var options = new SearchOptions { WholeWord = true, UnitAlignment = 4 };
+            Assert.Equal(new long[] { 5 * 4 }, await SearchAll(source, enc.GetBytes("cat"), options));
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_Utf32Be_ExcludesEmbeddedViaCodeUnitNeighbour()
+        {
+            var enc = new System.Text.UTF32Encoding(true, false); // UTF-32 BE
+            var source = new InMemoryByteSource(enc.GetBytes("cats cat"));
+            var options = new SearchOptions { WholeWord = true, UnitAlignment = 4, BigEndian = true };
+            Assert.Equal(new long[] { 5 * 4 }, await SearchAll(source, enc.GetBytes("cat"), options));
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_Utf16Le_FindsStandaloneAndExcludesWordCharNeighbours()
+        {
+            // "cat cat_ 1cat cat": standalone at char 0 and 14; "cat_" (underscore after) and "1cat" (digit
+            // before) are embedded and excluded — both word-char neighbours seen at the code-unit level.
+            var enc = System.Text.Encoding.Unicode; // UTF-16 LE
+            var source = new InMemoryByteSource(enc.GetBytes("cat cat_ 1cat cat"));
+            var options = new SearchOptions { WholeWord = true, UnitAlignment = 2 };
+            Assert.Equal(new long[] { 0 * 2, 14 * 2 }, await SearchAll(source, enc.GetBytes("cat"), options));
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_Utf16Le_AcrossChunkBoundary_ReadsNeighbourUnit()
+        {
+            // A tiny chunk makes the neighbour code unit straddle the buffer edge; the per-byte unit read must
+            // still reconstruct it, so the result is identical to the single-chunk scan.
+            var enc = System.Text.Encoding.Unicode; // UTF-16 LE
+            var source = new InMemoryByteSource(enc.GetBytes("scat cat"));
+            var options = new SearchOptions { WholeWord = true, UnitAlignment = 2 };
+            Assert.Equal(new long[] { 5 * 2 }, await SearchAll(source, enc.GetBytes("cat"), options, chunkSize: 4));
+        }
+
+        [Fact]
+        public void FindLastBefore_WholeWord_Utf16Be_ExcludesEmbeddedViaCodeUnitNeighbour()
+        {
+            // Backward counterpart: in "cats cat" only the standalone "cat" (char 5) qualifies in UTF-16BE.
+            var enc = System.Text.Encoding.BigEndianUnicode; // UTF-16 BE
+            var source = new InMemoryByteSource(enc.GetBytes("cats cat"));
+            var searcher = new TextSearcher(source);
+            long? hit = searcher.FindLastBefore(long.MaxValue, enc.GetBytes("cat"), new SearchOptions { WholeWord = true, UnitAlignment = 2, BigEndian = true });
+            Assert.Equal(5 * 2, hit);
+        }
     }
 }

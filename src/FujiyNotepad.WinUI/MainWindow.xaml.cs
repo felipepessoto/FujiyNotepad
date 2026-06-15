@@ -699,6 +699,7 @@ namespace FujiyNotepad.WinUI
                     IgnoreCase = !matchCase,
                     WholeWord = wholeWord,
                     UnitAlignment = currentEncoding.CodeUnitSize,
+                    BigEndian = currentEncoding.IsBigEndian,
                 };
                 pattern = currentEncoding.Encode(text);
             }

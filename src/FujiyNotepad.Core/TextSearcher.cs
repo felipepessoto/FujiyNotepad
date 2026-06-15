@@ -106,7 +106,7 @@ namespace FujiyNotepad.Core
                     bool aligned = options.UnitAlignment <= 1 || matchOffset % options.UnitAlignment == 0;
                     if (matchOffset >= nextAllowedStart
                         && aligned
-                        && (!options.WholeWord || IsWholeWordMatch(buffer, available, bufferBase, matchAt, pattern.Length)))
+                        && (!options.WholeWord || IsWholeWordMatch(buffer, available, bufferBase, matchAt, pattern.Length, options.UnitAlignment, options.BigEndian)))
                     {
                         yield return matchOffset;
                         nextAllowedStart = matchOffset + pattern.Length;
@@ -217,7 +217,7 @@ namespace FujiyNotepad.Core
                         break;
                     }
                     bool aligned = options.UnitAlignment <= 1 || matchOffset % options.UnitAlignment == 0;
-                    if (aligned && (!options.WholeWord || IsWholeWordMatch(buffer, read, blockStart, matchAt, patLen)))
+                    if (aligned && (!options.WholeWord || IsWholeWordMatch(buffer, read, blockStart, matchAt, patLen, options.UnitAlignment, options.BigEndian)))
                     {
                         best = matchOffset;
                     }
@@ -332,18 +332,48 @@ namespace FujiyNotepad.Core
             }
         }
 
-        private static bool IsWordByte(int b)
-            => b >= 0 && ((b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '_');
+        private static bool IsWordCodeUnit(int value)
+            => value >= 0 && ((value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') || value == '_');
 
-        // A match is "whole word" when the bytes immediately before and after it are non-word bytes or the
-        // file edge. Neighbours come from the buffer when present, else from a one-byte source read (only at
-        // a buffer edge), so the check is correct across chunk boundaries.
-        private bool IsWholeWordMatch(byte[] buffer, int available, long bufferBase, int matchAt, int patLen)
+        // A match is "whole word" when the code units immediately before and after it are non-word characters
+        // or the file edge. For a multi-byte encoding the neighbour is a whole code unit (unitAlignment bytes
+        // combined per endianness), NOT a single byte — otherwise the zero high byte of an adjacent ASCII
+        // UTF-16/UTF-32 character looks like a boundary and a match inside a word is wrongly accepted. The
+        // neighbour bytes come from the buffer when present, else from a source read (only at a buffer edge),
+        // so the check stays correct across chunk boundaries.
+        private bool IsWholeWordMatch(byte[] buffer, int available, long bufferBase, int matchAt, int patLen, int unitAlignment, bool bigEndian)
         {
-            int left = matchAt > 0 ? buffer[matchAt - 1] : ReadByteAt(bufferBase + matchAt - 1);
-            int rightIdx = matchAt + patLen;
-            int right = rightIdx < available ? buffer[rightIdx] : ReadByteAt(bufferBase + rightIdx);
-            return !IsWordByte(left) && !IsWordByte(right);
+            int unit = unitAlignment > 1 ? unitAlignment : 1;
+            long matchStart = bufferBase + matchAt;
+            int left = ReadUnitValue(buffer, available, bufferBase, matchStart - unit, unit, bigEndian);
+            int right = ReadUnitValue(buffer, available, bufferBase, matchStart + patLen, unit, bigEndian);
+            return !IsWordCodeUnit(left) && !IsWordCodeUnit(right);
+        }
+
+        // Reads the <paramref name="unitSize"/>-byte code unit at absolute offset <paramref name="unitOffset"/>,
+        // combining its bytes into the unit's integer value per <paramref name="bigEndian"/>, or returns -1 when
+        // the unit falls outside the file (a word boundary). Each byte is taken from the in-memory buffer when it
+        // lies inside it, else from a direct source read, so a unit straddling a chunk edge is still read right.
+        private int ReadUnitValue(byte[] buffer, int available, long bufferBase, long unitOffset, int unitSize, bool bigEndian)
+        {
+            if (unitOffset < 0 || unitOffset + unitSize > source.Length)
+            {
+                return -1;
+            }
+            int value = 0;
+            for (int k = 0; k < unitSize; k++)
+            {
+                long abs = unitOffset + k;
+                long rel = abs - bufferBase;
+                int b = (rel >= 0 && rel < available) ? buffer[(int)rel] : ReadByteAt(abs);
+                if (b < 0)
+                {
+                    return -1;
+                }
+                int shift = (bigEndian ? unitSize - 1 - k : k) * 8;
+                value |= b << shift;
+            }
+            return value;
         }
 
         private int ReadByteAt(long offset)

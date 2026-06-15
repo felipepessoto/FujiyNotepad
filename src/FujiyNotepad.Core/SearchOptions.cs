@@ -23,7 +23,16 @@ namespace FujiyNotepad.Core
         /// Code-unit size for multi-byte encodings: when greater than 1, a match is only accepted at a file
         /// offset that is a multiple of this, so it lands on a character boundary (e.g. 2 for UTF-16, 4 for
         /// UTF-32). The default (0/1) accepts matches at any byte offset — the original single-byte behaviour.
+        /// It also tells the whole-word check how many bytes form the code unit it must inspect on each side.
         /// </summary>
         public int UnitAlignment { get; init; }
+
+        /// <summary>
+        /// Byte order of the multi-byte code units (ignored when <see cref="UnitAlignment"/> is 0/1). The
+        /// whole-word check combines a neighbour's bytes into its code-unit value using this order, so the
+        /// boundary test inspects the actual adjacent character rather than one of its bytes. The default
+        /// (little-endian) matches UTF-16/UTF-32 LE; set it for the big-endian codecs.
+        /// </summary>
+        public bool BigEndian { get; init; }
     }
 }
