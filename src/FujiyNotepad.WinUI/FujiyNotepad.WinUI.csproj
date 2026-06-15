@@ -92,4 +92,24 @@
     </ItemGroup>
   </Target>
 
+  <!--
+    The framework-dependent release flavor strips the Windows App SDK 2.x "Windows AI" components
+    (onnxruntime.dll ~21 MB, DirectML.dll ~18 MB, Microsoft.Windows.AI.*). This app uses none of the
+    Windows AI / ML APIs, and a framework-dependent build can't trim them away (trimming requires a
+    self-contained publish). Opt in with -p:ExcludeWindowsAiComponents=true; the self-contained build,
+    which is what most people download, is left untouched.
+  -->
+  <Target Name="ExcludeWindowsAiComponents"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(ExcludeWindowsAiComponents)' == 'true'">
+    <ItemGroup>
+      <_WindowsAiFilesToExclude Include="@(ResolvedFileToPublish)"
+          Condition="'%(ResolvedFileToPublish.Filename)' == 'onnxruntime'
+                  or '%(ResolvedFileToPublish.Filename)' == 'DirectML'
+                  or '%(ResolvedFileToPublish.Filename)' == 'Microsoft.ML.OnnxRuntime'
+                  or $([System.String]::Copy('%(ResolvedFileToPublish.Filename)').StartsWith('Microsoft.Windows.AI.'))" />
+      <ResolvedFileToPublish Remove="@(_WindowsAiFilesToExclude)" />
+    </ItemGroup>
+  </Target>
+
 </Project>
