@@ -148,6 +148,90 @@ namespace FujiyNotepad.Core
         }
 
         /// <summary>
+        /// Returns the absolute offset of the last (highest-offset) occurrence of <paramref name="pattern"/>
+        /// whose start is strictly before <paramref name="beforeOffset"/>, honouring <paramref name="options"/>
+        /// (ASCII case-insensitive and/or whole-word), or <c>null</c> when there is none. This is the backward
+        /// counterpart of <see cref="Search(long, byte[], SearchOptions, IProgress{int}?, CancellationToken)"/>
+        /// used for "Find Previous": it walks the source in chunks from high to low and stops at the first
+        /// (highest) match. For a self-overlapping pattern the result is the nearest non-overlapping match
+        /// anchored at <paramref name="beforeOffset"/>, which can differ from the forward scan's canonical set
+        /// only in pathological cases (e.g. "xx" inside a long run of x's). Cancellation is cooperative: a
+        /// cancelled <paramref name="token"/> stops the scan between chunks without throwing and returns <c>null</c>.
+        /// </summary>
+        public long? FindLastBefore(long beforeOffset, byte[] pattern, SearchOptions options = default, CancellationToken token = default)
+        {
+            if (pattern.Length == 0)
+            {
+                return null;
+            }
+
+            long length = source.Length;
+            int patLen = pattern.Length;
+            int overlap = patLen - 1;
+
+            // Valid match starts lie in [0, startCap): strictly before the caret and with room for the
+            // whole pattern before end-of-file.
+            long startCap = Math.Min(beforeOffset, length - patLen + 1);
+            if (startCap <= 0)
+            {
+                return null;
+            }
+
+            byte[]? foldedPattern = options.IgnoreCase ? Fold(pattern) : null;
+            byte[] buffer = new byte[chunkSize + overlap];
+
+            long pos = startCap; // exclusive upper bound for match starts not yet covered by a higher block
+            while (pos > 0)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    return null;
+                }
+
+                int toScan = (int)Math.Min(chunkSize, pos);
+                long blockStart = pos - toScan;
+
+                // Read the block plus the overlap needed to verify a match that starts near its high edge.
+                long windowEnd = Math.Min(pos + overlap, length);
+                int windowLen = (int)(windowEnd - blockStart);
+                int read = source.ReadFull(blockStart, buffer.AsSpan(0, windowLen));
+
+                // Forward-scan the window, keeping the highest valid start below pos; starts at/after pos
+                // live in the overlap region and belong to an already-scanned higher block.
+                long best = -1;
+                int from = 0;
+                while (from < read)
+                {
+                    int idx = IndexOf(buffer.AsSpan(from, read - from), pattern, foldedPattern);
+                    if (idx < 0)
+                    {
+                        break;
+                    }
+                    int matchAt = from + idx;
+                    long matchOffset = blockStart + matchAt;
+                    if (matchOffset >= pos)
+                    {
+                        break;
+                    }
+                    if (!options.WholeWord || IsWholeWordMatch(buffer, read, blockStart, matchAt, patLen))
+                    {
+                        best = matchOffset;
+                    }
+                    from = matchAt + 1;
+                }
+
+                if (best >= 0)
+                {
+                    return best;
+                }
+
+                pos = blockStart;
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Yields the absolute offset of every occurrence of <paramref name="value"/> strictly before
         /// <paramref name="startOffset"/>, in descending order. For '\n' it additionally yields -1 at
         /// the end (the implicit start-of-file line boundary the viewport relies on).

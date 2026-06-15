@@ -54,6 +54,47 @@ namespace FujiyNotepad.Core
         }
 
         /// <summary>
+        /// Returns the last non-empty match strictly before (<paramref name="startLine"/>,
+        /// <paramref name="startChar"/>), scanning backward through the available lines, or <c>null</c>.
+        /// On the start line only matches whose start column is below <paramref name="startChar"/> qualify;
+        /// the per-line canonical (non-overlapping, forward) match set is reused, so this is the exact inverse
+        /// of <see cref="FindNext"/>.
+        /// </summary>
+        public LineMatch? FindPrevious(Regex regex, int startLine, int startChar, CancellationToken token = default)
+        {
+            int count = lines.LineCount;
+            for (int line = Math.Min(startLine, count - 1); line >= 0; line--)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    return null;
+                }
+
+                string text = lines.GetLine(line);
+                int limit = line == startLine ? Math.Clamp(startChar, 0, text.Length) : int.MaxValue;
+
+                LineMatch? best = null;
+                foreach (Match m in regex.Matches(text))
+                {
+                    if (m.Index >= limit)
+                    {
+                        break; // matches come in increasing-index order; nothing further qualifies
+                    }
+                    if (m.Length > 0)
+                    {
+                        best = new LineMatch(line, m.Index, m.Length);
+                    }
+                }
+
+                if (best is not null)
+                {
+                    return best;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Counts every non-empty match across all available lines. Cancellation stops early and returns the
         /// partial count; progress is reported as a 0-100 percentage of lines scanned.
         /// </summary>
