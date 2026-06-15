@@ -215,5 +215,67 @@ namespace FujiyNotepad.WinUI.Logic.Tests
 
             Assert.Equal(TextLayoutEngine.TextPadding - 30, line0.Matches[0].X); // first "cat" rides the scroll
         }
+
+        // ----- Line-number gutter -----
+
+        [Fact]
+        public async Task Gutter_OffByDefault_OnComputesWidthFromDigits()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 3), cw: 10, lh: 20);
+            Assert.Equal(0, e.GutterWidthPx);
+
+            e.ShowLineNumbers = true;
+            Assert.Equal(2 * 10 + 12, e.GutterWidthPx); // 3 lines -> min 2 digits * 10px + 2*6 padding = 32
+        }
+
+        [Fact]
+        public async Task Gutter_ShiftsTextAndSelectionRightByGutterWidth()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 3), cw: 10, lh: 20);
+            e.ShowLineNumbers = true;
+            double gutter = e.GutterWidthPx;
+            e.SelectMatch(0, 1, 3); // columns 1..4
+
+            VisibleLine line = e.GetVisibleLines(hasFocus: true, caretVisible: true)[0];
+
+            Assert.Equal(TextLayoutEngine.TextPadding + gutter, line.TextX);          // origin shifted by the gutter
+            Assert.Equal(10.0 + TextLayoutEngine.TextPadding + gutter, line.SelectionX); // column 1 * 10 + origin
+        }
+
+        [Fact]
+        public async Task Gutter_HitTest_AccountsForGutter()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 3), cw: 10, lh: 20);
+            e.ShowLineNumbers = true;
+            double origin = TextLayoutEngine.TextPadding + e.GutterWidthPx;
+
+            Assert.Equal(new TextPosition(0, 1), e.HitTest(origin + 12, 5)); // 1.2 chars -> column 1
+            Assert.Equal(new TextPosition(0, 0), e.HitTest(2, 5));           // a click inside the gutter -> column 0
+        }
+
+        [Fact]
+        public async Task Gutter_IsIncludedInHorizontalExtent()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDEFGHIJ", 5), cw: 10, lh: 20, vw: 50, vh: 100);
+            e.GetVisibleLines(hasFocus: false, caretVisible: false);
+            double withoutGutter = e.HorizontalExtentPx;
+
+            e.ShowLineNumbers = true;
+            e.GetVisibleLines(hasFocus: false, caretVisible: false);
+
+            Assert.Equal(withoutGutter + e.GutterWidthPx, e.HorizontalExtentPx);
+        }
+
+        [Fact]
+        public async Task ShowLineNumbers_TogglingRequestsRedraw()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 3), cw: 10, lh: 20);
+            int redraws = 0;
+            e.RedrawRequested += () => redraws++;
+
+            e.ShowLineNumbers = true;
+
+            Assert.True(redraws >= 1);
+        }
     }
 }

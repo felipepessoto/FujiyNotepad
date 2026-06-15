@@ -53,8 +53,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 - Configurable **tab width** (2 / 4 / 8) and **wide / CJK glyph** handling (East Asian wide and
   fullwidth characters occupy two columns).
 - **Zoom** (`Ctrl`+`+` / `Ctrl`+`-` / `Ctrl`+`0`, or `Ctrl`+mouse wheel) with the current percentage in
-  the status bar, a choice of **monospace fonts** (*View ▸ Font*), and the file's total **line and
-  character counts** shown in the status bar (alongside the encoding and the `Ln, Col` caret position).
+  the status bar, an optional **line-number gutter** (*View ▸ Line Numbers*), a choice of **monospace
+  fonts** (*View ▸ Font*), and the file's total **line and character counts** shown in the status bar
+  (alongside the encoding and the `Ln, Col` caret position).
 - *File ▸ Open Sample* generates a large (~10M line) file — with a short feature-demo header — to
   showcase performance.
 
