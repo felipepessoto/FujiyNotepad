@@ -38,11 +38,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # x64 and x86 build on the x64 image; arm64 builds natively on the Windows-on-Arm image, so
-          # Native AOT needs no x64 -> arm64 cross-compilation.
-          - { rid: win-x64,   platform: x64,   os: windows-latest }
-          - { rid: win-x86,   platform: x86,   os: windows-latest }
-          - { rid: win-arm64, platform: ARM64, os: windows-11-arm }
+          # x64 and x86 are built on the x64 image; arm64 is built natively on the Windows-on-Arm
+          # image, so Native AOT needs no x64 -> arm64 cross-compilation.
+          - rid: win-x64
+            platform: x64
+            os: windows-latest
+          - rid: win-x86
+            platform: x86
+            os: windows-latest
+          - rid: win-arm64
+            platform: ARM64
+            os: windows-11-arm
 
     steps:
       - name: Checkout
@@ -61,10 +67,12 @@ jobs:
           $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart('v') } else { "0.0.0-dev" }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      # Native AOT compiles the app to native code that bundles the .NET runtime AND the Windows App SDK,
-      # so the download has no prerequisites. The publish profile selects the RID + a self-contained
-      # publish; -p:Platform keeps RID resolution consistent. AOT linking uses the runner's C++ toolchain.
-      - name: Publish (self-contained Native AOT)
+      # Native AOT (PublishAot=true in the WinUI csproj) compiles the app to native code: smaller, faster
+      # startup, no JIT, and no .NET runtime to install. The app's publish profile
+      # (Properties/PublishProfiles/win-<rid>.pubxml) selects the RID and a self-contained publish; passing
+      # -p:Platform keeps the RID resolution consistent. WindowsAppSDKSelfContained bundles the Windows App
+      # SDK, so each unpackaged build is fully standalone. AOT linking uses the runner's C++ toolchain.
+      - name: Publish (Native AOT, self-contained)
         run: >
           dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
           -c Release
@@ -95,7 +103,7 @@ jobs:
           Compress-Archive -Path publish/app/* -DestinationPath $zip -Force
           "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      # Always uploaded (including on the manual dry-run) so each build can be inspected without a release.
+      # Always uploaded (including on the manual dry-run) so each AOT build can be inspected without a release.
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
