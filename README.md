@@ -25,11 +25,11 @@ Pick the architecture for your PC — **x64** for most Intel/AMD machines, **arm
 
 A **self-contained** [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/) build
 that bundles the .NET runtime **and** the Windows App SDK runtime. Unzip and run
-`FujiyNotepad.WinUI.exe` — **no prerequisites**, nothing to install (~50 MB).
+`FujiyNotepad.WinUI.exe` — **no prerequisites**, nothing to install (~45 MB).
 
 **Small** — `FujiyNotepad-<version>-win-<arch>-framework-dependent.zip`
 
-A much smaller download (~11 MB) that bundles nothing. It needs both of these installed first:
+A much smaller download (~10 MB) that bundles nothing. It needs both of these installed first:
 
 - the [**.NET 10 Runtime**](https://dotnet.microsoft.com/download/dotnet/10.0) (the plain *.NET Runtime* is enough), and
 - the [**Windows App SDK Runtime**](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads) (the "Windows App Runtime" redistributable).
