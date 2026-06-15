@@ -80,8 +80,8 @@ jobs:
           -o publish/app
 
       # Framework-dependent: a small download for users who already have the .NET 10 runtime and the
-      # Windows App SDK runtime installed. Nothing is bundled (no AOT / trim / R2R), and the unused
-      # Windows-AI components (~40 MB) are stripped via ExcludeWindowsAiComponents.
+      # Windows App SDK runtime installed. Nothing is bundled (no AOT / trim / R2R); the unused
+      # Windows-AI and WebView2 components are pruned by the "Remove unused files" step below.
       - name: Publish (framework-dependent)
         if: matrix.kind == 'framework'
         run: >
@@ -94,16 +94,20 @@ jobs:
           -p:WindowsAppSDKSelfContained=false
           -p:PublishReadyToRun=false
           -p:PublishTrimmed=false
-          -p:ExcludeWindowsAiComponents=true
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/app
 
-      # End users don't need debug symbols, and the self-contained Native AOT .pdb is ~34 MB. ILC writes
-      # it straight into the output (it isn't a normal publish item, so MSBuild properties/targets can't
-      # drop it), so strip every .pdb from the published folder here — for both flavors.
-      - name: Strip debug symbols
+      # Prune files end users don't need, for both flavors: debug symbols (the Native AOT .pdb is ~34 MB,
+      # and ILC writes it straight to the output where MSBuild can't drop it), plus the Windows App SDK's
+      # bundled Windows-AI (onnxruntime / DirectML / Microsoft.Windows.AI.*) and WebView2 components —
+      # none of which this app uses (~40 MB of native libraries).
+      - name: Remove unused files
         shell: pwsh
-        run: Get-ChildItem publish/app -Recurse -Filter *.pdb | Remove-Item -Force
+        run: |
+          $unused = 'onnxruntime.dll', 'DirectML.dll', 'Microsoft.Web.WebView2.Core.dll', 'Microsoft.ML.OnnxRuntime.dll'
+          Get-ChildItem publish/app -Recurse -File | Where-Object {
+            $_.Extension -eq '.pdb' -or $_.Name -in $unused -or $_.Name -like 'Microsoft.Windows.AI.*'
+          } | Remove-Item -Force
 
       - name: Package
         id: package
