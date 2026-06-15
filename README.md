@@ -56,7 +56,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 
 - Windows 10 (version 1809 / build 17763) or Windows 11 — **x64, Arm64, or x86**.
 - Released builds need **nothing** installed (self-contained Native AOT).
-- To build from source: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+- To build from source: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Running an
+  unpackaged **dev build** also needs the [Windows App SDK runtime](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads)
+  (already on most dev machines); released self-contained builds bundle it, so they need nothing.
 
 ## Build & run
 
@@ -95,7 +97,7 @@ WinUI has no text control that virtualizes over a file — its virtualization se
 items controls — so the view is a **custom text surface drawn from scratch with Win2D**
 (`CanvasControl` + DirectWrite), not a `TextBox`/`ListView`. `TextCanvas` is a thin Win2D shell: it
 owns the `CanvasControl`, font metrics, focus, the clipboard, and the caret-blink/auto-scroll timers,
-maps pointer/keyboard input to the engine, and paints its per-line render model. All scroll/caret/
+maps pointer/keyboard input to the `TextLayoutEngine`, and paints its per-line render model. All scroll/caret/
 selection math lives in `FujiyNotepad.WinUI.Logic`, and the on-disk engine lives in
 `FujiyNotepad.Core`; both are free of any Win2D/WinUI/WinRT dependency, so they're covered by xUnit
 tests that run on a normal .NET host. Windows App SDK UI can't be driven on headless CI, so
