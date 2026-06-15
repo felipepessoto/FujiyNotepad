@@ -9,6 +9,12 @@ namespace FujiyNotepad.WinUI.Logic
         /// <summary>Tab width in columns (2, 4, or 8). Defaults to 4.</summary>
         public int TabWidth { get; set; } = 4;
 
+        /// <summary>Monospace font family used by the text view. Defaults to Consolas.</summary>
+        public string FontFamily { get; set; } = "Consolas";
+
+        /// <summary>Font size in points (drives zoom). Defaults to 14.</summary>
+        public double FontSize { get; set; } = 14;
+
         /// <summary>Last window width in physical pixels; 0 means "unset, use the default size".</summary>
         public int WindowWidth { get; set; }
 
