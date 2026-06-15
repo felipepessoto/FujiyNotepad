@@ -18,22 +18,33 @@ namespace FujiyNotepad.Core
 
         private readonly IByteSource source;
         private readonly LineIndexer indexer;
+        private readonly TextEncoding encoding;
         private readonly long fileSize;
         private readonly bool endsWithNewline;
         private readonly Dictionary<int, string> cache = new();
 
-        public LineProvider(IByteSource source, LineIndexer indexer)
+        public LineProvider(IByteSource source, LineIndexer indexer, TextEncoding? encoding = null)
         {
             this.source = source;
             this.indexer = indexer;
+            this.encoding = encoding ?? TextEncoding.Utf8;
             fileSize = source.Length;
-            endsWithNewline = fileSize > 0 && ReadByteAt(fileSize - 1) == (byte)'\n';
+            endsWithNewline = FileEndsWithNewline();
         }
 
-        private byte ReadByteAt(long offset)
+        private bool FileEndsWithNewline()
         {
-            Span<byte> one = stackalloc byte[1];
-            return source.ReadFull(offset, one) == 1 ? one[0] : (byte)0;
+            byte[] newline = encoding.NewLineBytes;
+            if (fileSize < newline.Length)
+            {
+                return false;
+            }
+            byte[] tail = new byte[newline.Length];
+            if (source.ReadFull(fileSize - newline.Length, tail) != newline.Length)
+            {
+                return false;
+            }
+            return tail.AsSpan().SequenceEqual(newline);
         }
 
         /// <summary>
@@ -116,20 +127,41 @@ namespace FujiyNotepad.Core
             int textLen = read;
             if (!truncated)
             {
-                // Drop the line's own terminator (LF, and a preceding CR) from the rendered text.
-                if (textLen > 0 && buffer[textLen - 1] == (byte)'\n') textLen--;
-                if (textLen > 0 && buffer[textLen - 1] == (byte)'\r') textLen--;
+                // Drop the line's own terminator (the encoded "\n", and a preceding "\r") from the rendered text.
+                textLen = StripSuffix(buffer, textLen, encoding.NewLineBytes);
+                textLen = StripSuffix(buffer, textLen, encoding.CarriageReturnBytes);
             }
 
-            int from = 0;
-            // Strip a UTF-8 BOM at the very start of the file so it is not rendered on the first line.
-            if (lineIndex == 0 && textLen >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF)
-            {
-                from = 3;
-            }
+            // Strip a byte-order mark at the very start of the file so it is not rendered on the first line.
+            int from = lineIndex == 0 ? BomLength(buffer, textLen) : 0;
 
-            string text = Encoding.UTF8.GetString(buffer, from, textLen - from);
+            string text = encoding.Encoding.GetString(buffer, from, textLen - from);
             return truncated ? text + " …" : text;
+        }
+
+        // Removes a trailing byte sequence (a newline or carriage-return) from the line if present.
+        private static int StripSuffix(byte[] buffer, int length, byte[] suffix)
+        {
+            if (suffix.Length == 0 || length < suffix.Length)
+            {
+                return length;
+            }
+            if (!buffer.AsSpan(length - suffix.Length, suffix.Length).SequenceEqual(suffix))
+            {
+                return length;
+            }
+            return length - suffix.Length;
+        }
+
+        // Length of this encoding's BOM when the buffer begins with it (only relevant on line 0), else 0.
+        private int BomLength(byte[] buffer, int available)
+        {
+            byte[] bom = encoding.Bom;
+            if (bom.Length == 0 || available < bom.Length)
+            {
+                return 0;
+            }
+            return buffer.AsSpan(0, bom.Length).SequenceEqual(bom) ? bom.Length : 0;
         }
 
         /// <summary>
@@ -159,14 +191,10 @@ namespace FujiyNotepad.Core
             byte[] buffer = new byte[count];
             int read = source.ReadFull(start, buffer);
 
-            int from = 0;
-            if (lineIndex == 0 && read >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF)
-            {
-                from = 3;
-            }
+            int from = lineIndex == 0 ? BomLength(buffer, read) : 0;
 
-            // Count whole UTF-8 characters in the prefix; ignore a trailing partial sequence.
-            int chars = Encoding.UTF8.GetCharCount(buffer, from, read - from);
+            // Count whole characters in the prefix; the decoder ignores a trailing partial code unit.
+            int chars = encoding.Encoding.GetCharCount(buffer, from, read - from);
             int lineLength = GetLine(lineIndex).Length;
             return Math.Min(chars, lineLength);
         }
@@ -174,7 +202,7 @@ namespace FujiyNotepad.Core
         /// <summary>
         /// Converts a character column within <paramref name="lineIndex"/> to a byte offset measured from
         /// the start of that line (the inverse of <see cref="ByteColumnToCharColumn"/>), used to start a
-        /// Find from the caret. Counts the UTF-8 bytes of the decoded line prefix; a leading BOM on line 0
+        /// Find from the caret. Counts the encoded bytes of the decoded line prefix; a leading BOM on line 0
         /// is not added, so a Find may begin a couple of bytes early there (harmless - it only widens the
         /// scan).
         /// </summary>
@@ -187,7 +215,7 @@ namespace FujiyNotepad.Core
 
             string text = GetLine(lineIndex);
             int chars = Math.Min(charColumn, text.Length);
-            return Encoding.UTF8.GetByteCount(text.AsSpan(0, chars));
+            return encoding.Encoding.GetByteCount(text.AsSpan(0, chars));
         }
     }
 }

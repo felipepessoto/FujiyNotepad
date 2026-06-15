@@ -300,5 +300,27 @@ namespace FujiyNotepad.Core.Tests
             var source = new InMemoryByteSource("xxxxxx");
             Assert.Equal(3, FindLast(source, "xxx", beforeOffset: 6));
         }
+
+        [Fact]
+        public async Task Search_UnitAlignment_KeepsOnlyAlignedMatches()
+        {
+            // 'x' sits at offsets 0, 2, 4 (all multiples of 2) in "xAxAxA"; alignment 2 keeps them all.
+            Assert.Equal(new long[] { 0, 2, 4 }, await SearchAll(new InMemoryByteSource("xAxAxA"), "x", new SearchOptions { UnitAlignment = 2 }));
+        }
+
+        [Fact]
+        public async Task Search_UnitAlignment_SkipsMisalignedMatches()
+        {
+            // 'x' sits at offsets 1, 3, 5 (all odd) in "AxAxAx"; alignment 2 rejects every one.
+            Assert.Empty(await SearchAll(new InMemoryByteSource("AxAxAx"), "x", new SearchOptions { UnitAlignment = 2 }));
+        }
+
+        [Fact]
+        public void FindLastBefore_UnitAlignment_ReturnsHighestAlignedMatch()
+        {
+            // 'x' at 0, 2, 5; alignment 2 rejects the odd match at 5, so the previous aligned match is 2.
+            var searcher = new TextSearcher(new InMemoryByteSource("xAxAAx"));
+            Assert.Equal(2, searcher.FindLastBefore(long.MaxValue, System.Text.Encoding.ASCII.GetBytes("x"), new SearchOptions { UnitAlignment = 2 }));
+        }
     }
 }

@@ -100,9 +100,12 @@ namespace FujiyNotepad.Core
 
                     // A real match resumes scanning past its end so matches never overlap. Skip a candidate
                     // that overlaps one already yielded (this can recur at a chunk boundary, where the carry
-                    // re-presents the tail of the previous match) or a rejected whole-word candidate, trying
-                    // the next byte instead.
+                    // re-presents the tail of the previous match), a misaligned candidate (one that doesn't
+                    // start on a code-unit boundary in a multi-byte encoding), or a rejected whole-word
+                    // candidate, trying the next byte instead.
+                    bool aligned = options.UnitAlignment <= 1 || matchOffset % options.UnitAlignment == 0;
                     if (matchOffset >= nextAllowedStart
+                        && aligned
                         && (!options.WholeWord || IsWholeWordMatch(buffer, available, bufferBase, matchAt, pattern.Length)))
                     {
                         yield return matchOffset;
@@ -213,7 +216,8 @@ namespace FujiyNotepad.Core
                     {
                         break;
                     }
-                    if (!options.WholeWord || IsWholeWordMatch(buffer, read, blockStart, matchAt, patLen))
+                    bool aligned = options.UnitAlignment <= 1 || matchOffset % options.UnitAlignment == 0;
+                    if (aligned && (!options.WholeWord || IsWholeWordMatch(buffer, read, blockStart, matchAt, patLen)))
                     {
                         best = matchOffset;
                     }

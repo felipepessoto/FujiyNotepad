@@ -1,0 +1,7 @@
+﻿Encoding sample - UTF-8 with BOM
+ASCII: The quick brown fox jumps over the lazy dog. 0123456789
+Accents: café, naïve, Köln, señor, façade, Ærø
+Punctuation: “curly quotes”, ‘apostrophes’, em—dash, ellipsis…, €100, £50, ½, ©, ®
+CJK: 日本語 - 中文 - 한국어
+Symbols: ☺ ♥ → ∞ ✓
+Find test: needle needle NEEDLE needle

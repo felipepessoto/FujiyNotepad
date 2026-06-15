@@ -23,6 +23,12 @@ namespace FujiyNotepad.WinUI
         private LineProvider? provider;
         private LineIndexer LineIndexer = null!;
 
+        // The path of the open file and its active text encoding; encodingAutoDetect tracks whether the
+        // encoding was auto-detected (vs. chosen from the Encoding menu) so re-opening can re-detect.
+        private string? currentFilePath;
+        private TextEncoding currentEncoding = TextEncoding.Utf8;
+        private bool encodingAutoDetect = true;
+
         private readonly DispatcherQueueTimer indexRefreshTimer;
         private CancellationTokenSource? cancelIndexing;
         private Task indexingTask = Task.CompletedTask;
@@ -206,15 +212,19 @@ namespace FujiyNotepad.WinUI
             };
         }
 
-        private async Task OpenFile(string path, bool addToRecent = true)
+        private async Task OpenFile(string path, bool addToRecent = true, TextEncoding? forcedEncoding = null)
         {
             await StopIndexingAsync();
 
             source?.Dispose();
             source = new FileByteSource(path);
+            // Auto-detect the encoding (BOM + heuristic) unless the user forced one from the Encoding menu.
+            currentEncoding = forcedEncoding ?? EncodingDetector.Detect(source);
+            encodingAutoDetect = forcedEncoding is null;
+            currentFilePath = path;
             searcher = new TextSearcher(source);
-            LineIndexer = new LineIndexer(searcher);
-            provider = new LineProvider(source, LineIndexer);
+            LineIndexer = new LineIndexer(searcher, currentEncoding);
+            provider = new LineProvider(source, LineIndexer, currentEncoding);
             findCoordinator.Reset();
             countCts?.Cancel();
             countedKey = null;
@@ -224,6 +234,8 @@ namespace FujiyNotepad.WinUI
             View.SetProvider(provider);
             Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
             EditMenu.IsEnabled = true;
+            EncodingMenu.IsEnabled = true;
+            UpdateEncodingUi();
 
             if (addToRecent)
             {
@@ -236,6 +248,31 @@ namespace FujiyNotepad.WinUI
             StartIndexing();
             SyncScrollBars();
             View.FocusCanvas();
+        }
+
+        // Re-opens the current file with the encoding chosen from the menu (empty tag = auto-detect).
+        private async void Encoding_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioMenuFlyoutItem item && currentFilePath is { } path)
+            {
+                TextEncoding? forced = item.Tag is string id && id.Length > 0 ? TextEncoding.FromId(id) : null;
+                await OpenFile(path, addToRecent: false, forcedEncoding: forced);
+            }
+        }
+
+        // Reflects the active encoding in the status bar and ticks the matching menu item (or "Auto-detect").
+        private void UpdateEncodingUi()
+        {
+            LblEncoding.Text = encodingAutoDetect ? $"{currentEncoding.DisplayName} (auto)" : currentEncoding.DisplayName;
+
+            EncAuto.IsChecked = encodingAutoDetect;
+            EncUtf8.IsChecked = !encodingAutoDetect && currentEncoding.Id == "utf-8";
+            EncUtf8Bom.IsChecked = !encodingAutoDetect && currentEncoding.Id == "utf-8-bom";
+            EncUtf16Le.IsChecked = !encodingAutoDetect && currentEncoding.Id == "utf-16le";
+            EncUtf16Be.IsChecked = !encodingAutoDetect && currentEncoding.Id == "utf-16be";
+            EncUtf32Le.IsChecked = !encodingAutoDetect && currentEncoding.Id == "utf-32le";
+            EncUtf32Be.IsChecked = !encodingAutoDetect && currentEncoding.Id == "utf-32be";
+            EncWindows1252.IsChecked = !encodingAutoDetect && currentEncoding.Id == "windows-1252";
         }
 
         private void StartIndexing()
@@ -597,8 +634,15 @@ namespace FujiyNotepad.WinUI
             }
             else
             {
-                options = new SearchOptions { IgnoreCase = !matchCase, WholeWord = wholeWord };
-                pattern = Encoding.UTF8.GetBytes(text);
+                // Encode the term in the file's encoding and only accept matches on a code-unit boundary, so
+                // literal find works in UTF-16/UTF-32 as well as UTF-8/ANSI.
+                options = new SearchOptions
+                {
+                    IgnoreCase = !matchCase,
+                    WholeWord = wholeWord,
+                    UnitAlignment = currentEncoding.CodeUnitSize,
+                };
+                pattern = currentEncoding.Encode(text);
             }
 
             RefreshMatchCount(key, useRegex, pattern, options, regex);

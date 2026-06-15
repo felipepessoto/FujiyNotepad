@@ -1,0 +1,6 @@
+Encoding sample - Windows-1252 (ANSI)
+ASCII: The quick brown fox jumps over the lazy dog. 0123456789
+Accents: café, naïve, Köln, señor, façade, Ærø
+Punctuation: “curly quotes”, ‘apostrophes’, em—dash, ellipsis…, €100, £50, ½, ©, ®
+(CJK and symbols are not representable in Windows-1252)
+Find test: needle needle NEEDLE needle
