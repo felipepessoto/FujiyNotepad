@@ -35,9 +35,11 @@ viewer is drawn from scratch:
 - Mouse-wheel + scrollbar + keyboard navigation (arrows, Page Up/Down, Home/End, Ctrl+Home/End).
 - Character-level selection (drag with continuous edge auto-scroll, Shift+arrows/click, double-click
   to select a word) and copy (Ctrl+C).
-- **Go To Line** and a non-modal **Find** bar (Ctrl+F) with find-next (Enter/F3), progress, and cancel.
+- **Go To Line** and a non-modal **Find** bar (Ctrl+F): find-next (Enter/F3), match case, whole word,
+  regular expressions, and a live match count, with progress and cancel.
 - Configurable **tab width** (Edit ▸ Tab Width) and **wide / CJK glyph** handling (two columns wide).
-- Open a file from the command line / file association: `FujiyNotepad.WinUI.exe <path>`.
+- Open a file by dragging it onto the window, or from the command line / file association:
+  `FujiyNotepad.WinUI.exe <path>`; recent files appear under *File ▸ Open Recent*.
 - *File ▸ Open Sample* generates a large sample file (with a feature-demo header) to demonstrate performance.
 
 ## Build & run

@@ -34,6 +34,8 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 
 - Open multi-gigabyte text files with near-constant memory usage — a custom view draws only the
   lines currently on screen, reading each on demand.
+- **Open a file** by dragging it onto the window, from *File ▸ Open*, or via a command-line
+  argument / file association; recently opened files appear under *File ▸ Open Recent*.
 - **Looks at home on Windows**: a Mica backdrop on Windows 11, the open file's name in the title bar,
   and a text view that follows the system **light / dark** theme.
 - Native-style navigation: mouse wheel, a line-based vertical scrollbar, a horizontal scrollbar,
@@ -42,8 +44,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   double-click to select a word) and **copy** (`Ctrl+C`), with a caret and an `Ln, Col` indicator.
 - Background **line indexing** with progress reporting and cancellation; the scrollbar extent grows
   as the indexer discovers lines.
-- **Go To Line** (`Ctrl+G`) and a non-modal **Find** bar (`Ctrl+F`) with find-next (`Enter`/`F3`),
-  a progress bar, and cancel.
+- **Go To Line** (`Ctrl+G`) and a non-modal **Find** bar (`Ctrl+F`): find-next (`Enter`/`F3`),
+  **match case**, **whole word**, **regular expressions**, and a live **match count**, with a
+  progress bar and cancel.
 - Configurable **tab width** (2 / 4 / 8) and **wide / CJK glyph** handling (East Asian wide and
   fullwidth characters occupy two columns).
 - *File ▸ Open Sample* generates a large (~10M line) file — with a short feature-demo header — to
