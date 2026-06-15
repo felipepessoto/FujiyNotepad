@@ -10,7 +10,9 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Windows.Graphics;
+using Windows.Storage;
 using Windows.Storage.Pickers;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace FujiyNotepad.WinUI
 {
@@ -85,6 +87,35 @@ namespace FujiyNotepad.WinUI
             if (fileArg != null)
             {
                 DispatcherQueue.TryEnqueue(() => { _ = OpenFile(fileArg); });
+            }
+        }
+
+        // Accept a text file dragged onto the window: show an "Open" affordance while a file is over
+        // the window, then open the first dropped file.
+        private void Root_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            {
+                e.AcceptedOperation = DataPackageOperation.Copy;
+                if (e.DragUIOverride is not null)
+                {
+                    e.DragUIOverride.Caption = "Open";
+                    e.DragUIOverride.IsContentVisible = true;
+                }
+            }
+        }
+
+        private async void Root_Drop(object sender, DragEventArgs e)
+        {
+            if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+            {
+                return;
+            }
+
+            var items = await e.DataView.GetStorageItemsAsync();
+            if (items.OfType<StorageFile>().FirstOrDefault() is { } file)
+            {
+                await OpenFile(file.Path);
             }
         }
 

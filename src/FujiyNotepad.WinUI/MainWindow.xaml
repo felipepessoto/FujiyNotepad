@@ -15,7 +15,8 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid KeyboardAcceleratorPlacementMode="Hidden">
+    <Grid KeyboardAcceleratorPlacementMode="Hidden" AllowDrop="True"
+          DragOver="Root_DragOver" Drop="Root_Drop">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F3" Invoked="FindNextAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
