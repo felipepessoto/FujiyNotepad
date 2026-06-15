@@ -32,10 +32,10 @@ namespace FujiyNotepad.WinUI
         private AppSettings settings = new();
         private SizeInt32 lastNormalSize;
 
-        // Find state: the controller decides where each forward "find next" starts; findCts cancels an
-        // in-progress search; isFinding guards against starting a second search while one runs.
-        private readonly FindController find = new();
-        private readonly RegexFindController regexFind = new();
+        // Find state: the coordinator decides where each "find next/previous" starts and how the wrap/caret
+        // state evolves (FindCoordinator, headlessly tested); findCts cancels an in-progress search; isFinding
+        // guards against starting a second search while one runs.
+        private readonly FindCoordinator findCoordinator = new();
         private CancellationTokenSource? findCts;
         private bool isFinding;
 
@@ -44,17 +44,6 @@ namespace FujiyNotepad.WinUI
         private CancellationTokenSource? countCts;
         private string? countedKey;
         private bool suppressFindOptionEvents;
-
-        // The caret position the last Find left behind; if the caret differs at the next Find (the user
-        // clicked elsewhere), the search restarts from the caret instead of resuming past the last match.
-        private TextPosition? lastFindCaret;
-
-        // After a search finds nothing, the next same-direction Find wraps around - Find next to the start
-        // of the document, Find previous to the end - unless the term/options change or the caret moves
-        // first. The two flags are mutually exclusive. lastFindKey detects a term/option change.
-        private bool findWrapPending;
-        private bool findPrevWrapPending;
-        private string? lastFindKey;
 
         public MainWindow()
         {
@@ -226,15 +215,10 @@ namespace FujiyNotepad.WinUI
             searcher = new TextSearcher(source);
             LineIndexer = new LineIndexer(searcher);
             provider = new LineProvider(source, LineIndexer);
-            find.Reset();
-            regexFind.Reset();
+            findCoordinator.Reset();
             countCts?.Cancel();
             countedKey = null;
             FindCount.Text = string.Empty;
-            lastFindCaret = null;
-            findWrapPending = false;
-            findPrevWrapPending = false;
-            lastFindKey = null;
 
             View.SetProvider(provider);
             Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
@@ -590,24 +574,9 @@ namespace FujiyNotepad.WinUI
             useRegex = RegexToggle.IsChecked == true;
             string key = $"{useRegex}|{matchCase}|{wholeWord}|{text}";
 
-            // A changed term or options is a fresh search, so don't carry a pending wrap from the previous one.
-            if (!string.Equals(key, lastFindKey, StringComparison.Ordinal))
-            {
-                findWrapPending = false;
-                findPrevWrapPending = false;
-                lastFindKey = key;
-            }
-
-            // If the caret moved since the last result (e.g. the user clicked in the text), restart from the
-            // caret rather than resuming past/before the previous match or wrapping.
-            if (lastFindCaret is { } previousCaret && !View.CaretPosition.Equals(previousCaret))
-            {
-                find.RecordNoMatch();
-                regexFind.RecordNoMatch();
-                findWrapPending = false;
-                findPrevWrapPending = false;
-                lastFindCaret = null;
-            }
+            // A changed term/options drops any pending wrap, and a moved caret restarts from the caret; the
+            // coordinator owns that state machine (headlessly tested in FindCoordinatorTests).
+            findCoordinator.Begin(key, View.CaretPosition);
 
             if (useRegex)
             {
@@ -634,14 +603,11 @@ namespace FujiyNotepad.WinUI
         }
 
         // Forward literal byte search off the UI thread, honouring the case/whole-word options, progress and
-        // cancellation. The FindController decides where to start (past the last hit, or from the caret when
-        // the term changed or the previous search wrapped).
+        // cancellation. The coordinator decides where to start (past the last hit, or from the caret when the
+        // term changed or the previous search wrapped).
         private async Task RunFindNextLiteral(string text, byte[] pattern, SearchOptions options)
         {
-            // After a no-match, wrap back to the start of the document; otherwise start from the caret.
-            long anchor = findWrapPending ? 0 : GetCaretAnchorOffset();
-            findWrapPending = false;
-            long start = find.PrepareForwardSearch(text, anchor);
+            long start = findCoordinator.PlanLiteralForward(text, GetCaretAnchorOffset());
 
             // Capture the provider so a concurrent file switch/close can be detected after the search and
             // its (stale) result ignored; the try/catch handles a torn-down read mid-search.
@@ -700,21 +666,15 @@ namespace FujiyNotepad.WinUI
                 int line = LineIndexer.GetLineNumberFromOffset(matchOffset);
                 long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
                 int charColumn = provider!.ByteColumnToCharColumn(line, matchOffset - lineStart);
-                find.RecordMatch(matchOffset, pattern.Length);
                 View.SelectMatch(line, charColumn, text.Length);
                 FindStatus.Text = $"Ln {line + 1}";
-                lastFindCaret = View.CaretPosition;
-                findWrapPending = false;
-                findPrevWrapPending = false;
+                findCoordinator.RecordLiteralMatch(matchOffset, pattern.Length, View.CaretPosition);
             }
             else
             {
                 // No match through the end of the document; the next Find next wraps back to the start.
-                find.RecordNoMatch();
                 FindStatus.Text = "No matches";
-                findWrapPending = true;
-                findPrevWrapPending = false;
-                lastFindCaret = View.CaretPosition;
+                findCoordinator.RecordLiteralNoMatch(FindDirection.Forward, View.CaretPosition);
             }
         }
 
@@ -722,12 +682,7 @@ namespace FujiyNotepad.WinUI
         // (no indexed-frontier guard needed). Runs off the UI thread; cancellation is checked between lines.
         private async Task RunFindNextRegex(Regex regex)
         {
-            TextPosition caret = GetCaretForFind();
-            // After a no-match, wrap back to the start of the document; otherwise start from the caret.
-            int anchorLine = findWrapPending ? 0 : caret.Line;
-            int anchorChar = findWrapPending ? 0 : caret.Column;
-            findWrapPending = false;
-            (int startLine, int startChar) = regexFind.PrepareForwardSearch(FindBox.Text, anchorLine, anchorChar);
+            (int startLine, int startChar) = findCoordinator.PlanRegexForward(FindBox.Text, GetCaretForFind());
             LineProvider activeProvider = provider!;
 
             using var cts = new CancellationTokenSource();
@@ -763,21 +718,15 @@ namespace FujiyNotepad.WinUI
 
             if (match is { } m)
             {
-                regexFind.RecordMatch(m.LineIndex, m.CharStart, m.CharLength);
                 View.SelectMatch(m.LineIndex, m.CharStart, m.CharLength);
                 FindStatus.Text = $"Ln {m.LineIndex + 1}";
-                lastFindCaret = View.CaretPosition;
-                findWrapPending = false;
-                findPrevWrapPending = false;
+                findCoordinator.RecordRegexMatch(m.LineIndex, m.CharStart, m.CharLength, View.CaretPosition);
             }
             else
             {
                 // No match through the end of the document; the next Find next wraps back to the start.
-                regexFind.RecordNoMatch();
                 FindStatus.Text = "No matches";
-                findWrapPending = true;
-                findPrevWrapPending = false;
-                lastFindCaret = View.CaretPosition;
+                findCoordinator.RecordRegexNoMatch(FindDirection.Forward, View.CaretPosition);
             }
         }
 
@@ -786,10 +735,8 @@ namespace FujiyNotepad.WinUI
         // document. Honours the case/whole-word options and the same indexed-frontier guard as Find next.
         private async Task RunFindPreviousLiteral(string text, byte[] pattern, SearchOptions options)
         {
-            // After a no-match, wrap to the end of the document (long.MaxValue is clamped to the last valid
-            // start by FindLastBefore); otherwise stop just before the current selection.
-            long before = findPrevWrapPending ? long.MaxValue : GetSelectionStartOffset();
-            findPrevWrapPending = false;
+            // Stop just before the current selection, or wrap to the end (long.MaxValue, clamped by FindLastBefore).
+            long before = findCoordinator.PlanLiteralBackward(GetSelectionStartOffset());
 
             LineProvider activeProvider = provider!;
 
@@ -839,21 +786,15 @@ namespace FujiyNotepad.WinUI
                 int line = LineIndexer.GetLineNumberFromOffset(matchOffset);
                 long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
                 int charColumn = provider!.ByteColumnToCharColumn(line, matchOffset - lineStart);
-                find.RecordMatch(matchOffset, pattern.Length);
                 View.SelectMatch(line, charColumn, text.Length);
                 FindStatus.Text = $"Ln {line + 1}";
-                lastFindCaret = View.CaretPosition;
-                findWrapPending = false;
-                findPrevWrapPending = false;
+                findCoordinator.RecordLiteralMatch(matchOffset, pattern.Length, View.CaretPosition);
             }
             else
             {
                 // No match before the caret; the next Find previous wraps back to the end of the document.
-                find.RecordNoMatch();
                 FindStatus.Text = "No matches";
-                findPrevWrapPending = true;
-                findWrapPending = false;
-                lastFindCaret = View.CaretPosition;
+                findCoordinator.RecordLiteralNoMatch(FindDirection.Backward, View.CaretPosition);
             }
         }
 
@@ -861,11 +802,8 @@ namespace FujiyNotepad.WinUI
         // no-match the next call wraps to the end of the document. Only indexed lines are searched.
         private async Task RunFindPreviousRegex(Regex regex)
         {
-            TextPosition start = GetSelectionStartForFind();
-            // After a no-match, wrap to the end of the document; otherwise stop just before the selection.
-            int beforeLine = findPrevWrapPending ? Math.Max(0, (provider?.LineCount ?? 1) - 1) : start.Line;
-            int beforeChar = findPrevWrapPending ? int.MaxValue : start.Column;
-            findPrevWrapPending = false;
+            // Stop just before the current selection, or wrap to the end (last line, clamped per line by the searcher).
+            (int beforeLine, int beforeChar) = findCoordinator.PlanRegexBackward(GetSelectionStartForFind(), provider?.LineCount ?? 1);
             LineProvider activeProvider = provider!;
 
             using var cts = new CancellationTokenSource();
@@ -901,21 +839,15 @@ namespace FujiyNotepad.WinUI
 
             if (match is { } m)
             {
-                regexFind.RecordMatch(m.LineIndex, m.CharStart, m.CharLength);
                 View.SelectMatch(m.LineIndex, m.CharStart, m.CharLength);
                 FindStatus.Text = $"Ln {m.LineIndex + 1}";
-                lastFindCaret = View.CaretPosition;
-                findWrapPending = false;
-                findPrevWrapPending = false;
+                findCoordinator.RecordRegexMatch(m.LineIndex, m.CharStart, m.CharLength, View.CaretPosition);
             }
             else
             {
                 // No match before the caret; the next Find previous wraps back to the end of the document.
-                regexFind.RecordNoMatch();
                 FindStatus.Text = "No matches";
-                findPrevWrapPending = true;
-                findWrapPending = false;
-                lastFindCaret = View.CaretPosition;
+                findCoordinator.RecordRegexNoMatch(FindDirection.Backward, View.CaretPosition);
             }
         }
 
@@ -930,12 +862,6 @@ namespace FujiyNotepad.WinUI
             }
             string pattern = wholeWord ? $@"\b(?:{text})\b" : text;
             return new Regex(pattern, options);
-        }
-
-        private int GetCaretLineForFind()
-        {
-            TextPosition caret = View.CaretPosition;
-            return (provider != null && caret.Line >= 0 && caret.Line < provider.LineCount) ? caret.Line : 0;
         }
 
         // Recomputes the total match count in the background whenever the term/options change, updating the
@@ -1004,14 +930,10 @@ namespace FujiyNotepad.WinUI
             settings.FindUseRegex = RegexToggle.IsChecked == true;
             settingsStore.Save(settings);
 
-            find.Reset();
-            regexFind.Reset();
+            findCoordinator.Reset();
             countCts?.Cancel();
             countedKey = null;
             FindCount.Text = string.Empty;
-            lastFindCaret = null;
-            findWrapPending = false;
-            findPrevWrapPending = false;
         }
 
         private void SetFindBusy(bool busy, bool indeterminate = false)
