@@ -30,7 +30,7 @@ jobs:
         run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release
 
   build:
-    name: Publish ${{ matrix.rid }}${{ matrix.suffix }}
+    name: Publish ${{ matrix.rid }}
     needs: test
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -38,16 +38,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Self-contained Native AOT (no prerequisites). x64/x86 build on the x64 image; arm64 builds
-          # natively on the Windows-on-Arm image, so AOT needs no x64 -> arm64 cross-compilation.
-          - { rid: win-x64,   platform: x64,   os: windows-latest, kind: selfcontained, suffix: "" }
-          - { rid: win-x86,   platform: x86,   os: windows-latest, kind: selfcontained, suffix: "" }
-          - { rid: win-arm64, platform: ARM64, os: windows-11-arm,  kind: selfcontained, suffix: "" }
-          # Framework-dependent (small): needs the .NET 10 runtime + Windows App SDK runtime installed.
-          # No AOT, so all three build on the x64 image.
-          - { rid: win-x64,   platform: x64,   os: windows-latest, kind: framework, suffix: "-framework-dependent" }
-          - { rid: win-x86,   platform: x86,   os: windows-latest, kind: framework, suffix: "-framework-dependent" }
-          - { rid: win-arm64, platform: ARM64, os: windows-latest, kind: framework, suffix: "-framework-dependent" }
+          # x64 and x86 build on the x64 image; arm64 builds natively on the Windows-on-Arm image, so
+          # Native AOT needs no x64 -> arm64 cross-compilation.
+          - { rid: win-x64,   platform: x64,   os: windows-latest }
+          - { rid: win-x86,   platform: x86,   os: windows-latest }
+          - { rid: win-arm64, platform: ARM64, os: windows-11-arm }
 
     steps:
       - name: Checkout
@@ -66,11 +61,10 @@ jobs:
           $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart('v') } else { "0.0.0-dev" }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      # Self-contained Native AOT: native code that bundles the .NET runtime AND the Windows App SDK, so
-      # this download has no prerequisites. The publish profile selects the RID + self-contained publish;
-      # -p:Platform keeps RID resolution consistent. AOT linking uses the runner's C++ toolchain.
+      # Native AOT compiles the app to native code that bundles the .NET runtime AND the Windows App SDK,
+      # so the download has no prerequisites. The publish profile selects the RID + a self-contained
+      # publish; -p:Platform keeps RID resolution consistent. AOT linking uses the runner's C++ toolchain.
       - name: Publish (self-contained Native AOT)
-        if: matrix.kind == 'selfcontained'
         run: >
           dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
           -c Release
@@ -79,28 +73,10 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/app
 
-      # Framework-dependent: a small download for users who already have the .NET 10 runtime and the
-      # Windows App SDK runtime installed. Nothing is bundled (no AOT / trim / R2R); the unused
-      # Windows-AI and WebView2 components are pruned by the "Remove unused files" step below.
-      - name: Publish (framework-dependent)
-        if: matrix.kind == 'framework'
-        run: >
-          dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
-          -c Release
-          -p:Platform=${{ matrix.platform }}
-          -r ${{ matrix.rid }}
-          --self-contained false
-          -p:PublishAot=false
-          -p:WindowsAppSDKSelfContained=false
-          -p:PublishReadyToRun=false
-          -p:PublishTrimmed=false
-          -p:Version=${{ steps.version.outputs.version }}
-          -o publish/app
-
-      # Prune files end users don't need, for both flavors: debug symbols (the Native AOT .pdb is ~34 MB,
-      # and ILC writes it straight to the output where MSBuild can't drop it), plus the Windows App SDK's
-      # bundled Windows-AI (onnxruntime / DirectML / Microsoft.Windows.AI.*) and WebView2 components —
-      # none of which this app uses (~40 MB of native libraries).
+      # Prune files end users don't need: debug symbols (the Native AOT .pdb is ~34 MB, and ILC writes it
+      # straight to the output where MSBuild can't drop it), plus the Windows App SDK's bundled Windows-AI
+      # (onnxruntime / DirectML / Microsoft.Windows.AI.*) and WebView2 components — none of which this app
+      # uses (~40 MB of native libraries).
       - name: Remove unused files
         shell: pwsh
         run: |
@@ -115,7 +91,7 @@ jobs:
         run: |
           $v = "${{ steps.version.outputs.version }}"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $zip = "dist/FujiyNotepad-$v-${{ matrix.rid }}${{ matrix.suffix }}.zip"
+          $zip = "dist/FujiyNotepad-$v-${{ matrix.rid }}.zip"
           Compress-Archive -Path publish/app/* -DestinationPath $zip -Force
           "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
@@ -123,7 +99,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FujiyNotepad-${{ matrix.rid }}${{ matrix.suffix }}
+          name: FujiyNotepad-${{ matrix.rid }}
           path: ${{ steps.package.outputs.zip }}
 
   release:
