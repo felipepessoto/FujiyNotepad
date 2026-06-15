@@ -43,6 +43,10 @@ namespace FujiyNotepad.WinUI
         private string? countedKey;
         private bool suppressFindOptionEvents;
 
+        // The caret position the last Find left behind; if the caret differs at the next Find (the user
+        // clicked elsewhere), the search restarts from the caret instead of resuming past the last match.
+        private TextPosition? lastFindCaret;
+
         public MainWindow()
         {
             this.InitializeComponent();
@@ -189,6 +193,7 @@ namespace FujiyNotepad.WinUI
             countCts?.Cancel();
             countedKey = null;
             FindCount.Text = string.Empty;
+            lastFindCaret = null;
 
             View.SetProvider(provider);
             Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
@@ -454,6 +459,15 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
+            // If the caret moved since the last match (e.g. the user clicked in the text), resume from the
+            // caret rather than continuing past the previous match.
+            if (lastFindCaret is { } previousCaret && !View.CaretPosition.Equals(previousCaret))
+            {
+                find.RecordNoMatch();
+                regexFind.RecordNoMatch();
+                lastFindCaret = null;
+            }
+
             bool matchCase = MatchCaseToggle.IsChecked == true;
             bool wholeWord = WholeWordToggle.IsChecked == true;
             bool useRegex = RegexToggle.IsChecked == true;
@@ -560,12 +574,14 @@ namespace FujiyNotepad.WinUI
                 find.RecordMatch(matchOffset, pattern.Length);
                 View.SelectMatch(line, charColumn, text.Length);
                 FindStatus.Text = $"Ln {line + 1}";
+                lastFindCaret = View.CaretPosition;
             }
             else
             {
                 // No match from here on; let the next search wrap to the caret again.
                 find.RecordNoMatch();
                 FindStatus.Text = "No matches";
+                lastFindCaret = null;
             }
         }
 
@@ -573,7 +589,8 @@ namespace FujiyNotepad.WinUI
         // (no indexed-frontier guard needed). Runs off the UI thread; cancellation is checked between lines.
         private async Task RunFindNextRegex(Regex regex)
         {
-            (int startLine, int startChar) = regexFind.PrepareForwardSearch(FindBox.Text, GetCaretLineForFind(), 0);
+            TextPosition caret = GetCaretForFind();
+            (int startLine, int startChar) = regexFind.PrepareForwardSearch(FindBox.Text, caret.Line, caret.Column);
             LineProvider activeProvider = provider!;
 
             using var cts = new CancellationTokenSource();
@@ -612,11 +629,13 @@ namespace FujiyNotepad.WinUI
                 regexFind.RecordMatch(m.LineIndex, m.CharStart, m.CharLength);
                 View.SelectMatch(m.LineIndex, m.CharStart, m.CharLength);
                 FindStatus.Text = $"Ln {m.LineIndex + 1}";
+                lastFindCaret = View.CaretPosition;
             }
             else
             {
                 regexFind.RecordNoMatch();
                 FindStatus.Text = "No matches";
+                lastFindCaret = null;
             }
         }
 
@@ -733,22 +752,29 @@ namespace FujiyNotepad.WinUI
             }
         }
 
-        private long GetCaretAnchorOffset()
+        private TextPosition GetCaretForFind()
         {
             TextPosition caret = View.CaretPosition;
-            if (provider != null && caret.Line >= 0 && caret.Line < provider.LineCount)
+            return (provider != null && caret.Line >= 0 && caret.Line < provider.LineCount) ? caret : new TextPosition(0, 0);
+        }
+
+        private long GetCaretAnchorOffset()
+        {
+            if (provider == null)
             {
-                try
-                {
-                    return LineIndexer.GetOffsetFromLineNumber(caret.Line + 1);
-                }
-                catch (InvalidOperationException)
-                {
-                    return 0;
-                }
+                return 0;
             }
 
-            return 0;
+            TextPosition caret = GetCaretForFind();
+            try
+            {
+                long lineStart = LineIndexer.GetOffsetFromLineNumber(caret.Line + 1);
+                return lineStart + provider.CharColumnToByteColumn(caret.Line, caret.Column);
+            }
+            catch (InvalidOperationException)
+            {
+                return 0;
+            }
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e) => Close();

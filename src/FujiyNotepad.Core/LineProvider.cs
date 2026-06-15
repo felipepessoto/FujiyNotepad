@@ -170,5 +170,24 @@ namespace FujiyNotepad.Core
             int lineLength = GetLine(lineIndex).Length;
             return Math.Min(chars, lineLength);
         }
+
+        /// <summary>
+        /// Converts a character column within <paramref name="lineIndex"/> to a byte offset measured from
+        /// the start of that line (the inverse of <see cref="ByteColumnToCharColumn"/>), used to start a
+        /// Find from the caret. Counts the UTF-8 bytes of the decoded line prefix; a leading BOM on line 0
+        /// is not added, so a Find may begin a couple of bytes early there (harmless - it only widens the
+        /// scan).
+        /// </summary>
+        public long CharColumnToByteColumn(int lineIndex, int charColumn)
+        {
+            if (charColumn <= 0)
+            {
+                return 0;
+            }
+
+            string text = GetLine(lineIndex);
+            int chars = Math.Min(charColumn, text.Length);
+            return Encoding.UTF8.GetByteCount(text.AsSpan(0, chars));
+        }
     }
 }

@@ -124,5 +124,19 @@ namespace FujiyNotepad.Core.Tests
             Assert.True(column > 0);
             Assert.True(column <= maxLineBytes, $"expected a bounded column, got {column}");
         }
+
+        [Fact]
+        public async Task CharColumnToByteColumn_MapsAcrossMultibyteChars()
+        {
+            // Inverse of ByteColumnToCharColumn for "aébc" (é is 2 UTF-8 bytes); total is 5 bytes.
+            byte[] bytes = Encoding.UTF8.GetBytes("aébc");
+            var provider = await BuildAsync(new InMemoryByteSource(bytes));
+
+            Assert.Equal(0, provider.CharColumnToByteColumn(0, 0));
+            Assert.Equal(1, provider.CharColumnToByteColumn(0, 1)); // after 'a' -> 1 byte
+            Assert.Equal(3, provider.CharColumnToByteColumn(0, 2)); // after 'a'+'é' -> 3 bytes
+            Assert.Equal(4, provider.CharColumnToByteColumn(0, 3)); // after 'a'+'é'+'b' -> 4 bytes
+            Assert.Equal(5, provider.CharColumnToByteColumn(0, 99)); // clamped to the 4-char / 5-byte line
+        }
     }
 }
