@@ -1170,6 +1170,13 @@ namespace FujiyNotepad.WinUI
 
         private void ResetZoom_Click(object sender, RoutedEventArgs e) => View.ResetZoom();
 
+        private void LineNumbers_Click(object sender, RoutedEventArgs e)
+        {
+            View.ShowLineNumbers = LineNumbersToggle.IsChecked;
+            settings.ShowLineNumbers = LineNumbersToggle.IsChecked;
+            settingsStore.Save(settings);
+        }
+
         private void Font_Click(object sender, RoutedEventArgs e)
         {
             if (sender is RadioMenuFlyoutItem item && item.Tag is string family)
@@ -1252,6 +1259,9 @@ namespace FujiyNotepad.WinUI
             View.FontSizePoints = settings.FontSize;
             TickFontMenu(View.FontFamilyName);
             LblZoom.Text = $"{View.ZoomPercent}%";
+
+            LineNumbersToggle.IsChecked = settings.ShowLineNumbers;
+            View.ShowLineNumbers = settings.ShowLineNumbers;
 
             suppressFindOptionEvents = true;
             MatchCaseToggle.IsChecked = settings.FindMatchCase;

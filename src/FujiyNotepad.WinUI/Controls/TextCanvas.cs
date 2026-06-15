@@ -45,6 +45,11 @@ namespace FujiyNotepad.WinUI.Controls
         private Color caretColor = Colors.Black;
         private Color selectionColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
         private Color matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
+        private Color gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
+        private Color gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
+
+        // Right margin (px) between a line number and the gutter's edge; mirrors the engine's gutter padding.
+        private const double GutterRightMargin = 6d;
 
         private bool hasFocusInternal;
         private bool caretBlinkOn = true;
@@ -255,6 +260,13 @@ namespace FujiyNotepad.WinUI.Controls
 
         /// <summary>Sets (or clears, with null) the highlighter that paints every Find match in the viewport.</summary>
         public void SetHighlighter(ILineHighlighter? highlighter) => engine.SetHighlighter(highlighter);
+
+        /// <summary>Whether the line-number gutter is shown.</summary>
+        public bool ShowLineNumbers
+        {
+            get => engine.ShowLineNumbers;
+            set => engine.ShowLineNumbers = value;
+        }
 
         public void FocusCanvas() => Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
 
@@ -492,7 +504,8 @@ namespace FujiyNotepad.WinUI.Controls
 
             // The selection keeps its colour even when the canvas isn't focused (e.g. the menu has focus), so
             // it stays clearly visible; only the caret is hidden while unfocused.
-            foreach (VisibleLine line in engine.GetVisibleLines(hasFocusInternal, caretBlinkOn))
+            IReadOnlyList<VisibleLine> lines = engine.GetVisibleLines(hasFocusInternal, caretBlinkOn);
+            foreach (VisibleLine line in lines)
             {
                 // Highlight every Find match (under the text); the selected match is drawn over its highlight
                 // by the selection layer below, so the current match reads as the selection colour.
@@ -516,6 +529,31 @@ namespace FujiyNotepad.WinUI.Controls
                     ds.FillRectangle((float)line.CaretX, (float)line.Y, 1.0f, (float)lineHeight, caretColor);
                 }
             }
+
+            DrawGutter(ds, sender, lines);
+        }
+
+        // Draws the line-number gutter on top of the text (its opaque background masks any text scrolled under
+        // it, since the gutter itself stays fixed while the text scrolls horizontally).
+        private void DrawGutter(CanvasDrawingSession ds, CanvasControl sender, IReadOnlyList<VisibleLine> lines)
+        {
+            double gutterWidth = engine.GutterWidthPx;
+            if (gutterWidth <= 0)
+            {
+                return;
+            }
+
+            float w = (float)gutterWidth;
+            float h = (float)sender.Size.Height;
+            ds.FillRectangle(0, 0, w, h, backgroundColor);
+            ds.DrawLine(w - 0.5f, 0, w - 0.5f, h, gutterSeparatorColor, 1f);
+
+            foreach (VisibleLine line in lines)
+            {
+                string number = (line.LineIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                float x = (float)(gutterWidth - GutterRightMargin - number.Length * charWidth);
+                ds.DrawText(number, new Vector2(x, (float)line.Y), gutterTextColor, textFormat);
+            }
         }
 
         private void RestartCaretBlink()
@@ -538,6 +576,8 @@ namespace FujiyNotepad.WinUI.Controls
                 caretColor = Color.FromArgb(255, 0xF1, 0xF1, 0xF1);
                 selectionColor = Color.FromArgb(255, 0x26, 0x4F, 0x78);
                 matchHighlightColor = Color.FromArgb(255, 0x66, 0x51, 0x18);
+                gutterTextColor = Color.FromArgb(255, 0x85, 0x85, 0x85);
+                gutterSeparatorColor = Color.FromArgb(255, 0x33, 0x33, 0x33);
             }
             else
             {
@@ -546,6 +586,8 @@ namespace FujiyNotepad.WinUI.Controls
                 caretColor = Colors.Black;
                 selectionColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
                 matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
+                gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
+                gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
             }
 
             canvas?.Invalidate();
