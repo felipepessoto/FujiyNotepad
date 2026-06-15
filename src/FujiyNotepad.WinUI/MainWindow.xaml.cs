@@ -709,9 +709,10 @@ namespace FujiyNotepad.WinUI
             FindCount.Text = count < 0 ? string.Empty : count == 1 ? "1 match" : $"{count:N0} matches";
         }
 
-        // Persists an option change, invalidates the find position and count, and re-runs the search so the
-        // user sees the effect immediately. Silenced while saved options are applied at startup.
-        private async void FindOption_Toggled(object sender, RoutedEventArgs e)
+        // Persists an option change and invalidates the current find position and cached count, but does NOT
+        // search or recount - that waits until the user runs Find next with the new options. Silenced while
+        // the saved options are applied at startup.
+        private void FindOption_Toggled(object sender, RoutedEventArgs e)
         {
             if (suppressFindOptionEvents)
             {
@@ -728,11 +729,7 @@ namespace FujiyNotepad.WinUI
             countCts?.Cancel();
             countedKey = null;
             FindCount.Text = string.Empty;
-
-            if (FindBar.Visibility == Visibility.Visible && !string.IsNullOrEmpty(FindBox.Text))
-            {
-                await RunFindNext();
-            }
+            lastFindCaret = null;
         }
 
         private void SetFindBusy(bool busy, bool indeterminate = false)
