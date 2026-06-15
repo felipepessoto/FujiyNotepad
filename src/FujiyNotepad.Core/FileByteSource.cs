@@ -15,7 +15,9 @@ namespace FujiyNotepad.Core
 
         public FileByteSource(string path)
         {
-            handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read, FileOptions.RandomAccess);
+            // Share ReadWrite|Delete so the file can be opened while another process is appending to it
+            // (live logs) and can be rotated/deleted underneath us; our positional handle keeps reading.
+            handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, FileOptions.RandomAccess);
             Length = RandomAccess.GetLength(handle);
         }
 

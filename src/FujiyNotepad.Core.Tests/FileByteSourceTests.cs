@@ -9,6 +9,31 @@ namespace FujiyNotepad.Core.Tests
     public class FileByteSourceTests
     {
         [Fact]
+        public void CanOpen_WhileAnotherProcessHasItOpenForWriting()
+        {
+            string path = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllBytes(path, Encoding.ASCII.GetBytes("hello"));
+
+                // Simulate a log writer that keeps the file open for appending. With FileShare.Read the
+                // viewer could not open it (sharing violation); FileShare.ReadWrite|Delete allows it.
+                using var writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+
+                using var source = new FileByteSource(path);
+
+                Assert.Equal(5, source.Length);
+                var buffer = new byte[5];
+                Assert.Equal(5, source.ReadFull(0, buffer));
+                Assert.Equal("hello", Encoding.ASCII.GetString(buffer));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Fact]
         public void Read_ReturnsBytesAtOffset()
         {
             string path = Path.GetTempFileName();
