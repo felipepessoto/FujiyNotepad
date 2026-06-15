@@ -20,7 +20,7 @@ constant regardless of file size.
 Grab the latest build from the [Releases page](https://github.com/felipepessoto/FujiyNotepad/releases).
 Each release publishes a **self-contained** [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
 build for every Windows architecture — each bundles the .NET runtime **and** the Windows App SDK runtime,
-so you just unzip and run `FujiyNotepad.WinUI.exe` with **no prerequisites**, nothing to install (~24 MB):
+so you just unzip and run `FujiyNotepad.WinUI.exe` with **no prerequisites**, nothing to install (~22 MB):
 
 | Your PC | Download |
 | --- | --- |
