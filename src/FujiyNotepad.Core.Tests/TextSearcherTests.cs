@@ -137,5 +137,69 @@ namespace FujiyNotepad.Core.Tests
             Assert.NotEmpty(results);
             Assert.True(results.Count < 1000, $"expected an early stop, got {results.Count} matches");
         }
+
+        private static async Task<List<long>> SearchAll(IByteSource source, string pattern, SearchOptions options, int chunkSize = 1 << 20)
+        {
+            var searcher = new TextSearcher(source, chunkSize);
+            var results = new List<long>();
+            await foreach (long offset in searcher.Search(0, System.Text.Encoding.ASCII.GetBytes(pattern), options))
+            {
+                results.Add(offset);
+            }
+            return results;
+        }
+
+        [Fact]
+        public async Task Search_CaseSensitiveByDefault_SkipsDifferentCase()
+        {
+            var source = new InMemoryByteSource("ABCabc");
+            Assert.Equal(new long[] { 3 }, await SearchAll(source, "abc"));
+        }
+
+        [Fact]
+        public async Task Search_IgnoreCase_MatchesEitherCase()
+        {
+            var source = new InMemoryByteSource("ABCabcAbC");
+            Assert.Equal(new long[] { 0, 3, 6 }, await SearchAll(source, "abc", new SearchOptions { IgnoreCase = true }));
+        }
+
+        [Fact]
+        public async Task Search_IgnoreCase_AcrossChunkBoundary_IsFound()
+        {
+            var source = new InMemoryByteSource("xxxxNeEdLeyyyy");
+            Assert.Equal(new long[] { 4 }, await SearchAll(source, "needle", new SearchOptions { IgnoreCase = true }, chunkSize: 6));
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_ExcludesMatchesInsideWords()
+        {
+            // "cat" stands alone at 0 and 12; the ones inside "catalog" (4) and "scatter" (17) are excluded.
+            var source = new InMemoryByteSource("cat catalog cat scatter");
+            Assert.Equal(new long[] { 0, 12 }, await SearchAll(source, "cat", new SearchOptions { WholeWord = true }));
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_TreatsDigitsAndUnderscoreAsWordChars()
+        {
+            // Only the trailing standalone "cat" qualifies; '_' and digits are word characters.
+            var source = new InMemoryByteSource("cat_cat cat1 cat");
+            Assert.Equal(new long[] { 13 }, await SearchAll(source, "cat", new SearchOptions { WholeWord = true }));
+        }
+
+        [Fact]
+        public async Task Search_WholeWord_AcrossChunkBoundary_ChecksNeighbourBytes()
+        {
+            // The match at 4 straddles the chunk split; its right neighbour ('s') must still exclude it,
+            // while the standalone match at 11 qualifies.
+            var source = new InMemoryByteSource("xxx cats cat");
+            Assert.Equal(new long[] { 9 }, await SearchAll(source, "cat", new SearchOptions { WholeWord = true }, chunkSize: 6));
+        }
+
+        [Fact]
+        public async Task Search_IgnoreCaseAndWholeWord_Combined()
+        {
+            var source = new InMemoryByteSource("Cat CAT cats");
+            Assert.Equal(new long[] { 0, 4 }, await SearchAll(source, "cat", new SearchOptions { IgnoreCase = true, WholeWord = true }));
+        }
     }
 }
