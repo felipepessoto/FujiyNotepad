@@ -60,6 +60,9 @@ namespace FujiyNotepad.WinUI.Logic
         public string? CopyText { get; }
     }
 
+    /// <summary>A match-highlight rectangle on a line, in viewport pixels (the line's Y/height are known).</summary>
+    public readonly record struct HighlightRect(double X, double Width);
+
     /// <summary>
     /// One visible line's layout, in viewport pixels, ready for a renderer to paint. The
     /// <see cref="TextLayoutEngine"/> computes these (pure math); the host only issues the corresponding
@@ -93,6 +96,12 @@ namespace FujiyNotepad.WinUI.Logic
 
         /// <summary>X (viewport px) of the caret.</summary>
         public double CaretX { get; init; }
+
+        /// <summary>
+        /// Highlight rectangles for every Find match on this line (empty when highlighting is off). Painted
+        /// under the text; the currently-selected match is drawn over its highlight by the selection layer.
+        /// </summary>
+        public IReadOnlyList<HighlightRect> Matches { get; init; }
     }
 
     /// <summary>
@@ -123,6 +132,9 @@ namespace FujiyNotepad.WinUI.Logic
         private double charWidth;
 
         private readonly Dictionary<int, LineColumns> columnsCache = new();
+
+        private static readonly IReadOnlyList<HighlightRect> NoHighlights = Array.Empty<HighlightRect>();
+        private ILineHighlighter? highlighter;
 
         private LineProvider? provider;
         private int totalLines;
@@ -214,6 +226,17 @@ namespace FujiyNotepad.WinUI.Logic
         /// as the upper bound so it never re-finds the current match.
         /// </summary>
         public TextPosition SelectionStart => NormalizedSelection().start;
+
+        /// <summary>
+        /// Sets (or clears, with <c>null</c>) the highlighter used to paint every Find match in the viewport,
+        /// and requests a redraw. Each visible line's <see cref="VisibleLine.Matches"/> is then computed from
+        /// this highlighter on the next <see cref="GetVisibleLines"/>.
+        /// </summary>
+        public void SetHighlighter(ILineHighlighter? value)
+        {
+            highlighter = value;
+            RaiseRedraw();
+        }
 
         public void SetProvider(LineProvider? newProvider)
         {
@@ -726,6 +749,7 @@ namespace FujiyNotepad.WinUI.Logic
                     SelectionWidth = selectionWidth,
                     HasCaret = hasCaret,
                     CaretX = caretX,
+                    Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns),
                 });
             }
 
@@ -753,6 +777,32 @@ namespace FujiyNotepad.WinUI.Logic
             }
             columnsCache[lineIndex] = columns;
             return columns;
+        }
+
+        // Maps the highlighter's character-index match spans on this line to viewport-pixel rectangles, using
+        // the same column/scroll math as the selection. Off-screen rectangles are kept (cheaply clipped by the
+        // renderer); a zero-width span is dropped.
+        private IReadOnlyList<HighlightRect> ComputeHighlights(LineColumns columns)
+        {
+            IReadOnlyList<(int Start, int Length)> spans = highlighter!.Find(columns.Source);
+            if (spans.Count == 0)
+            {
+                return NoHighlights;
+            }
+
+            var rects = new List<HighlightRect>(spans.Count);
+            foreach ((int start, int length) in spans)
+            {
+                int startCol = columns.ColumnOfCharIndex(start);
+                int endCol = columns.ColumnOfCharIndex(start + length);
+                double x0 = startCol * charWidth - horizontalOffset + TextPadding;
+                double x1 = endCol * charWidth - horizontalOffset + TextPadding;
+                if (x1 > x0)
+                {
+                    rects.Add(new HighlightRect(x0, x1 - x0));
+                }
+            }
+            return rects.Count > 0 ? rects : NoHighlights;
         }
 
         #endregion
