@@ -45,6 +45,7 @@ namespace FujiyNotepad.WinUI.Controls
         private Color caretColor = Colors.Black;
         private Color selectionActiveColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
         private Color selectionInactiveColor = Color.FromArgb(255, 0xDC, 0xDC, 0xDC);
+        private Color matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
 
         private bool hasFocusInternal;
         private bool caretBlinkOn = true;
@@ -195,6 +196,9 @@ namespace FujiyNotepad.WinUI.Controls
             Ready();
             engine.SelectMatch(lineIndex, startColumn, length);
         }
+
+        /// <summary>Sets (or clears, with null) the highlighter that paints every Find match in the viewport.</summary>
+        public void SetHighlighter(ILineHighlighter? highlighter) => engine.SetHighlighter(highlighter);
 
         public void FocusCanvas() => Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
 
@@ -418,6 +422,16 @@ namespace FujiyNotepad.WinUI.Controls
             Color selectionColor = hasFocusInternal ? selectionActiveColor : selectionInactiveColor;
             foreach (VisibleLine line in engine.GetVisibleLines(hasFocusInternal, caretBlinkOn))
             {
+                // Highlight every Find match (under the text); the selected match is drawn over its highlight
+                // by the selection layer below, so the current match reads as the selection colour.
+                if (line.Matches is { Count: > 0 })
+                {
+                    foreach (HighlightRect h in line.Matches)
+                    {
+                        ds.FillRectangle((float)h.X, (float)line.Y, (float)h.Width, (float)lineHeight, matchHighlightColor);
+                    }
+                }
+
                 if (line.HasSelection)
                 {
                     ds.FillRectangle((float)line.SelectionX, (float)line.Y, (float)line.SelectionWidth, (float)lineHeight, selectionColor);
@@ -452,6 +466,7 @@ namespace FujiyNotepad.WinUI.Controls
                 caretColor = Color.FromArgb(255, 0xF1, 0xF1, 0xF1);
                 selectionActiveColor = Color.FromArgb(255, 0x26, 0x4F, 0x78);
                 selectionInactiveColor = Color.FromArgb(255, 0x3A, 0x3D, 0x41);
+                matchHighlightColor = Color.FromArgb(255, 0x66, 0x51, 0x18);
             }
             else
             {
@@ -460,6 +475,7 @@ namespace FujiyNotepad.WinUI.Controls
                 caretColor = Colors.Black;
                 selectionActiveColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
                 selectionInactiveColor = Color.FromArgb(255, 0xDC, 0xDC, 0xDC);
+                matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
             }
 
             canvas?.Invalidate();
