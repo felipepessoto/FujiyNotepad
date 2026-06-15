@@ -57,6 +57,31 @@
                     <RadioMenuFlyoutItem x:Name="TabWidth8" Text="8" GroupName="TabWidth" Tag="8" Click="TabWidth_Click" />
                 </MenuFlyoutSubItem>
             </MenuBarItem>
+            <MenuBarItem x:Name="ViewMenu" Title="View">
+                <MenuFlyoutItem Text="Zoom In" Click="ZoomIn_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Add" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Zoom Out" Click="ZoomOut_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Subtract" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Reset Zoom" Click="ResetZoom_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Number0" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutSubItem Text="Font">
+                    <RadioMenuFlyoutItem x:Name="FontConsolas" Text="Consolas" GroupName="Font" Tag="Consolas" Click="Font_Click" />
+                    <RadioMenuFlyoutItem x:Name="FontCascadiaMono" Text="Cascadia Mono" GroupName="Font" Tag="Cascadia Mono" Click="Font_Click" />
+                    <RadioMenuFlyoutItem x:Name="FontCascadiaCode" Text="Cascadia Code" GroupName="Font" Tag="Cascadia Code" Click="Font_Click" />
+                    <RadioMenuFlyoutItem x:Name="FontCourierNew" Text="Courier New" GroupName="Font" Tag="Courier New" Click="Font_Click" />
+                    <RadioMenuFlyoutItem x:Name="FontLucidaConsole" Text="Lucida Console" GroupName="Font" Tag="Lucida Console" Click="Font_Click" />
+                </MenuFlyoutSubItem>
+            </MenuBarItem>
             <MenuBarItem x:Name="EncodingMenu" Title="Encoding" IsEnabled="False">
                 <RadioMenuFlyoutItem x:Name="EncAuto" Text="Auto-detect" GroupName="Encoding" Tag="" Click="Encoding_Click" />
                 <MenuFlyoutSeparator />
@@ -159,10 +184,14 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="LblStatus" Grid.Column="0" FontSize="12" />
-            <TextBlock x:Name="LblEncoding" Grid.Column="1" FontSize="12" Margin="0,0,16,0" />
-            <TextBlock x:Name="LblCursor" Grid.Column="2" FontSize="12" />
+            <TextBlock x:Name="LblCharCount" Grid.Column="1" FontSize="12" Margin="0,0,16,0" />
+            <TextBlock x:Name="LblZoom" Grid.Column="2" FontSize="12" Margin="0,0,16,0" />
+            <TextBlock x:Name="LblEncoding" Grid.Column="3" FontSize="12" Margin="0,0,16,0" />
+            <TextBlock x:Name="LblCursor" Grid.Column="4" FontSize="12" />
         </Grid>
     </Grid>
 </Window>
