@@ -47,6 +47,11 @@ namespace FujiyNotepad.WinUI
         // clicked elsewhere), the search restarts from the caret instead of resuming past the last match.
         private TextPosition? lastFindCaret;
 
+        // After a search finds nothing, the next Find next wraps back to the start of the document - unless
+        // the term/options change or the caret moves first. lastFindKey detects a term/option change.
+        private bool findWrapPending;
+        private string? lastFindKey;
+
         public MainWindow()
         {
             this.InitializeComponent();
@@ -194,6 +199,8 @@ namespace FujiyNotepad.WinUI
             countedKey = null;
             FindCount.Text = string.Empty;
             lastFindCaret = null;
+            findWrapPending = false;
+            lastFindKey = null;
 
             View.SetProvider(provider);
             Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
@@ -459,18 +466,27 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
-            // If the caret moved since the last match (e.g. the user clicked in the text), resume from the
-            // caret rather than continuing past the previous match.
+            bool matchCase = MatchCaseToggle.IsChecked == true;
+            bool wholeWord = WholeWordToggle.IsChecked == true;
+            bool useRegex = RegexToggle.IsChecked == true;
+            string key = $"{useRegex}|{matchCase}|{wholeWord}|{text}";
+
+            // A changed term or options is a fresh search, so don't carry a pending wrap from the previous one.
+            if (!string.Equals(key, lastFindKey, StringComparison.Ordinal))
+            {
+                findWrapPending = false;
+                lastFindKey = key;
+            }
+
+            // If the caret moved since the last result (e.g. the user clicked in the text), restart from the
+            // caret rather than resuming past the previous match or wrapping to the start.
             if (lastFindCaret is { } previousCaret && !View.CaretPosition.Equals(previousCaret))
             {
                 find.RecordNoMatch();
                 regexFind.RecordNoMatch();
+                findWrapPending = false;
                 lastFindCaret = null;
             }
-
-            bool matchCase = MatchCaseToggle.IsChecked == true;
-            bool wholeWord = WholeWordToggle.IsChecked == true;
-            bool useRegex = RegexToggle.IsChecked == true;
 
             Regex? regex = null;
             byte[]? pattern = null;
@@ -495,7 +511,7 @@ namespace FujiyNotepad.WinUI
                 pattern = Encoding.UTF8.GetBytes(text);
             }
 
-            RefreshMatchCount($"{useRegex}|{matchCase}|{wholeWord}|{text}", useRegex, pattern, options, regex);
+            RefreshMatchCount(key, useRegex, pattern, options, regex);
 
             if (useRegex)
             {
@@ -512,7 +528,10 @@ namespace FujiyNotepad.WinUI
         // the term changed or the previous search wrapped).
         private async Task RunFindNextLiteral(string text, byte[] pattern, SearchOptions options)
         {
-            long start = find.PrepareForwardSearch(text, GetCaretAnchorOffset());
+            // After a no-match, wrap back to the start of the document; otherwise start from the caret.
+            long anchor = findWrapPending ? 0 : GetCaretAnchorOffset();
+            findWrapPending = false;
+            long start = find.PrepareForwardSearch(text, anchor);
 
             // Capture the provider so a concurrent file switch/close can be detected after the search and
             // its (stale) result ignored; the try/catch handles a torn-down read mid-search.
@@ -575,13 +594,15 @@ namespace FujiyNotepad.WinUI
                 View.SelectMatch(line, charColumn, text.Length);
                 FindStatus.Text = $"Ln {line + 1}";
                 lastFindCaret = View.CaretPosition;
+                findWrapPending = false;
             }
             else
             {
-                // No match from here on; let the next search wrap to the caret again.
+                // No match through the end of the document; the next Find next wraps back to the start.
                 find.RecordNoMatch();
                 FindStatus.Text = "No matches";
-                lastFindCaret = null;
+                findWrapPending = true;
+                lastFindCaret = View.CaretPosition;
             }
         }
 
@@ -590,7 +611,11 @@ namespace FujiyNotepad.WinUI
         private async Task RunFindNextRegex(Regex regex)
         {
             TextPosition caret = GetCaretForFind();
-            (int startLine, int startChar) = regexFind.PrepareForwardSearch(FindBox.Text, caret.Line, caret.Column);
+            // After a no-match, wrap back to the start of the document; otherwise start from the caret.
+            int anchorLine = findWrapPending ? 0 : caret.Line;
+            int anchorChar = findWrapPending ? 0 : caret.Column;
+            findWrapPending = false;
+            (int startLine, int startChar) = regexFind.PrepareForwardSearch(FindBox.Text, anchorLine, anchorChar);
             LineProvider activeProvider = provider!;
 
             using var cts = new CancellationTokenSource();
@@ -630,12 +655,15 @@ namespace FujiyNotepad.WinUI
                 View.SelectMatch(m.LineIndex, m.CharStart, m.CharLength);
                 FindStatus.Text = $"Ln {m.LineIndex + 1}";
                 lastFindCaret = View.CaretPosition;
+                findWrapPending = false;
             }
             else
             {
+                // No match through the end of the document; the next Find next wraps back to the start.
                 regexFind.RecordNoMatch();
                 FindStatus.Text = "No matches";
-                lastFindCaret = null;
+                findWrapPending = true;
+                lastFindCaret = View.CaretPosition;
             }
         }
 
@@ -730,6 +758,7 @@ namespace FujiyNotepad.WinUI
             countedKey = null;
             FindCount.Text = string.Empty;
             lastFindCaret = null;
+            findWrapPending = false;
         }
 
         private void SetFindBusy(bool busy, bool indeterminate = false)
