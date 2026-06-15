@@ -10,6 +10,7 @@ namespace FujiyNotepad.Core
         public static readonly byte[] LineBreak = { (byte)'\n' };
 
         private readonly TextSearcher searcher;
+        private readonly TextEncoding encoding;
 
         private volatile bool isCompleted;
         public bool IsCompleted
@@ -18,9 +19,10 @@ namespace FujiyNotepad.Core
             set => isCompleted = value;
         }
 
-        public LineIndexer(TextSearcher searcher)
+        public LineIndexer(TextSearcher searcher, TextEncoding? encoding = null)
         {
             this.searcher = searcher;
+            this.encoding = encoding ?? TextEncoding.Utf8;
         }
 
         public async Task StartTaskToIndexLines(CancellationToken cancelToken, IProgress<int> progress)
@@ -41,15 +43,19 @@ namespace FujiyNotepad.Core
                 }
             }
 
-            // Pass None to Search so it keeps yielding line breaks; cancellation is observed here via
-            // ThrowIfCancellationRequested, which signals a stop by throwing OperationCanceledException
-            // (caught by the caller to re-enable resuming and to avoid marking a partial index complete).
-            await foreach (long result in searcher.Search(startOffset, LineBreak, progress))
+            // Search for the encoding's newline sequence, restricted to code-unit boundaries so a byte
+            // pattern that straddles two characters in a multi-byte encoding isn't mistaken for a newline.
+            // Pass None-equivalent options (only the alignment) so it keeps yielding line breaks; cancellation
+            // is observed here via ThrowIfCancellationRequested, which signals a stop by throwing
+            // OperationCanceledException (caught by the caller to re-enable resuming and to avoid marking a
+            // partial index complete). The next line starts past the whole newline sequence.
+            var options = new SearchOptions { UnitAlignment = encoding.CodeUnitSize };
+            await foreach (long result in searcher.Search(startOffset, encoding.NewLineBytes, options, progress))
             {
                 cancelToken.ThrowIfCancellationRequested();
                 lock (indexLock)
                 {
-                    lineNumberIndex.Add(result + 1);
+                    lineNumberIndex.Add(result + encoding.NewLineBytes.Length);
                 }
             }
 

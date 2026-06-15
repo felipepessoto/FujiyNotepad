@@ -18,5 +18,12 @@ namespace FujiyNotepad.Core
         /// non-word ASCII byte (anything outside <c>[A-Za-z0-9_]</c>) or the start/end of the file.
         /// </summary>
         public bool WholeWord { get; init; }
+
+        /// <summary>
+        /// Code-unit size for multi-byte encodings: when greater than 1, a match is only accepted at a file
+        /// offset that is a multiple of this, so it lands on a character boundary (e.g. 2 for UTF-16, 4 for
+        /// UTF-32). The default (0/1) accepts matches at any byte offset — the original single-byte behaviour.
+        /// </summary>
+        public int UnitAlignment { get; init; }
     }
 }
