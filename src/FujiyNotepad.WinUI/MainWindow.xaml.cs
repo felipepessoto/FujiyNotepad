@@ -96,7 +96,7 @@ namespace FujiyNotepad.WinUI
         private async void OpenSample_Click(object sender, RoutedEventArgs e)
         {
             // Versioned name so an existing cached copy from a previous build is not reused.
-            string path = Path.Combine(Path.GetTempPath(), "FujiyNotepadSample-v2.txt");
+            string path = Path.Combine(Path.GetTempPath(), "FujiyNotepadSample-v3.txt");
             if (!File.Exists(path))
             {
                 LblStatus.Text = "Generating sample...";
@@ -151,6 +151,24 @@ namespace FujiyNotepad.WinUI
                 "double_click selects snake_case_words and CamelCaseWords as single words",
                 "punctuation, like; commas. and-hyphens form their own runs",
                 "spaces      between      words (double-click a gap to select the run of spaces)",
+                "",
+                "[Find: Match case] Open Find (Ctrl+F), toggle 'Aa'. Case-insensitive (default) finds all three;",
+                "turn Match case on to step through them one at a time:",
+                "ERROR  error  Error  -  the same word in three different cases.",
+                "",
+                "[Find: Whole word] Toggle '[ab]' and find 'cat'. Whole-word matches a token only when it stands",
+                "alone, so on the next line the first and last words match - not the 'cat' in category/scatter/bobcat:",
+                "cat category scatter bobcat cat",
+                "",
+                "[Find: Regex] Toggle '.*' and try these patterns (each is matched within a single line):",
+                "    \\d{4}-\\d{2}-\\d{2}     dates:   2024-01-15   2025-12-31   1999-07-04",
+                "    #[0-9A-Fa-f]{6}        colors:  #1E90FF   #FF0000   #00c853",
+                "    \\b\\w+@\\w+\\.\\w+\\b   emails:  alice@example.com   bob@test.org",
+                "    TODO|FIXME|HACK        tags:    TODO refactor   FIXME edge case   HACK workaround",
+                "",
+                "[Find: Match count] The count beside the find bar shows the file-wide total (counted in the",
+                "background on this large sample). The repeated word on the next line occurs 7 times, 6 with Match case on:",
+                "needle, needle, NEEDLE, needle, needle, needle, needle",
                 "",
                 "-----------------------------------------------------------------------------------",
                 "Below: 10,000,000 generated lines (large-file demo).",
