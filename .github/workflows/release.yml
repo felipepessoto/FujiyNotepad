@@ -81,16 +81,31 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/app
 
-      # Prune files end users don't need: debug symbols (the Native AOT .pdb is ~34 MB, and ILC writes it
-      # straight to the output where MSBuild can't drop it), plus the Windows App SDK's bundled Windows-AI
-      # (onnxruntime / DirectML / Microsoft.Windows.AI.*) and WebView2 components — none of which this app
-      # uses (~40 MB of native libraries).
+      # Prune optional Windows App SDK components and debug symbols this text viewer never loads, to
+      # shrink the download. Validated: the app still launches, opens, searches and renders without them.
+      #   * Native AOT *.pdb (~31 MB) - ILC writes it straight to the output, bypassing MSBuild, so we
+      #     delete it here rather than from the project file.
+      #   * Unused SDK libraries (~50 MB): Windows AI (onnxruntime / DirectML / Microsoft.Windows.AI.*),
+      #     WebView2, widgets, push notifications, workloads, perception/NPU, imaging, the XAML designer,
+      #     phone controls, and the background-task host.
+      # The per-language *.mui folders are intentionally KEPT: deleting the folder that matches a user's
+      # Windows display language crashes the app at startup (ERROR_MRM_NO_CANDIDATE / 0x80073B01).
       - name: Remove unused files
         shell: pwsh
         run: |
-          $unused = 'onnxruntime.dll', 'DirectML.dll', 'Microsoft.Web.WebView2.Core.dll', 'Microsoft.ML.OnnxRuntime.dll'
+          $unused = @(
+            'onnxruntime.dll', 'DirectML.dll', 'Microsoft.ML.OnnxRuntime.dll',
+            'Microsoft.Web.WebView2.Core.dll', 'WebView2Loader.dll',
+            'Microsoft.Windows.Widgets.dll', 'PerceptiveStreaming.dll', 'NPUDetect.dll',
+            'PushNotificationsLongRunningTask.ProxyStub.dll',
+            'Microsoft.UI.Xaml.Phone.dll', 'Microsoft.UI.Designer.dll', 'Microsoft.Graphics.Imaging.dll',
+            'Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll',
+            'Microsoft.Windows.Workloads.dll', 'Microsoft.Windows.Workloads.Resources.dll', 'Microsoft.Windows.Workloads.Resources_ec.dll'
+          )
           Get-ChildItem publish/app -Recurse -File | Where-Object {
-            $_.Extension -eq '.pdb' -or $_.Name -in $unused -or $_.Name -like 'Microsoft.Windows.AI.*'
+            $_.Extension -eq '.pdb' -or $_.Name -in $unused -or
+            $_.Name -like 'Microsoft.Windows.AI.*' -or
+            $_.Name -like 'workloads.*'
           } | Remove-Item -Force
 
       - name: Package
