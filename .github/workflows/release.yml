@@ -88,8 +88,10 @@ jobs:
       #   * Unused SDK libraries (~50 MB): Windows AI (onnxruntime / DirectML / Microsoft.Windows.AI.*),
       #     WebView2, widgets, push notifications, workloads, perception/NPU, imaging, the XAML designer,
       #     phone controls, and the background-task host.
-      # The per-language *.mui folders are intentionally KEPT: deleting the folder that matches a user's
-      # Windows display language crashes the app at startup (ERROR_MRM_NO_CANDIDATE / 0x80073B01).
+      #   * Non-English UI resources: keep only the en-US *.mui folder. en-US is the framework's ultimate
+      #     fallback language, so every other Windows display language resolves to it (confirmed with the
+      #     GetFileMUIPath loader API) and non-English systems still run. Removing *every* language folder,
+      #     including en-US, instead crashes startup with ERROR_MRM_NO_CANDIDATE / 0x80073B01.
       - name: Remove unused files
         shell: pwsh
         run: |
@@ -107,6 +109,13 @@ jobs:
             $_.Name -like 'Microsoft.Windows.AI.*' -or
             $_.Name -like 'workloads.*'
           } | Remove-Item -Force
+
+          # Keep only the en-US localization: it is the Windows App SDK's ultimate fallback language, so
+          # every other display language resolves to it. (-ne is case-insensitive, so an 'en-US' folder
+          # would be kept too.) Language folders are the ones that contain *.mui files.
+          Get-ChildItem publish/app -Directory | Where-Object {
+            $_.Name -ne 'en-US' -and (Get-ChildItem $_.FullName -Filter '*.mui' -File -ErrorAction SilentlyContinue)
+          } | Remove-Item -Recurse -Force
 
       - name: Package
         id: package
