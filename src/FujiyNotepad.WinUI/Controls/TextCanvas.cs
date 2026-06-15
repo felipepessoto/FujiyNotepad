@@ -43,8 +43,7 @@ namespace FujiyNotepad.WinUI.Controls
         private Color backgroundColor = Colors.White;
         private Color textColor = Colors.Black;
         private Color caretColor = Colors.Black;
-        private Color selectionActiveColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
-        private Color selectionInactiveColor = Color.FromArgb(255, 0xDC, 0xDC, 0xDC);
+        private Color selectionColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
         private Color matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
 
         private bool hasFocusInternal;
@@ -419,7 +418,8 @@ namespace FujiyNotepad.WinUI.Controls
             EnsureMetrics();
             SyncViewport();
 
-            Color selectionColor = hasFocusInternal ? selectionActiveColor : selectionInactiveColor;
+            // The selection keeps its colour even when the canvas isn't focused (e.g. the menu has focus), so
+            // it stays clearly visible; only the caret is hidden while unfocused.
             foreach (VisibleLine line in engine.GetVisibleLines(hasFocusInternal, caretBlinkOn))
             {
                 // Highlight every Find match (under the text); the selected match is drawn over its highlight
@@ -464,8 +464,7 @@ namespace FujiyNotepad.WinUI.Controls
                 backgroundColor = Color.FromArgb(255, 0x1E, 0x1E, 0x1E);
                 textColor = Color.FromArgb(255, 0xF1, 0xF1, 0xF1);
                 caretColor = Color.FromArgb(255, 0xF1, 0xF1, 0xF1);
-                selectionActiveColor = Color.FromArgb(255, 0x26, 0x4F, 0x78);
-                selectionInactiveColor = Color.FromArgb(255, 0x3A, 0x3D, 0x41);
+                selectionColor = Color.FromArgb(255, 0x26, 0x4F, 0x78);
                 matchHighlightColor = Color.FromArgb(255, 0x66, 0x51, 0x18);
             }
             else
@@ -473,8 +472,7 @@ namespace FujiyNotepad.WinUI.Controls
                 backgroundColor = Colors.White;
                 textColor = Colors.Black;
                 caretColor = Colors.Black;
-                selectionActiveColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
-                selectionInactiveColor = Color.FromArgb(255, 0xDC, 0xDC, 0xDC);
+                selectionColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
                 matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
             }
 
