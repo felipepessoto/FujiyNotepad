@@ -219,6 +219,7 @@ namespace FujiyNotepad.WinUI
             countCts?.Cancel();
             countedKey = null;
             FindCount.Text = string.Empty;
+            View.SetHighlighter(null);
 
             View.SetProvider(provider);
             Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
@@ -506,6 +507,7 @@ namespace FujiyNotepad.WinUI
         {
             findCts?.Cancel();
             FindBar.Visibility = Visibility.Collapsed;
+            View.SetHighlighter(null);
             View.FocusCanvas();
         }
 
@@ -589,6 +591,7 @@ namespace FujiyNotepad.WinUI
                     FindStatus.Text = "Invalid regex";
                     FindCount.Text = string.Empty;
                     countedKey = null;
+                    View.SetHighlighter(null);
                     return false;
                 }
             }
@@ -599,6 +602,11 @@ namespace FujiyNotepad.WinUI
             }
 
             RefreshMatchCount(key, useRegex, pattern, options, regex);
+
+            // Highlight every match of the executed search in the viewport (the selected match stays distinct).
+            View.SetHighlighter(useRegex
+                ? new RegexLineHighlighter(regex!)
+                : new LiteralLineHighlighter(text, ignoreCase: !matchCase, wholeWord: wholeWord));
             return true;
         }
 
@@ -934,6 +942,7 @@ namespace FujiyNotepad.WinUI
             countCts?.Cancel();
             countedKey = null;
             FindCount.Text = string.Empty;
+            View.SetHighlighter(null);
         }
 
         private void SetFindBusy(bool busy, bool indeterminate = false)

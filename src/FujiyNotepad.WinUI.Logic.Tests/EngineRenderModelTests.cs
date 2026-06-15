@@ -154,5 +154,66 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.Equal(100.0 + 2 * TextLayoutEngine.TextPadding, e.HorizontalExtentPx); // widest line 10*10 + left/right padding
             Assert.True(viewChanged >= 1);
         }
+
+        // ----- Match highlighting (every Find match in the viewport) -----
+
+        [Fact]
+        public async Task GetVisibleLines_WithHighlighter_ProducesARectPerMatch()
+        {
+            TextLayoutEngine e = await NewEngineAsync("cat dog cat\nxxxx", cw: 10, lh: 20);
+            e.SetHighlighter(new LiteralLineHighlighter("cat", ignoreCase: false, wholeWord: false));
+
+            VisibleLine line0 = e.GetVisibleLines(hasFocus: false, caretVisible: false)[0];
+
+            Assert.Equal(2, line0.Matches.Count);
+            Assert.Equal(TextLayoutEngine.TextPadding, line0.Matches[0].X);        // "cat" at char 0
+            Assert.Equal(30.0, line0.Matches[0].Width);                            // 3 chars * 10
+            Assert.Equal(80.0 + TextLayoutEngine.TextPadding, line0.Matches[1].X); // "cat" at char 8
+            Assert.Equal(30.0, line0.Matches[1].Width);
+        }
+
+        [Fact]
+        public async Task GetVisibleLines_NoHighlighter_HasNoMatchRects()
+        {
+            TextLayoutEngine e = await NewEngineAsync("cat dog cat", cw: 10, lh: 20);
+
+            Assert.Empty(e.GetVisibleLines(hasFocus: false, caretVisible: false)[0].Matches);
+        }
+
+        [Fact]
+        public async Task SetHighlighter_Null_ClearsMatchRects()
+        {
+            TextLayoutEngine e = await NewEngineAsync("cat dog cat", cw: 10, lh: 20);
+            e.SetHighlighter(new LiteralLineHighlighter("cat", ignoreCase: false, wholeWord: false));
+            Assert.NotEmpty(e.GetVisibleLines(hasFocus: false, caretVisible: false)[0].Matches);
+
+            e.SetHighlighter(null);
+            Assert.Empty(e.GetVisibleLines(hasFocus: false, caretVisible: false)[0].Matches);
+        }
+
+        [Fact]
+        public async Task SetHighlighter_RequestsRedraw()
+        {
+            TextLayoutEngine e = await NewEngineAsync("cat dog cat", cw: 10, lh: 20);
+            int redraws = 0;
+            e.RedrawRequested += () => redraws++;
+
+            e.SetHighlighter(new LiteralLineHighlighter("cat", ignoreCase: false, wholeWord: false));
+
+            Assert.True(redraws >= 1);
+        }
+
+        [Fact]
+        public async Task GetVisibleLines_MatchRects_FollowHorizontalScroll()
+        {
+            TextLayoutEngine e = await NewEngineAsync("cat dog cat", cw: 10, lh: 20, vw: 50, vh: 100);
+            e.SetHighlighter(new LiteralLineHighlighter("cat", ignoreCase: false, wholeWord: false));
+            e.GetVisibleLines(hasFocus: false, caretVisible: false); // compute extent before scrolling
+
+            e.HorizontalOffset = 30;
+            VisibleLine line0 = e.GetVisibleLines(hasFocus: false, caretVisible: false)[0];
+
+            Assert.Equal(TextLayoutEngine.TextPadding - 30, line0.Matches[0].X); // first "cat" rides the scroll
+        }
     }
 }
