@@ -583,7 +583,7 @@ namespace FujiyNotepad.WinUI
                 // the UI thread. Leave the Find state unchanged so the user can retry as indexing catches up.
                 if (!LineIndexer.CanResolveOffset(matchOffset))
                 {
-                    FindStatus.Text = "Match found past the indexed area — try again as indexing continues";
+                    FindStatus.Text = "Past indexed area — retry";
                     return;
                 }
 

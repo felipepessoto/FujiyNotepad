@@ -59,14 +59,17 @@
 
         <Grid x:Name="FindBar" Grid.Row="1" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"
               Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+            <!-- The search box is the only flexible (*) column; every variable-width widget to its right
+                 (status text, match count, and the search-progress area) has a fixed-width column. That
+                 keeps the * column - and therefore the option toggles and Find Next button - from shifting
+                 when those labels change between empty / "counting…" / a count / a line number. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="184" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
@@ -88,18 +91,21 @@
             <Button x:Name="FindNextButton" Grid.Column="2" Content="Find Next" VerticalAlignment="Center"
                     Click="FindNext_Click" />
 
-            <ProgressBar x:Name="FindProgress" Grid.Column="3" Width="120" Minimum="0" Maximum="100"
-                         VerticalAlignment="Center" Visibility="Collapsed" />
+            <TextBlock x:Name="FindStatus" Grid.Column="3" VerticalAlignment="Center" Margin="4,0"
+                       TextTrimming="CharacterEllipsis" />
 
-            <Button x:Name="FindCancelButton" Grid.Column="4" Content="Cancel" VerticalAlignment="Center"
-                    Visibility="Collapsed" Click="FindCancel_Click" />
-
-            <TextBlock x:Name="FindStatus" Grid.Column="5" VerticalAlignment="Center" Margin="4,0" />
-
-            <TextBlock x:Name="FindCount" Grid.Column="6" VerticalAlignment="Center" Margin="4,0"
+            <TextBlock x:Name="FindCount" Grid.Column="4" VerticalAlignment="Center" Margin="4,0"
+                       TextTrimming="CharacterEllipsis"
                        Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
 
-            <Button Grid.Column="7" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
+            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <ProgressBar x:Name="FindProgress" Width="100" Minimum="0" Maximum="100"
+                             VerticalAlignment="Center" Visibility="Collapsed" />
+                <Button x:Name="FindCancelButton" Content="Cancel" VerticalAlignment="Center"
+                        Visibility="Collapsed" Click="FindCancel_Click" />
+            </StackPanel>
+
+            <Button Grid.Column="6" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
                     ToolTipService.ToolTip="Close" />
         </Grid>
 
