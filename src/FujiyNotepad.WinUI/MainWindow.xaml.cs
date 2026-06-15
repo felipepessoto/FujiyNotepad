@@ -69,7 +69,7 @@ namespace FujiyNotepad.WinUI
             ApplyStartupSettings();
 
             View.ViewChanged += SyncScrollBars;
-            View.CaretChanged += pos => LblCursor.Text = $"Ln {pos.Line + 1}, Col {pos.Column + 1}";
+            View.CaretChanged += UpdateCursorStatus;
             View.FontChanged += OnFontChanged;
 
             indexRefreshTimer = DispatcherQueue.CreateTimer();
@@ -416,6 +416,25 @@ namespace FujiyNotepad.WinUI
             {
                 syncingScroll = false;
             }
+        }
+
+        private void UpdateCursorStatus(TextPosition pos)
+        {
+            string text = $"Ln {pos.Line + 1}, Col {pos.Column + 1}";
+
+            SelectionStats selection = View.GetSelectionStats();
+            if (selection.Lines == 1)
+            {
+                text += $"  ({selection.Characters:N0} selected)";
+            }
+            else if (selection.Lines > 1)
+            {
+                text += selection.Characters >= 0
+                    ? $"  ({selection.Characters:N0} selected, {selection.Lines:N0} lines)"
+                    : $"  ({selection.Lines:N0} lines selected)";
+            }
+
+            LblCursor.Text = text;
         }
 
         private void VScroll_Scroll(object sender, ScrollEventArgs e)

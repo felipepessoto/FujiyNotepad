@@ -171,6 +171,9 @@ namespace FujiyNotepad.WinUI.Controls
 
         public TextPosition SelectionStart => engine.SelectionStart;
 
+        /// <summary>The size (characters and lines) of the current selection, for the status bar.</summary>
+        public SelectionStats GetSelectionStats() => engine.GetSelectionStats();
+
         public int TabSize
         {
             get => engine.TabSize;

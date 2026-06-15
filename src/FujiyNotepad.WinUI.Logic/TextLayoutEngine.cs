@@ -64,6 +64,13 @@ namespace FujiyNotepad.WinUI.Logic
     public readonly record struct HighlightRect(double X, double Width);
 
     /// <summary>
+    /// Size of the current selection. <see cref="Lines"/> is 0 when nothing is selected, otherwise the number
+    /// of lines it touches. <see cref="Characters"/> is the selected character count, or -1 when the selection
+    /// is too large to count cheaply (only the line count is shown then).
+    /// </summary>
+    public readonly record struct SelectionStats(long Characters, int Lines);
+
+    /// <summary>
     /// One visible line's layout, in viewport pixels, ready for a renderer to paint. The
     /// <see cref="TextLayoutEngine"/> computes these (pure math); the host only issues the corresponding
     /// draw-text / fill-rectangle calls, so the non-trivial "what to draw" logic stays unit-testable.
@@ -280,6 +287,61 @@ namespace FujiyNotepad.WinUI.Logic
         /// as the upper bound so it never re-finds the current match.
         /// </summary>
         public TextPosition SelectionStart => NormalizedSelection().start;
+
+        // A multi-line selection spanning more lines than this isn't character-counted (the count would mean
+        // decoding that many lines on the UI thread on every selection change); only its line count is shown.
+        private const int MaxSelectionLinesForCharCount = 5000;
+
+        /// <summary>
+        /// The size of the current selection (characters and lines) for the status bar. Returns zero lines when
+        /// there is no selection. The character count is exact for a single-line or a moderate multi-line
+        /// selection; for a very large multi-line selection it is -1 (uncounted) and only the line count applies.
+        /// </summary>
+        public SelectionStats GetSelectionStats()
+        {
+            if (provider == null || anchor == caret)
+            {
+                return new SelectionStats(0, 0);
+            }
+
+            (TextPosition start, TextPosition end) = NormalizedSelection();
+
+            if (start.Line == end.Line)
+            {
+                return new SelectionStats(Math.Max(0, end.Column - start.Column), 1);
+            }
+
+            int lines = end.Line - start.Line + 1;
+            if (lines > MaxSelectionLinesForCharCount)
+            {
+                return new SelectionStats(-1, lines);
+            }
+
+            long characters = 0;
+            for (int line = start.Line; line <= end.Line; line++)
+            {
+                int lineLength = GetColumns(line).Source.Length;
+                if (line == start.Line)
+                {
+                    characters += Math.Max(0, lineLength - start.Column);
+                }
+                else if (line == end.Line)
+                {
+                    characters += Math.Min(end.Column, lineLength);
+                }
+                else
+                {
+                    characters += lineLength;
+                }
+
+                if (line < end.Line)
+                {
+                    characters += 1; // the line break between the two lines
+                }
+            }
+
+            return new SelectionStats(characters, lines);
+        }
 
         /// <summary>
         /// Sets (or clears, with <c>null</c>) the highlighter used to paint every Find match in the viewport,
