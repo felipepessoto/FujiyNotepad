@@ -57,6 +57,17 @@
                     <RadioMenuFlyoutItem x:Name="TabWidth8" Text="8" GroupName="TabWidth" Tag="8" Click="TabWidth_Click" />
                 </MenuFlyoutSubItem>
             </MenuBarItem>
+            <MenuBarItem x:Name="EncodingMenu" Title="Encoding" IsEnabled="False">
+                <RadioMenuFlyoutItem x:Name="EncAuto" Text="Auto-detect" GroupName="Encoding" Tag="" Click="Encoding_Click" />
+                <MenuFlyoutSeparator />
+                <RadioMenuFlyoutItem x:Name="EncUtf8" Text="UTF-8" GroupName="Encoding" Tag="utf-8" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf8Bom" Text="UTF-8 with BOM" GroupName="Encoding" Tag="utf-8-bom" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf16Le" Text="UTF-16 LE" GroupName="Encoding" Tag="utf-16le" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf16Be" Text="UTF-16 BE" GroupName="Encoding" Tag="utf-16be" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf32Le" Text="UTF-32 LE" GroupName="Encoding" Tag="utf-32le" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf32Be" Text="UTF-32 BE" GroupName="Encoding" Tag="utf-32be" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncWindows1252" Text="Windows-1252 (ANSI)" GroupName="Encoding" Tag="windows-1252" Click="Encoding_Click" />
+            </MenuBarItem>
         </MenuBar>
 
         <Grid x:Name="FindBar" Grid.Row="1" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"
@@ -144,9 +155,11 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="LblStatus" Grid.Column="0" FontSize="12" />
-            <TextBlock x:Name="LblCursor" Grid.Column="1" FontSize="12" />
+            <TextBlock x:Name="LblEncoding" Grid.Column="1" FontSize="12" Margin="0,0,16,0" />
+            <TextBlock x:Name="LblCursor" Grid.Column="2" FontSize="12" />
         </Grid>
     </Grid>
 </Window>
