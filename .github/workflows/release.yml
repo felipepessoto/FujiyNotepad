@@ -98,6 +98,13 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           -o publish/app
 
+      # End users don't need debug symbols, and the self-contained Native AOT .pdb is ~34 MB. ILC writes
+      # it straight into the output (it isn't a normal publish item, so MSBuild properties/targets can't
+      # drop it), so strip every .pdb from the published folder here — for both flavors.
+      - name: Strip debug symbols
+        shell: pwsh
+        run: Get-ChildItem publish/app -Recurse -Filter *.pdb | Remove-Item -Force
+
       - name: Package
         id: package
         shell: pwsh
