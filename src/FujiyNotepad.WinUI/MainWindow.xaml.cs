@@ -52,6 +52,9 @@ namespace FujiyNotepad.WinUI
         private string? countedKey;
         private bool suppressFindOptionEvents;
 
+        // Cancels an in-flight background character count (re-run on file open / encoding change).
+        private CancellationTokenSource? charCountCts;
+
         public MainWindow()
         {
             this.InitializeComponent();
@@ -67,6 +70,7 @@ namespace FujiyNotepad.WinUI
 
             View.ViewChanged += SyncScrollBars;
             View.CaretChanged += pos => LblCursor.Text = $"Ln {pos.Line + 1}, Col {pos.Column + 1}";
+            View.FontChanged += OnFontChanged;
 
             indexRefreshTimer = DispatcherQueue.CreateTimer();
             indexRefreshTimer.Interval = TimeSpan.FromMilliseconds(150);
@@ -237,6 +241,7 @@ namespace FujiyNotepad.WinUI
             EditMenu.IsEnabled = true;
             EncodingMenu.IsEnabled = true;
             UpdateEncodingUi();
+            RefreshCharacterCount();
 
             if (addToRecent)
             {
@@ -1126,6 +1131,81 @@ namespace FujiyNotepad.WinUI
             }
         }
 
+        private void ZoomIn_Click(object sender, RoutedEventArgs e) => View.ZoomIn();
+
+        private void ZoomOut_Click(object sender, RoutedEventArgs e) => View.ZoomOut();
+
+        private void ResetZoom_Click(object sender, RoutedEventArgs e) => View.ResetZoom();
+
+        private void Font_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioMenuFlyoutItem item && item.Tag is string family)
+            {
+                View.FontFamilyName = family;
+            }
+        }
+
+        // A font-family or zoom (size) change: show the zoom percent, keep the Font menu ticked, and persist.
+        private void OnFontChanged()
+        {
+            LblZoom.Text = $"{View.ZoomPercent}%";
+            TickFontMenu(View.FontFamilyName);
+            settings.FontFamily = View.FontFamilyName;
+            settings.FontSize = View.FontSizePoints;
+            settingsStore.Save(settings);
+        }
+
+        private void TickFontMenu(string family)
+        {
+            FontConsolas.IsChecked = family == "Consolas";
+            FontCascadiaMono.IsChecked = family == "Cascadia Mono";
+            FontCascadiaCode.IsChecked = family == "Cascadia Code";
+            FontCourierNew.IsChecked = family == "Courier New";
+            FontLucidaConsole.IsChecked = family == "Lucida Console";
+        }
+
+        // Counts the file's total characters in the background (constant memory) and shows it in the status
+        // bar. Each call cancels the previous one; a result for a superseded file/encoding is dropped.
+        private async void RefreshCharacterCount()
+        {
+            if (source is null)
+            {
+                LblCharCount.Text = string.Empty;
+                return;
+            }
+
+            charCountCts?.Cancel();
+            using var cts = new CancellationTokenSource();
+            charCountCts = cts;
+            CancellationToken token = cts.Token;
+            IByteSource activeSource = source;
+            TextEncoding encoding = currentEncoding;
+            LblCharCount.Text = "counting\u2026";
+
+            long count = await Task.Run(async () =>
+            {
+                try
+                {
+                    return await CharacterCounter.CountAsync(activeSource, encoding, null, token);
+                }
+                catch (ObjectDisposedException)
+                {
+                    return -1L;
+                }
+            });
+
+            if (ReferenceEquals(charCountCts, cts))
+            {
+                charCountCts = null;
+            }
+            if (token.IsCancellationRequested || !ReferenceEquals(source, activeSource))
+            {
+                return;
+            }
+
+            LblCharCount.Text = count < 0 ? string.Empty : count == 1 ? "1 character" : $"{count:N0} characters";
+        }
+
         // Apply persisted settings on startup: tab width, the saved window size/maximized state, and the
         // recent-files menu.
         private void ApplyStartupSettings()
@@ -1133,6 +1213,12 @@ namespace FujiyNotepad.WinUI
             int tab = settings.TabWidth is 2 or 4 or 8 ? settings.TabWidth : 4;
             View.TabSize = tab;
             (tab switch { 2 => TabWidth2, 8 => TabWidth8, _ => TabWidth4 }).IsChecked = true;
+
+            // Font + zoom. (FontChanged isn't subscribed yet, so set the zoom label and Font menu directly.)
+            View.FontFamilyName = settings.FontFamily;
+            View.FontSizePoints = settings.FontSize;
+            TickFontMenu(View.FontFamilyName);
+            LblZoom.Text = $"{View.ZoomPercent}%";
 
             suppressFindOptionEvents = true;
             MatchCaseToggle.IsChecked = settings.FindMatchCase;

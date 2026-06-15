@@ -172,6 +172,63 @@ namespace FujiyNotepad.WinUI.Controls
             set => engine.TabSize = value;
         }
 
+        // Font size bounds and the "100% zoom" baseline (the default size). Zoom changes the font size.
+        private const double BaseFontSize = 14;
+        private const double MinFontSize = 6;
+        private const double MaxFontSize = 72;
+        private const double FontSizeStep = 1;
+
+        /// <summary>The monospace font family used to render text. Changing it re-measures the cell metrics.</summary>
+        public string FontFamilyName
+        {
+            get => textFormat.FontFamily;
+            set
+            {
+                if (!string.IsNullOrEmpty(value) && !string.Equals(value, textFormat.FontFamily, StringComparison.Ordinal))
+                {
+                    textFormat.FontFamily = value;
+                    RefreshFont();
+                }
+            }
+        }
+
+        /// <summary>The font size in points (clamped). Zoom is expressed through this. Re-measures the metrics.</summary>
+        public double FontSizePoints
+        {
+            get => textFormat.FontSize;
+            set
+            {
+                float clamped = (float)Math.Clamp(value, MinFontSize, MaxFontSize);
+                if (Math.Abs(clamped - textFormat.FontSize) > 0.01f)
+                {
+                    textFormat.FontSize = clamped;
+                    RefreshFont();
+                }
+            }
+        }
+
+        /// <summary>The current zoom as a percentage of the default font size (100% = the baseline size).</summary>
+        public int ZoomPercent => (int)Math.Round(textFormat.FontSize / BaseFontSize * 100);
+
+        public void ZoomIn() => FontSizePoints = textFormat.FontSize + FontSizeStep;
+
+        public void ZoomOut() => FontSizePoints = textFormat.FontSize - FontSizeStep;
+
+        public void ResetZoom() => FontSizePoints = BaseFontSize;
+
+        /// <summary>Raised when the font family or size (zoom) changes, so the host can persist and update status.</summary>
+        public event Action? FontChanged;
+
+        // Re-measure the monospace cell, push the new metrics, refresh the scrollbars, and repaint.
+        private void RefreshFont()
+        {
+            metricsValid = false;
+            EnsureMetrics();
+            ViewChanged?.Invoke();
+            canvas?.Invalidate();
+            FontChanged?.Invoke();
+        }
+
         public void SetProvider(LineProvider? newProvider)
         {
             Ready();
@@ -267,7 +324,22 @@ namespace FujiyNotepad.WinUI.Controls
         {
             Ready();
             int delta = e.GetCurrentPoint(this).Properties.MouseWheelDelta;
-            engine.ScrollByWheelDelta(delta);
+            if (e.KeyModifiers.HasFlag(Windows.System.VirtualKeyModifiers.Control))
+            {
+                // Ctrl + wheel zooms (changes the font size) instead of scrolling.
+                if (delta > 0)
+                {
+                    ZoomIn();
+                }
+                else if (delta < 0)
+                {
+                    ZoomOut();
+                }
+            }
+            else
+            {
+                engine.ScrollByWheelDelta(delta);
+            }
             e.Handled = true;
         }
 
