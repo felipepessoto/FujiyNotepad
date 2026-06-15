@@ -400,6 +400,31 @@ namespace FujiyNotepad.WinUI.Logic
             RaiseRedraw();
         }
 
+        /// <summary>
+        /// Moves the caret to <paramref name="column"/> on line <paramref name="lineIndex"/> (each clamped to
+        /// the document / the line length), clears any selection, scrolls the line to the top and nudges the
+        /// caret horizontally into view. Used by <c>Go To Offset</c> to land on the exact character at a byte
+        /// position; <see cref="GoToLine"/> is the column-0 special case.
+        /// </summary>
+        public void GoToLineColumn(int lineIndex, int column)
+        {
+            if (provider == null || totalLines == 0)
+            {
+                return;
+            }
+
+            lineIndex = Math.Clamp(lineIndex, 0, totalLines - 1);
+            int lineLen = GetColumns(lineIndex).Source.Length;
+            int col = Math.Clamp(column, 0, lineLen);
+            caret = anchor = new TextPosition(lineIndex, col);
+            desiredColumn = -1;
+            SetFirstVisibleLine(Math.Min(lineIndex, MaxFirstLine));
+            EnsureCaretVisibleHorizontally();
+            RaiseBlinkReset();
+            RaiseCaretChanged();
+            RaiseRedraw();
+        }
+
         public void SelectMatch(int lineIndex, int startColumn, int length)
         {
             if (provider == null || totalLines == 0)

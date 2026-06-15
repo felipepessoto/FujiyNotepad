@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -491,6 +492,96 @@ namespace FujiyNotepad.WinUI
                 View.GoToLine(line - 1);
                 View.FocusCanvas();
             }
+        }
+
+        private async void GoToOffset_Click(object sender, RoutedEventArgs e)
+        {
+            if (provider is null || source is null)
+            {
+                return;
+            }
+
+            var input = new TextBox { PlaceholderText = "Byte offset (decimal, or 0x for hex)" };
+            var dialog = new ContentDialog
+            {
+                Title = "Go To Offset",
+                Content = input,
+                PrimaryButtonText = "Go",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = Content.XamlRoot,
+            };
+
+            // Pressing Enter in the box confirms the dialog, the same as clicking "Go".
+            bool confirmedByEnter = false;
+            input.KeyDown += (_, args) =>
+            {
+                if (args.Key == Windows.System.VirtualKey.Enter)
+                {
+                    args.Handled = true;
+                    confirmedByEnter = true;
+                    dialog.Hide();
+                }
+            };
+
+            ContentDialogResult result = await dialog.ShowAsync();
+            if (!(confirmedByEnter || result == ContentDialogResult.Primary) || !TryParseOffset(input.Text, out long offset))
+            {
+                return;
+            }
+
+            long length = source.Length;
+            if (length <= 0)
+            {
+                return;
+            }
+            offset = Math.Clamp(offset, 0, length - 1);
+
+            // The offset's line is only known once indexing has reached it; resolving past the indexed frontier
+            // would clamp to the last indexed line (the wrong place) and read up to the rest of the file on the
+            // UI thread. Ask the user to retry as indexing catches up — the same guard the Find flow uses.
+            if (!LineIndexer.CanResolveOffset(offset))
+            {
+                await ShowMessageAsync("Go To Offset", "That offset hasn't been indexed yet. Try again once indexing has progressed further.");
+                return;
+            }
+
+            int line = LineIndexer.GetLineNumberFromOffset(offset);
+            long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
+            int charColumn = provider.ByteColumnToCharColumn(line, offset - lineStart);
+            View.GoToLineColumn(line, charColumn);
+            View.FocusCanvas();
+        }
+
+        // Parses a byte offset entered as decimal, or hexadecimal with a leading "0x"/"0X". Returns false (and
+        // the caller does nothing) on blank or malformed input, mirroring Go To Line's lenient int.TryParse.
+        private static bool TryParseOffset(string? text, out long offset)
+        {
+            offset = 0;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            text = text.Trim();
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return long.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out offset);
+            }
+
+            return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out offset);
+        }
+
+        private async Task ShowMessageAsync(string title, string message)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = title,
+                Content = message,
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot,
+            };
+            await dialog.ShowAsync();
         }
 
         private void Find_Click(object sender, RoutedEventArgs e)
