@@ -59,6 +59,30 @@ namespace FujiyNotepad.WinUI.Logic.Tests
         }
 
         [Fact]
+        public async Task SelectMatch_LineAlreadyVisible_KeepsScrollPosition()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.ManyLines(100), lh: 20, vh: 200); // 10 visible lines
+            e.FirstVisibleLine = 20; // showing lines 20..29
+
+            e.SelectMatch(25, 0, 1); // already on screen
+
+            Assert.Equal(20, e.FirstVisibleLine);   // no scroll
+            Assert.Equal(25, e.CaretPosition.Line);  // but the selection moved to the match
+        }
+
+        [Fact]
+        public async Task SelectMatch_LineOffScreen_ScrollsIntoView()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.ManyLines(100), lh: 20, vh: 200);
+            e.FirstVisibleLine = 0; // showing lines 0..9
+
+            e.SelectMatch(60, 0, 1); // off screen
+
+            Assert.Equal(60, e.FirstVisibleLine);   // scrolled to reveal the match
+            Assert.Equal(60, e.CaretPosition.Line);
+        }
+
+        [Fact]
         public async Task SetFirstVisibleLine_RaisesViewChangedOnlyWhenValueChanges()
         {
             TextLayoutEngine e = await NewEngineAsync(TestData.ManyLines(100));

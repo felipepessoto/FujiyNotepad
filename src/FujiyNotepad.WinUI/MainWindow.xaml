@@ -59,30 +59,53 @@
 
         <Grid x:Name="FindBar" Grid.Row="1" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"
               Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+            <!-- The search box is the only flexible (*) column; every variable-width widget to its right
+                 (status text, match count, and the search-progress area) has a fixed-width column. That
+                 keeps the * column - and therefore the option toggles and Find Next button - from shifting
+                 when those labels change between empty / "counting…" / a count / a line number. -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="184" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBox x:Name="FindBox" Grid.Column="0" PlaceholderText="Find" VerticalAlignment="Center"
                      KeyDown="FindBox_KeyDown" />
 
-            <Button x:Name="FindNextButton" Grid.Column="1" Content="Find Next" VerticalAlignment="Center"
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <ToggleButton x:Name="MatchCaseToggle" Content="Aa" MinWidth="36" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Match case"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+                <ToggleButton x:Name="WholeWordToggle" Content="[ab]" MinWidth="40" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Match whole word"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+                <ToggleButton x:Name="RegexToggle" Content=".*" MinWidth="36" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Use regular expression"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+            </StackPanel>
+
+            <Button x:Name="FindNextButton" Grid.Column="2" Content="Find Next" VerticalAlignment="Center"
                     Click="FindNext_Click" />
 
-            <ProgressBar x:Name="FindProgress" Grid.Column="2" Width="120" Minimum="0" Maximum="100"
-                         VerticalAlignment="Center" Visibility="Collapsed" />
+            <TextBlock x:Name="FindStatus" Grid.Column="3" VerticalAlignment="Center" Margin="4,0"
+                       TextTrimming="CharacterEllipsis" />
 
-            <Button x:Name="FindCancelButton" Grid.Column="3" Content="Cancel" VerticalAlignment="Center"
-                    Visibility="Collapsed" Click="FindCancel_Click" />
+            <TextBlock x:Name="FindCount" Grid.Column="4" VerticalAlignment="Center" Margin="4,0"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
 
-            <TextBlock x:Name="FindStatus" Grid.Column="4" VerticalAlignment="Center" Margin="4,0" />
+            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <ProgressBar x:Name="FindProgress" Width="100" Minimum="0" Maximum="100"
+                             VerticalAlignment="Center" Visibility="Collapsed" />
+                <Button x:Name="FindCancelButton" Content="Cancel" VerticalAlignment="Center"
+                        Visibility="Collapsed" Click="FindCancel_Click" />
+            </StackPanel>
 
-            <Button Grid.Column="5" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
+            <Button Grid.Column="6" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
                     ToolTipService.ToolTip="Close" />
         </Grid>
 

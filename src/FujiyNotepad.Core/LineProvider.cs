@@ -9,7 +9,7 @@ namespace FujiyNotepad.Core
     /// re-read the disk. Line text never changes once its line is indexed (the index is append-only and
     /// only fully-terminated lines are exposed), so cached values stay valid.
     /// </summary>
-    public sealed class LineProvider
+    public sealed class LineProvider : ILineSource
     {
         // Cap the bytes decoded for any one line so a pathologically long line cannot allocate without
         // bound; the remainder is elided with a marker (this is a viewer, not an editor).
@@ -169,6 +169,25 @@ namespace FujiyNotepad.Core
             int chars = Encoding.UTF8.GetCharCount(buffer, from, read - from);
             int lineLength = GetLine(lineIndex).Length;
             return Math.Min(chars, lineLength);
+        }
+
+        /// <summary>
+        /// Converts a character column within <paramref name="lineIndex"/> to a byte offset measured from
+        /// the start of that line (the inverse of <see cref="ByteColumnToCharColumn"/>), used to start a
+        /// Find from the caret. Counts the UTF-8 bytes of the decoded line prefix; a leading BOM on line 0
+        /// is not added, so a Find may begin a couple of bytes early there (harmless - it only widens the
+        /// scan).
+        /// </summary>
+        public long CharColumnToByteColumn(int lineIndex, int charColumn)
+        {
+            if (charColumn <= 0)
+            {
+                return 0;
+            }
+
+            string text = GetLine(lineIndex);
+            int chars = Math.Min(charColumn, text.Length);
+            return Encoding.UTF8.GetByteCount(text.AsSpan(0, chars));
         }
     }
 }

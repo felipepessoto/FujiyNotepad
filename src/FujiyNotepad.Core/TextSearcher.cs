@@ -25,17 +25,27 @@ namespace FujiyNotepad.Core
         }
 
         /// <summary>
-        /// Yields the absolute offset of every occurrence of <paramref name="pattern"/> at or after
-        /// <paramref name="startOffset"/> (overlapping matches included, advancing one byte past each).
+        /// Yields the absolute offset of every non-overlapping occurrence of <paramref name="pattern"/> at
+        /// or after <paramref name="startOffset"/>: after each match, scanning resumes past its end (like a
+        /// text editor's "find all"), so "xxx" in "xxxxxx" matches at 0 and 3, not 0/1/2/3.
         /// Cancellation is cooperative: a cancelled <paramref name="token"/> stops enumeration between
         /// chunks <em>without throwing</em>, so callers can treat a cancelled search as an empty result.
         /// </summary>
-        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default)
+        public IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, IProgress<int>? progress = null, CancellationToken token = default)
+            => Search(startOffset, pattern, default, progress, token);
+
+        /// <summary>
+        /// As <see cref="Search(long, byte[], IProgress{int}?, CancellationToken)"/>, additionally honouring
+        /// <paramref name="options"/>: ASCII case-insensitive matching and/or whole-word filtering.
+        /// </summary>
+        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, SearchOptions options, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default)
         {
             if (pattern.Length == 0)
             {
                 yield break;
             }
+
+            byte[]? foldedPattern = options.IgnoreCase ? Fold(pattern) : null;
 
             long length = source.Length;
             if (startOffset < 0)
@@ -54,6 +64,7 @@ namespace FujiyNotepad.Core
             long readPos = startOffset;     // next absolute read position
             int carry = 0;                  // bytes retained at the front of the buffer
             long bufferBase = startOffset;  // absolute offset of buffer[0]
+            long nextAllowedStart = startOffset; // non-overlapping guard: never yield a match before this
             long total = length - startOffset;
             int lastPercent = -1;
             progress?.Report(0);
@@ -79,14 +90,29 @@ namespace FujiyNotepad.Core
                 int from = 0;
                 while (from < available)
                 {
-                    int idx = buffer.AsSpan(from, available - from).IndexOf(pattern);
+                    int idx = IndexOf(buffer.AsSpan(from, available - from), pattern, foldedPattern);
                     if (idx < 0)
                     {
                         break;
                     }
                     int matchAt = from + idx;
-                    yield return bufferBase + matchAt;
-                    from = matchAt + 1;
+                    long matchOffset = bufferBase + matchAt;
+
+                    // A real match resumes scanning past its end so matches never overlap. Skip a candidate
+                    // that overlaps one already yielded (this can recur at a chunk boundary, where the carry
+                    // re-presents the tail of the previous match) or a rejected whole-word candidate, trying
+                    // the next byte instead.
+                    if (matchOffset >= nextAllowedStart
+                        && (!options.WholeWord || IsWholeWordMatch(buffer, available, bufferBase, matchAt, pattern.Length)))
+                    {
+                        yield return matchOffset;
+                        nextAllowedStart = matchOffset + pattern.Length;
+                        from = matchAt + pattern.Length;
+                    }
+                    else
+                    {
+                        from = matchAt + 1;
+                    }
                 }
 
                 readPos += read;
@@ -161,6 +187,85 @@ namespace FujiyNotepad.Core
             {
                 yield return -1;
             }
+        }
+
+        private static byte AsciiFold(byte b) => (byte)(b >= (byte)'A' && b <= (byte)'Z' ? b + 32 : b);
+
+        private static byte[] Fold(ReadOnlySpan<byte> pattern)
+        {
+            byte[] folded = new byte[pattern.Length];
+            for (int i = 0; i < pattern.Length; i++)
+            {
+                folded[i] = AsciiFold(pattern[i]);
+            }
+            return folded;
+        }
+
+        // Case-sensitive when foldedPattern is null (vectorized span IndexOf). Otherwise an ASCII
+        // case-insensitive scan that still uses a vectorized first-byte probe to jump to candidates.
+        private static int IndexOf(ReadOnlySpan<byte> haystack, ReadOnlySpan<byte> pattern, byte[]? foldedPattern)
+        {
+            if (foldedPattern is null)
+            {
+                return haystack.IndexOf(pattern);
+            }
+
+            int patLen = foldedPattern.Length;
+            byte f0 = foldedPattern[0];
+            bool firstIsLetter = f0 >= (byte)'a' && f0 <= (byte)'z';
+            byte upper0 = (byte)(f0 - 32);
+            int searchFrom = 0;
+            while (true)
+            {
+                ReadOnlySpan<byte> window = haystack.Slice(searchFrom);
+                int rel = firstIsLetter ? window.IndexOfAny(f0, upper0) : window.IndexOf(f0);
+                if (rel < 0)
+                {
+                    return -1;
+                }
+                int i = searchFrom + rel;
+                if (i + patLen > haystack.Length)
+                {
+                    return -1;
+                }
+                int j = 1;
+                for (; j < patLen; j++)
+                {
+                    if (AsciiFold(haystack[i + j]) != foldedPattern[j])
+                    {
+                        break;
+                    }
+                }
+                if (j == patLen)
+                {
+                    return i;
+                }
+                searchFrom = i + 1;
+            }
+        }
+
+        private static bool IsWordByte(int b)
+            => b >= 0 && ((b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '_');
+
+        // A match is "whole word" when the bytes immediately before and after it are non-word bytes or the
+        // file edge. Neighbours come from the buffer when present, else from a one-byte source read (only at
+        // a buffer edge), so the check is correct across chunk boundaries.
+        private bool IsWholeWordMatch(byte[] buffer, int available, long bufferBase, int matchAt, int patLen)
+        {
+            int left = matchAt > 0 ? buffer[matchAt - 1] : ReadByteAt(bufferBase + matchAt - 1);
+            int rightIdx = matchAt + patLen;
+            int right = rightIdx < available ? buffer[rightIdx] : ReadByteAt(bufferBase + rightIdx);
+            return !IsWordByte(left) && !IsWordByte(right);
+        }
+
+        private int ReadByteAt(long offset)
+        {
+            if (offset < 0 || offset >= source.Length)
+            {
+                return -1;
+            }
+            Span<byte> one = stackalloc byte[1];
+            return source.Read(offset, one) == 1 ? one[0] : -1;
         }
 
         private async ValueTask<int> ReadFullAsync(long offset, Memory<byte> buffer)
