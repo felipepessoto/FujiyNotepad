@@ -12,6 +12,7 @@ namespace FujiyNotepad.WinUI.Logic
         private string? pattern;
         private int lastLine = -1;
         private int lastChar = -1;
+        private int lastLen;
 
         /// <summary>True once a match has been recorded for the current pattern.</summary>
         public bool HasMatch => lastLine >= 0;
@@ -29,14 +30,16 @@ namespace FujiyNotepad.WinUI.Logic
                 lastLine = -1;
                 lastChar = -1;
             }
-            return lastLine >= 0 ? (lastLine, lastChar + 1) : (caretLine, caretChar);
+            // Resume past the end of the last match (not one char past its start) so matches never overlap.
+            return lastLine >= 0 ? (lastLine, lastChar + Math.Max(1, lastLen)) : (caretLine, caretChar);
         }
 
-        /// <summary>Records a found match so the next search resumes past it.</summary>
-        public void RecordMatch(int line, int charColumn)
+        /// <summary>Records a found match (line, start column, character length) so the next search resumes past its end.</summary>
+        public void RecordMatch(int line, int charColumn, int length)
         {
             lastLine = line;
             lastChar = charColumn;
+            lastLen = length;
         }
 
         /// <summary>Records that no match was found, so the next search restarts from the caret.</summary>
@@ -52,6 +55,7 @@ namespace FujiyNotepad.WinUI.Logic
             pattern = null;
             lastLine = -1;
             lastChar = -1;
+            lastLen = 0;
         }
     }
 }

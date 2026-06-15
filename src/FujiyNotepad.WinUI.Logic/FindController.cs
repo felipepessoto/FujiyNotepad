@@ -10,6 +10,7 @@ namespace FujiyNotepad.WinUI.Logic
     {
         private string? term;
         private long lastMatchOffset = -1;
+        private int lastMatchLength;
 
         /// <summary>The term of the most recent search, or <c>null</c> if none.</summary>
         public string? Term => term;
@@ -29,11 +30,18 @@ namespace FujiyNotepad.WinUI.Logic
                 term = newTerm;
                 lastMatchOffset = -1;
             }
-            return lastMatchOffset >= 0 ? lastMatchOffset + 1 : caretAnchorOffset;
+            // Resume past the end of the last match (not one byte past its start) so matches never overlap.
+            return lastMatchOffset >= 0 ? lastMatchOffset + Math.Max(1, lastMatchLength) : caretAnchorOffset;
         }
 
-        /// <summary>Records a found match so the next search resumes past it.</summary>
-        public void RecordMatch(long offset) => lastMatchOffset = offset;
+        /// <summary>
+        /// Records a found match (its start offset and byte length) so the next search resumes past its end.
+        /// </summary>
+        public void RecordMatch(long offset, int length)
+        {
+            lastMatchOffset = offset;
+            lastMatchLength = length;
+        }
 
         /// <summary>Records that no match was found, so the next search restarts from the caret anchor.</summary>
         public void RecordNoMatch() => lastMatchOffset = -1;
@@ -43,6 +51,7 @@ namespace FujiyNotepad.WinUI.Logic
         {
             term = null;
             lastMatchOffset = -1;
+            lastMatchLength = 0;
         }
     }
 }

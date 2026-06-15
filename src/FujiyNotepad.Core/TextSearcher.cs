@@ -25,8 +25,9 @@ namespace FujiyNotepad.Core
         }
 
         /// <summary>
-        /// Yields the absolute offset of every occurrence of <paramref name="pattern"/> at or after
-        /// <paramref name="startOffset"/> (overlapping matches included, advancing one byte past each).
+        /// Yields the absolute offset of every non-overlapping occurrence of <paramref name="pattern"/> at
+        /// or after <paramref name="startOffset"/>: after each match, scanning resumes past its end (like a
+        /// text editor's "find all"), so "xxx" in "xxxxxx" matches at 0 and 3, not 0/1/2/3.
         /// Cancellation is cooperative: a cancelled <paramref name="token"/> stops enumeration between
         /// chunks <em>without throwing</em>, so callers can treat a cancelled search as an empty result.
         /// </summary>
@@ -63,6 +64,7 @@ namespace FujiyNotepad.Core
             long readPos = startOffset;     // next absolute read position
             int carry = 0;                  // bytes retained at the front of the buffer
             long bufferBase = startOffset;  // absolute offset of buffer[0]
+            long nextAllowedStart = startOffset; // non-overlapping guard: never yield a match before this
             long total = length - startOffset;
             int lastPercent = -1;
             progress?.Report(0);
@@ -94,11 +96,23 @@ namespace FujiyNotepad.Core
                         break;
                     }
                     int matchAt = from + idx;
-                    if (!options.WholeWord || IsWholeWordMatch(buffer, available, bufferBase, matchAt, pattern.Length))
+                    long matchOffset = bufferBase + matchAt;
+
+                    // A real match resumes scanning past its end so matches never overlap. Skip a candidate
+                    // that overlaps one already yielded (this can recur at a chunk boundary, where the carry
+                    // re-presents the tail of the previous match) or a rejected whole-word candidate, trying
+                    // the next byte instead.
+                    if (matchOffset >= nextAllowedStart
+                        && (!options.WholeWord || IsWholeWordMatch(buffer, available, bufferBase, matchAt, pattern.Length)))
                     {
-                        yield return bufferBase + matchAt;
+                        yield return matchOffset;
+                        nextAllowedStart = matchOffset + pattern.Length;
+                        from = matchAt + pattern.Length;
                     }
-                    from = matchAt + 1;
+                    else
+                    {
+                        from = matchAt + 1;
+                    }
                 }
 
                 readPos += read;

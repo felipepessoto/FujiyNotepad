@@ -13,14 +13,15 @@ namespace FujiyNotepad.WinUI.Logic.Tests
         }
 
         [Fact]
-        public void PrepareForwardSearch_SamePattern_AfterMatch_ResumesOneCharPastMatch()
+        public void PrepareForwardSearch_SamePattern_AfterMatch_ResumesPastMatchEnd()
         {
             var c = new RegexFindController();
             c.PrepareForwardSearch("fo+", 10, 5);
-            c.RecordMatch(12, 7);
+            c.RecordMatch(12, 7, 2);
 
             Assert.True(c.HasMatch);
-            Assert.Equal((12, 8), c.PrepareForwardSearch("fo+", caretLine: 10, caretChar: 5));
+            // Resume past the match end (column 7 + length 2 = 9), so matches never overlap.
+            Assert.Equal((12, 9), c.PrepareForwardSearch("fo+", caretLine: 10, caretChar: 5));
         }
 
         [Fact]
@@ -37,7 +38,7 @@ namespace FujiyNotepad.WinUI.Logic.Tests
         {
             var c = new RegexFindController();
             c.PrepareForwardSearch("fo+", 10, 5);
-            c.RecordMatch(12, 7);
+            c.RecordMatch(12, 7, 2);
 
             Assert.Equal((1, 1), c.PrepareForwardSearch("ba.", caretLine: 1, caretChar: 1));
             Assert.False(c.HasMatch);
@@ -48,7 +49,7 @@ namespace FujiyNotepad.WinUI.Logic.Tests
         {
             var c = new RegexFindController();
             c.PrepareForwardSearch("fo+", 10, 5);
-            c.RecordMatch(12, 7);
+            c.RecordMatch(12, 7, 2);
             c.RecordNoMatch();
 
             Assert.False(c.HasMatch);
@@ -60,7 +61,7 @@ namespace FujiyNotepad.WinUI.Logic.Tests
         {
             var c = new RegexFindController();
             c.PrepareForwardSearch("fo+", 10, 5);
-            c.RecordMatch(12, 7);
+            c.RecordMatch(12, 7, 2);
 
             c.Reset();
 

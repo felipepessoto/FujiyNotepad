@@ -557,7 +557,7 @@ namespace FujiyNotepad.WinUI
                 int line = LineIndexer.GetLineNumberFromOffset(matchOffset);
                 long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
                 int charColumn = provider!.ByteColumnToCharColumn(line, matchOffset - lineStart);
-                find.RecordMatch(matchOffset);
+                find.RecordMatch(matchOffset, pattern.Length);
                 View.SelectMatch(line, charColumn, text.Length);
                 FindStatus.Text = $"Ln {line + 1}";
             }
@@ -609,7 +609,7 @@ namespace FujiyNotepad.WinUI
 
             if (match is { } m)
             {
-                regexFind.RecordMatch(m.LineIndex, m.CharStart);
+                regexFind.RecordMatch(m.LineIndex, m.CharStart, m.CharLength);
                 View.SelectMatch(m.LineIndex, m.CharStart, m.CharLength);
                 FindStatus.Text = $"Ln {m.LineIndex + 1}";
             }

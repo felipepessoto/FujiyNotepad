@@ -201,5 +201,21 @@ namespace FujiyNotepad.Core.Tests
             var source = new InMemoryByteSource("Cat CAT cats");
             Assert.Equal(new long[] { 0, 4 }, await SearchAll(source, "cat", new SearchOptions { IgnoreCase = true, WholeWord = true }));
         }
+
+        [Fact]
+        public async Task Search_SelfOverlappingPattern_YieldsNonOverlappingMatches()
+        {
+            // "xxx" in "xxxxxx" must match at 0 and 3 (not 0/1/2/3), like a text editor's find.
+            var source = new InMemoryByteSource("xxxxxx");
+            Assert.Equal(new long[] { 0, 3 }, await SearchAll(source, "xxx"));
+        }
+
+        [Fact]
+        public async Task Search_SelfOverlappingPattern_NonOverlapping_AcrossChunkBoundary()
+        {
+            // chunkSize 5 splits the run of 9; the cross-chunk carry must not re-yield an overlapping match.
+            var source = new InMemoryByteSource("xxxxxxxxx");
+            Assert.Equal(new long[] { 0, 3, 6 }, await SearchAll(source, "xxx", chunkSize: 5));
+        }
     }
 }
