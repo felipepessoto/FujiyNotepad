@@ -34,6 +34,8 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 
 - Open multi-gigabyte text files with near-constant memory usage — a custom view draws only the
   lines currently on screen, reading each on demand.
+- **Open a file** by dragging it onto the window, from *File ▸ Open*, or via a command-line
+  argument / file association; recently opened files appear under *File ▸ Open Recent*.
 - **Looks at home on Windows**: a Mica backdrop on Windows 11, the open file's name in the title bar,
   and a text view that follows the system **light / dark** theme.
 - Native-style navigation: mouse wheel, a line-based vertical scrollbar, a horizontal scrollbar,
@@ -42,8 +44,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   double-click to select a word) and **copy** (`Ctrl+C`), with a caret and an `Ln, Col` indicator.
 - Background **line indexing** with progress reporting and cancellation; the scrollbar extent grows
   as the indexer discovers lines.
-- **Go To Line** (`Ctrl+G`) and a non-modal **Find** bar (`Ctrl+F`) with find-next (`Enter`/`F3`),
-  a progress bar, and cancel.
+- **Go To Line** (`Ctrl+G`) and a non-modal **Find** bar (`Ctrl+F`): find next (`Enter`/`F3`) and
+  find previous (`Shift+Enter`/`Shift+F3`), **match case**, **whole word**, **regular expressions**,
+  and a live **match count**, with a progress bar and cancel.
 - Configurable **tab width** (2 / 4 / 8) and **wide / CJK glyph** handling (East Asian wide and
   fullwidth characters occupy two columns).
 - *File ▸ Open Sample* generates a large (~10M line) file — with a short feature-demo header — to
@@ -53,7 +56,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 
 - Windows 10 (version 1809 / build 17763) or Windows 11 — **x64, Arm64, or x86**.
 - Released builds need **nothing** installed (self-contained Native AOT).
-- To build from source: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+- To build from source: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Running an
+  unpackaged **dev build** also needs the [Windows App SDK runtime](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads)
+  (already on most dev machines); released self-contained builds bundle it, so they need nothing.
 
 ## Build & run
 
@@ -69,6 +74,13 @@ The app is **unpackaged** (`WindowsPackageType=None`), so the produced `.exe` ru
 release build additionally uses **Native AOT** (`PublishAot=true`); building AOT locally requires
 the *Desktop development with C++* workload (the CI runner already has it).
 
+## Release
+
+A `v*` tag triggers [`release.yml`](.github/workflows/release.yml), which publishes a self-contained
+**Native AOT** build for each architecture (`win-x64`, `win-arm64`, `win-x86`) — native code with the
+.NET and Windows App SDK runtimes bundled — then zips it and attaches it to a GitHub Release. The same
+workflow has a manual `workflow_dispatch` dry-run that produces the artifacts without creating a release.
+
 ## Project layout
 
 | Path | Description |
@@ -79,7 +91,18 @@ the *Desktop development with C++* workload (the CI runner already has it).
 | `src/FujiyNotepad.WinUI.Logic.Tests` | xUnit tests for the view logic and render model. |
 | `src/FujiyNotepad.WinUI` | The WinUI 3 app: `Controls/TextCanvas.cs` (Win2D surface that paints the engine's render model and forwards input) and `MainWindow` (menus, scrollbars, status bar, Go To Line, Find bar). |
 
-See [`src/FujiyNotepad.WinUI/README.md`](src/FujiyNotepad.WinUI/README.md) for architecture details.
+## Architecture
+
+WinUI has no text control that virtualizes over a file — its virtualization seam lives only in the
+items controls — so the view is a **custom text surface drawn from scratch with Win2D**
+(`CanvasControl` + DirectWrite), not a `TextBox`/`ListView`. `TextCanvas` is a thin Win2D shell: it
+owns the `CanvasControl`, font metrics, focus, the clipboard, and the caret-blink/auto-scroll timers,
+maps pointer/keyboard input to the `TextLayoutEngine`, and paints its per-line render model. All scroll/caret/
+selection math lives in `FujiyNotepad.WinUI.Logic`, and the on-disk engine lives in
+`FujiyNotepad.Core`; both are free of any Win2D/WinUI/WinRT dependency, so they're covered by xUnit
+tests that run on a normal .NET host. Windows App SDK UI can't be driven on headless CI, so
+interaction and visual details (selection feel, scrolling, rendering crispness) are best confirmed
+hands-on on a real desktop.
 
 ## License
 

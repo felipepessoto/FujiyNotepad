@@ -217,5 +217,88 @@ namespace FujiyNotepad.Core.Tests
             var source = new InMemoryByteSource("xxxxxxxxx");
             Assert.Equal(new long[] { 0, 3, 6 }, await SearchAll(source, "xxx", chunkSize: 5));
         }
+
+        private static long? FindLast(IByteSource source, string pattern, long beforeOffset, SearchOptions options = default, int chunkSize = 1 << 20)
+        {
+            var searcher = new TextSearcher(source, chunkSize);
+            return searcher.FindLastBefore(beforeOffset, System.Text.Encoding.ASCII.GetBytes(pattern), options);
+        }
+
+        [Fact]
+        public void FindLastBefore_ReturnsHighestMatchStrictlyBeforeOffset()
+        {
+            // "ab" occurs at 0, 4, 8; the last start before offset 8 is 4 (8 itself is not "before").
+            var source = new InMemoryByteSource("ab..ab..ab");
+            Assert.Equal(4, FindLast(source, "ab", beforeOffset: 8));
+        }
+
+        [Fact]
+        public void FindLastBefore_OffsetPastEnd_ReturnsLastMatch()
+        {
+            // A large beforeOffset (e.g. wrap-around) yields the final occurrence in the file.
+            var source = new InMemoryByteSource("ab..ab..ab");
+            Assert.Equal(8, FindLast(source, "ab", beforeOffset: long.MaxValue));
+        }
+
+        [Fact]
+        public void FindLastBefore_NoMatchBeforeOffset_ReturnsNull()
+        {
+            var source = new InMemoryByteSource("....ab..ab");
+            Assert.Null(FindLast(source, "ab", beforeOffset: 4));
+        }
+
+        [Fact]
+        public void FindLastBefore_PatternLongerThanFile_ReturnsNull()
+        {
+            var source = new InMemoryByteSource("ab");
+            Assert.Null(FindLast(source, "abc", beforeOffset: long.MaxValue));
+        }
+
+        [Fact]
+        public void FindLastBefore_MatchStraddlingChunkBoundary_IsFound()
+        {
+            // chunkSize 6 splits "needle"; the backward block scan's overlap must still complete the match.
+            var source = new InMemoryByteSource("xxxxneedleyyyy");
+            Assert.Equal(4, FindLast(source, "needle", beforeOffset: long.MaxValue, chunkSize: 6));
+        }
+
+        [Fact]
+        public void FindLastBefore_LastMatchSpansMultipleChunks_ScansBackwardUntilFound()
+        {
+            // Only one match, in the first chunk; the scan must walk back through several empty chunks.
+            var source = new InMemoryByteSource("needle" + new string('.', 30));
+            Assert.Equal(0, FindLast(source, "needle", beforeOffset: long.MaxValue, chunkSize: 4));
+        }
+
+        [Fact]
+        public void FindLastBefore_IgnoreCase_MatchesEitherCase()
+        {
+            var source = new InMemoryByteSource("abcABCabc");
+            Assert.Equal(6, FindLast(source, "ABC", beforeOffset: long.MaxValue, options: new SearchOptions { IgnoreCase = true }));
+        }
+
+        [Fact]
+        public void FindLastBefore_WholeWord_SkipsMatchesInsideWords()
+        {
+            // Standalone "cat" at 0 and 12; the ones inside "catalog" (4) and "scatter" (17) are excluded.
+            var source = new InMemoryByteSource("cat catalog cat scatter");
+            Assert.Equal(12, FindLast(source, "cat", beforeOffset: long.MaxValue, options: new SearchOptions { WholeWord = true }));
+        }
+
+        [Fact]
+        public void FindLastBefore_WholeWord_AcrossChunkBoundary_ChecksNeighbourBytes()
+        {
+            // "cat" at 4 (in "cats") straddles the chunk split and must be excluded; the standalone "cat" at 9 wins.
+            var source = new InMemoryByteSource("xxx cats cat");
+            Assert.Equal(9, FindLast(source, "cat", beforeOffset: long.MaxValue, options: new SearchOptions { WholeWord = true }, chunkSize: 6));
+        }
+
+        [Fact]
+        public void FindLastBefore_SelfOverlapping_ReturnsNearestNonOverlappingBeforeOffset()
+        {
+            // "xxx" in "xxxxxx": from end (offset 6) the previous match is 3; the canonical forward set is {0,3}.
+            var source = new InMemoryByteSource("xxxxxx");
+            Assert.Equal(3, FindLast(source, "xxx", beforeOffset: 6));
+        }
     }
 }
