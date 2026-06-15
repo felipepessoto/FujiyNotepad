@@ -268,7 +268,12 @@ namespace FujiyNotepad.WinUI.Logic
             anchor = new TextPosition(lineIndex, start);
             caret = new TextPosition(lineIndex, end);
             desiredColumn = -1;
-            SetFirstVisibleLine(Math.Min(lineIndex, MaxFirstLine));
+            // Only scroll when the match line is off-screen; if it is already visible, keep the scroll
+            // position and just highlight (the horizontal nudge below is a no-op when it is fully visible).
+            if (lineIndex < firstVisibleLine || lineIndex >= firstVisibleLine + FullyVisibleLineCount)
+            {
+                SetFirstVisibleLine(Math.Min(lineIndex, MaxFirstLine));
+            }
             EnsureCaretVisibleHorizontally();
             RaiseBlinkReset();
             RaiseCaretChanged();
