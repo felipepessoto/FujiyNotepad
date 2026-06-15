@@ -219,10 +219,23 @@ namespace FujiyNotepad.WinUI
 
         private async Task OpenFile(string path, bool addToRecent = true, TextEncoding? forcedEncoding = null)
         {
+            // Open the new file before tearing down the current one, so a failure (missing/locked/denied
+            // file) leaves the already-open file intact instead of half-closing it.
+            FileByteSource newSource;
+            try
+            {
+                newSource = new FileByteSource(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                await ShowOpenErrorAsync(path, ex);
+                return;
+            }
+
             await StopIndexingAsync();
 
             source?.Dispose();
-            source = new FileByteSource(path);
+            source = newSource;
             // Auto-detect the encoding (BOM + heuristic) unless the user forced one from the Encoding menu.
             currentEncoding = forcedEncoding ?? EncodingDetector.Detect(source);
             encodingAutoDetect = forcedEncoding is null;
@@ -254,6 +267,26 @@ namespace FujiyNotepad.WinUI
             StartIndexing();
             SyncScrollBars();
             View.FocusCanvas();
+        }
+
+        private async Task ShowOpenErrorAsync(string path, Exception ex)
+        {
+            string reason = ex switch
+            {
+                FileNotFoundException => "The file was not found.",
+                DirectoryNotFoundException => "The folder was not found.",
+                UnauthorizedAccessException => "You don't have permission to read it.",
+                _ => ex.Message,
+            };
+
+            var dialog = new ContentDialog
+            {
+                Title = "Can't open file",
+                Content = $"Could not open \u201C{Path.GetFileName(path)}\u201D.\n\n{reason}",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot,
+            };
+            await dialog.ShowAsync();
         }
 
         // Re-opens the current file with the encoding chosen from the menu (empty tag = auto-detect).
