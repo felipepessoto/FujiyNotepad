@@ -49,9 +49,11 @@ namespace FujiyNotepad.WinUI
         // clicked elsewhere), the search restarts from the caret instead of resuming past the last match.
         private TextPosition? lastFindCaret;
 
-        // After a search finds nothing, the next Find next wraps back to the start of the document - unless
-        // the term/options change or the caret moves first. lastFindKey detects a term/option change.
+        // After a search finds nothing, the next same-direction Find wraps around - Find next to the start
+        // of the document, Find previous to the end - unless the term/options change or the caret moves
+        // first. The two flags are mutually exclusive. lastFindKey detects a term/option change.
         private bool findWrapPending;
+        private bool findPrevWrapPending;
         private string? lastFindKey;
 
         public MainWindow()
@@ -231,6 +233,7 @@ namespace FujiyNotepad.WinUI
             FindCount.Text = string.Empty;
             lastFindCaret = null;
             findWrapPending = false;
+            findPrevWrapPending = false;
             lastFindKey = null;
 
             View.SetProvider(provider);
@@ -427,7 +430,14 @@ namespace FujiyNotepad.WinUI
             if (e.Key == Windows.System.VirtualKey.Enter)
             {
                 e.Handled = true;
-                await RunFindNext();
+                if (IsShiftDown())
+                {
+                    await RunFindPrevious();
+                }
+                else
+                {
+                    await RunFindNext();
+                }
             }
             else if (e.Key == Windows.System.VirtualKey.Escape)
             {
@@ -443,7 +453,14 @@ namespace FujiyNotepad.WinUI
             }
         }
 
+        private static bool IsShiftDown()
+            => Microsoft.UI.Input.InputKeyboardSource
+                .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
         private async void FindNext_Click(object sender, RoutedEventArgs e) => await RunFindNext();
+
+        private async void FindPrev_Click(object sender, RoutedEventArgs e) => await RunFindPrevious();
 
         // F3 is a window-wide shortcut (like Ctrl+F): open the find bar if it's closed, then repeat the
         // search — or focus the box for input when no term has been entered yet.
@@ -471,6 +488,32 @@ namespace FujiyNotepad.WinUI
             }
         }
 
+        // Shift+F3: the backward counterpart of F3. Opens the find bar if needed, then repeats the search
+        // backward (or focuses the box when no term has been entered).
+        private async void FindPreviousAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+            args.Handled = true;
+
+            if (FindBar.Visibility != Visibility.Visible)
+            {
+                FindBar.Visibility = Visibility.Visible;
+            }
+
+            if (string.IsNullOrEmpty(FindBox.Text))
+            {
+                FindBox.Focus(FocusState.Programmatic);
+                FindBox.SelectAll();
+            }
+            else
+            {
+                await RunFindPrevious();
+            }
+        }
+
         private void FindCancel_Click(object sender, RoutedEventArgs e) => findCts?.Cancel();
 
         private void FindClose_Click(object sender, RoutedEventArgs e) => CloseFindBar();
@@ -483,45 +526,89 @@ namespace FujiyNotepad.WinUI
         }
 
         // "Find next" reads the option toggles, dispatches to the literal byte search or the line-scoped
-        // regex search, and (when the term/options change) kicks off a background total-match count.
+        // regex search forward through the document.
         private async Task RunFindNext()
         {
-            if (provider is null || isFinding)
+            if (!TryBeginFind(out string text, out bool useRegex, out byte[]? pattern, out SearchOptions options, out Regex? regex))
             {
                 return;
             }
 
-            string text = FindBox.Text;
-            if (string.IsNullOrEmpty(text))
+            if (useRegex)
+            {
+                await RunFindNextRegex(regex!);
+            }
+            else
+            {
+                await RunFindNextLiteral(text, pattern!, options);
+            }
+        }
+
+        // "Find previous" is the backward counterpart of "Find next": same options and match count, but it
+        // walks toward the start of the document, anchored above the current selection.
+        private async Task RunFindPrevious()
+        {
+            if (!TryBeginFind(out string text, out bool useRegex, out byte[]? pattern, out SearchOptions options, out Regex? regex))
             {
                 return;
+            }
+
+            if (useRegex)
+            {
+                await RunFindPreviousRegex(regex!);
+            }
+            else
+            {
+                await RunFindPreviousLiteral(text, pattern!, options);
+            }
+        }
+
+        // Shared Find preamble for both directions: validates the term, reads the option toggles, resets the
+        // wrap/caret state on a changed term or a moved caret, builds the literal pattern or regex, and kicks
+        // off the (direction-independent) background match count. Returns false when there is nothing to do.
+        private bool TryBeginFind(out string text, out bool useRegex, out byte[]? pattern, out SearchOptions options, out Regex? regex)
+        {
+            text = string.Empty;
+            useRegex = false;
+            pattern = null;
+            options = default;
+            regex = null;
+
+            if (provider is null || isFinding)
+            {
+                return false;
+            }
+
+            text = FindBox.Text;
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
             }
 
             bool matchCase = MatchCaseToggle.IsChecked == true;
             bool wholeWord = WholeWordToggle.IsChecked == true;
-            bool useRegex = RegexToggle.IsChecked == true;
+            useRegex = RegexToggle.IsChecked == true;
             string key = $"{useRegex}|{matchCase}|{wholeWord}|{text}";
 
             // A changed term or options is a fresh search, so don't carry a pending wrap from the previous one.
             if (!string.Equals(key, lastFindKey, StringComparison.Ordinal))
             {
                 findWrapPending = false;
+                findPrevWrapPending = false;
                 lastFindKey = key;
             }
 
             // If the caret moved since the last result (e.g. the user clicked in the text), restart from the
-            // caret rather than resuming past the previous match or wrapping to the start.
+            // caret rather than resuming past/before the previous match or wrapping.
             if (lastFindCaret is { } previousCaret && !View.CaretPosition.Equals(previousCaret))
             {
                 find.RecordNoMatch();
                 regexFind.RecordNoMatch();
                 findWrapPending = false;
+                findPrevWrapPending = false;
                 lastFindCaret = null;
             }
 
-            Regex? regex = null;
-            byte[]? pattern = null;
-            SearchOptions options = default;
             if (useRegex)
             {
                 try
@@ -533,7 +620,7 @@ namespace FujiyNotepad.WinUI
                     FindStatus.Text = "Invalid regex";
                     FindCount.Text = string.Empty;
                     countedKey = null;
-                    return;
+                    return false;
                 }
             }
             else
@@ -543,15 +630,7 @@ namespace FujiyNotepad.WinUI
             }
 
             RefreshMatchCount(key, useRegex, pattern, options, regex);
-
-            if (useRegex)
-            {
-                await RunFindNextRegex(regex!);
-            }
-            else
-            {
-                await RunFindNextLiteral(text, pattern!, options);
-            }
+            return true;
         }
 
         // Forward literal byte search off the UI thread, honouring the case/whole-word options, progress and
@@ -626,6 +705,7 @@ namespace FujiyNotepad.WinUI
                 FindStatus.Text = $"Ln {line + 1}";
                 lastFindCaret = View.CaretPosition;
                 findWrapPending = false;
+                findPrevWrapPending = false;
             }
             else
             {
@@ -633,6 +713,7 @@ namespace FujiyNotepad.WinUI
                 find.RecordNoMatch();
                 FindStatus.Text = "No matches";
                 findWrapPending = true;
+                findPrevWrapPending = false;
                 lastFindCaret = View.CaretPosition;
             }
         }
@@ -687,6 +768,7 @@ namespace FujiyNotepad.WinUI
                 FindStatus.Text = $"Ln {m.LineIndex + 1}";
                 lastFindCaret = View.CaretPosition;
                 findWrapPending = false;
+                findPrevWrapPending = false;
             }
             else
             {
@@ -694,6 +776,145 @@ namespace FujiyNotepad.WinUI
                 regexFind.RecordNoMatch();
                 FindStatus.Text = "No matches";
                 findWrapPending = true;
+                findPrevWrapPending = false;
+                lastFindCaret = View.CaretPosition;
+            }
+        }
+
+        // Backward literal byte search off the UI thread. The upper bound is the current selection start
+        // (so the current match isn't re-found); after a no-match the next call wraps to the end of the
+        // document. Honours the case/whole-word options and the same indexed-frontier guard as Find next.
+        private async Task RunFindPreviousLiteral(string text, byte[] pattern, SearchOptions options)
+        {
+            // After a no-match, wrap to the end of the document (long.MaxValue is clamped to the last valid
+            // start by FindLastBefore); otherwise stop just before the current selection.
+            long before = findPrevWrapPending ? long.MaxValue : GetSelectionStartOffset();
+            findPrevWrapPending = false;
+
+            LineProvider activeProvider = provider!;
+
+            using var cts = new CancellationTokenSource();
+            findCts = cts;
+            CancellationToken token = cts.Token;
+            SetFindBusy(true, indeterminate: true);
+
+            long? match = await Task.Run(() =>
+            {
+                try
+                {
+                    return searcher.FindLastBefore(before, pattern, options, token);
+                }
+                catch (ObjectDisposedException)
+                {
+                    return (long?)null;
+                }
+            });
+
+            SetFindBusy(false);
+            findCts = null;
+
+            if (!ReferenceEquals(provider, activeProvider))
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested)
+            {
+                FindStatus.Text = "Cancelled";
+                return;
+            }
+
+            if (match.HasValue)
+            {
+                long matchOffset = match.Value;
+
+                // Index-readiness guard (as in Find next): a match beyond the indexed frontier (only reachable
+                // here after wrapping to the end) can't be resolved to a line yet; leave the state for a retry.
+                if (!LineIndexer.CanResolveOffset(matchOffset))
+                {
+                    FindStatus.Text = "Past indexed area — retry";
+                    return;
+                }
+
+                int line = LineIndexer.GetLineNumberFromOffset(matchOffset);
+                long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
+                int charColumn = provider!.ByteColumnToCharColumn(line, matchOffset - lineStart);
+                find.RecordMatch(matchOffset, pattern.Length);
+                View.SelectMatch(line, charColumn, text.Length);
+                FindStatus.Text = $"Ln {line + 1}";
+                lastFindCaret = View.CaretPosition;
+                findWrapPending = false;
+                findPrevWrapPending = false;
+            }
+            else
+            {
+                // No match before the caret; the next Find previous wraps back to the end of the document.
+                find.RecordNoMatch();
+                FindStatus.Text = "No matches";
+                findPrevWrapPending = true;
+                findWrapPending = false;
+                lastFindCaret = View.CaretPosition;
+            }
+        }
+
+        // Backward line-scoped regex search. Anchored just before the current selection start; after a
+        // no-match the next call wraps to the end of the document. Only indexed lines are searched.
+        private async Task RunFindPreviousRegex(Regex regex)
+        {
+            TextPosition start = GetSelectionStartForFind();
+            // After a no-match, wrap to the end of the document; otherwise stop just before the selection.
+            int beforeLine = findPrevWrapPending ? Math.Max(0, (provider?.LineCount ?? 1) - 1) : start.Line;
+            int beforeChar = findPrevWrapPending ? int.MaxValue : start.Column;
+            findPrevWrapPending = false;
+            LineProvider activeProvider = provider!;
+
+            using var cts = new CancellationTokenSource();
+            findCts = cts;
+            CancellationToken token = cts.Token;
+            SetFindBusy(true, indeterminate: true);
+
+            RegexLineSearcher.LineMatch? match = await Task.Run(() =>
+            {
+                try
+                {
+                    return new RegexLineSearcher(activeProvider).FindPrevious(regex, beforeLine, beforeChar, token);
+                }
+                catch (ObjectDisposedException)
+                {
+                    return (RegexLineSearcher.LineMatch?)null;
+                }
+            });
+
+            SetFindBusy(false);
+            findCts = null;
+
+            if (!ReferenceEquals(provider, activeProvider))
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested)
+            {
+                FindStatus.Text = "Cancelled";
+                return;
+            }
+
+            if (match is { } m)
+            {
+                regexFind.RecordMatch(m.LineIndex, m.CharStart, m.CharLength);
+                View.SelectMatch(m.LineIndex, m.CharStart, m.CharLength);
+                FindStatus.Text = $"Ln {m.LineIndex + 1}";
+                lastFindCaret = View.CaretPosition;
+                findWrapPending = false;
+                findPrevWrapPending = false;
+            }
+            else
+            {
+                // No match before the caret; the next Find previous wraps back to the end of the document.
+                regexFind.RecordNoMatch();
+                FindStatus.Text = "No matches";
+                findPrevWrapPending = true;
+                findWrapPending = false;
                 lastFindCaret = View.CaretPosition;
             }
         }
@@ -790,12 +1011,14 @@ namespace FujiyNotepad.WinUI
             FindCount.Text = string.Empty;
             lastFindCaret = null;
             findWrapPending = false;
+            findPrevWrapPending = false;
         }
 
         private void SetFindBusy(bool busy, bool indeterminate = false)
         {
             isFinding = busy;
             FindNextButton.IsEnabled = !busy;
+            FindPrevButton.IsEnabled = !busy;
             FindCancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
             FindProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
             FindProgress.IsIndeterminate = busy && indeterminate;
@@ -827,6 +1050,33 @@ namespace FujiyNotepad.WinUI
             {
                 long lineStart = LineIndexer.GetOffsetFromLineNumber(caret.Line + 1);
                 return lineStart + provider.CharColumnToByteColumn(caret.Line, caret.Column);
+            }
+            catch (InvalidOperationException)
+            {
+                return 0;
+            }
+        }
+
+        // The start of the current selection (the match start after a Find, or the caret when nothing is
+        // selected), used by Find previous as the exclusive upper bound so it never re-finds the current match.
+        private TextPosition GetSelectionStartForFind()
+        {
+            TextPosition start = View.SelectionStart;
+            return (provider != null && start.Line >= 0 && start.Line < provider.LineCount) ? start : new TextPosition(0, 0);
+        }
+
+        private long GetSelectionStartOffset()
+        {
+            if (provider == null)
+            {
+                return 0;
+            }
+
+            TextPosition start = GetSelectionStartForFind();
+            try
+            {
+                long lineStart = LineIndexer.GetOffsetFromLineNumber(start.Line + 1);
+                return lineStart + provider.CharColumnToByteColumn(start.Line, start.Column);
             }
             catch (InvalidOperationException)
             {

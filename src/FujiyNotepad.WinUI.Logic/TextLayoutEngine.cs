@@ -208,6 +208,13 @@ namespace FujiyNotepad.WinUI.Logic
         /// <summary>True when there is a non-empty selection (the anchor and caret differ).</summary>
         public bool HasSelection => anchor != caret;
 
+        /// <summary>
+        /// The start of the current selection in document order (equals the caret when nothing is selected).
+        /// After <see cref="SelectMatch"/> this is the start of the matched text, which "Find Previous" uses
+        /// as the upper bound so it never re-finds the current match.
+        /// </summary>
+        public TextPosition SelectionStart => NormalizedSelection().start;
+
         public void SetProvider(LineProvider? newProvider)
         {
             provider = newProvider;

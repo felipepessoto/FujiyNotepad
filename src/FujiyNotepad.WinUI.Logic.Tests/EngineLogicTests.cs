@@ -499,6 +499,28 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.Equal(50, e.FirstVisibleLine);
         }
 
+        [Fact]
+        public async Task SelectionStart_AfterSelectMatch_IsMatchStartNotCaret()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 3));
+
+            e.SelectMatch(1, 1, 3); // selects "BCD" on line 1; the caret lands at the match end (col 4)
+
+            Assert.Equal(new TextPosition(1, 4), e.CaretPosition);   // caret = match end
+            Assert.Equal(new TextPosition(1, 1), e.SelectionStart);  // Find Previous anchors here, not the caret
+        }
+
+        [Fact]
+        public async Task SelectionStart_NoSelection_EqualsCaret()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 3));
+
+            e.SelectMatch(2, 2, 0); // empty selection -> caret only
+
+            Assert.Equal(new TextPosition(2, 2), e.CaretPosition);
+            Assert.Equal(new TextPosition(2, 2), e.SelectionStart);
+        }
+
         // ----- Double-click word selection -----
 
         [Theory]

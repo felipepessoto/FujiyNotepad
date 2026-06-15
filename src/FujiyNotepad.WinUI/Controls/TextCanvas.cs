@@ -164,6 +164,8 @@ namespace FujiyNotepad.WinUI.Controls
         public double HorizontalExtentPx { get { Ready(); return engine.HorizontalExtentPx; } }
         public TextPosition CaretPosition => engine.CaretPosition;
 
+        public TextPosition SelectionStart => engine.SelectionStart;
+
         public int TabSize
         {
             get => engine.TabSize;
