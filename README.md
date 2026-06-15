@@ -47,6 +47,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 - **Go To Line** (`Ctrl+G`) and a non-modal **Find** bar (`Ctrl+F`): find next (`Enter`/`F3`) and
   find previous (`Shift+Enter`/`Shift+F3`), **match case**, **whole word**, **regular expressions**,
   a live **match count**, and **all matches highlighted** in the viewport, with a progress bar and cancel.
+- **Character encoding**: auto-detects **UTF-8**, **UTF-16** (LE/BE) and **UTF-32** (LE/BE) from the
+  byte-order mark or a heuristic, with **Windows-1252 (ANSI)** as a fallback, so Windows logs and
+  exports don't render as mojibake. The *Encoding* menu shows the detection and lets you override it.
 - Configurable **tab width** (2 / 4 / 8) and **wide / CJK glyph** handling (East Asian wide and
   fullwidth characters occupy two columns).
 - *File ▸ Open Sample* generates a large (~10M line) file — with a short feature-demo header — to
