@@ -68,6 +68,9 @@
                 <RadioMenuFlyoutItem x:Name="EncUtf32Be" Text="UTF-32 BE" GroupName="Encoding" Tag="utf-32be" Click="Encoding_Click" />
                 <RadioMenuFlyoutItem x:Name="EncWindows1252" Text="Windows-1252 (ANSI)" GroupName="Encoding" Tag="windows-1252" Click="Encoding_Click" />
             </MenuBarItem>
+            <MenuBarItem Title="Help">
+                <MenuFlyoutItem Text="About FujiyNotepad..." Click="About_Click" />
+            </MenuBarItem>
         </MenuBar>
 
         <Grid x:Name="FindBar" Grid.Row="1" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"

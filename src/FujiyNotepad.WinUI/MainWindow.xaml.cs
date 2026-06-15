@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using FujiyNotepad.Core;
@@ -1060,6 +1061,60 @@ namespace FujiyNotepad.WinUI
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+
+        private async void About_Click(object sender, RoutedEventArgs e)
+        {
+            var panel = new StackPanel { Spacing = 6 };
+            panel.Children.Add(new TextBlock
+            {
+                Text = "FujiyNotepad",
+                FontSize = 20,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            panel.Children.Add(new TextBlock { Text = $"Version {GetAppVersion()}" });
+            panel.Children.Add(new TextBlock
+            {
+                Text = "A lightweight Windows viewer for very large text files.",
+                TextWrapping = TextWrapping.Wrap,
+            });
+            panel.Children.Add(new HyperlinkButton
+            {
+                Content = "github.com/felipepessoto/FujiyNotepad",
+                NavigateUri = new Uri("https://github.com/felipepessoto/FujiyNotepad"),
+                Padding = new Thickness(0),
+            });
+            panel.Children.Add(new TextBlock
+            {
+                Text = "MIT License — Copyright © 2017 Felipe Pessoto",
+                FontSize = 12,
+                Opacity = 0.7,
+            });
+
+            var dialog = new ContentDialog
+            {
+                Title = "About",
+                Content = panel,
+                CloseButtonText = "Close",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot,
+            };
+            await dialog.ShowAsync();
+        }
+
+        // The version stamped at build time (-p:Version), read from the assembly; the source-revision "+hash"
+        // suffix on the informational version is trimmed. Falls back to the assembly version for a dev build.
+        private static string GetAppVersion()
+        {
+            Assembly assembly = typeof(MainWindow).Assembly;
+            string? informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!string.IsNullOrEmpty(informational))
+            {
+                int plus = informational.IndexOf('+');
+                return plus >= 0 ? informational[..plus] : informational;
+            }
+            Version? version = assembly.GetName().Version;
+            return version is null ? "1.0.0" : $"{version.Major}.{version.Minor}.{version.Build}";
+        }
 
         private void TabWidth_Click(object sender, RoutedEventArgs e)
         {
