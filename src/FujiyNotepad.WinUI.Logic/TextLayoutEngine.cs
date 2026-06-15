@@ -126,6 +126,9 @@ namespace FujiyNotepad.WinUI.Logic
         /// </summary>
         public const double TextPadding = 8d;
 
+        // Horizontal padding inside the line-number gutter (on each side of the number).
+        private const double GutterPaddingX = 6d;
+
         private int tabSize = 4;
 
         private double lineHeight;
@@ -135,6 +138,8 @@ namespace FujiyNotepad.WinUI.Logic
 
         private static readonly IReadOnlyList<HighlightRect> NoHighlights = Array.Empty<HighlightRect>();
         private ILineHighlighter? highlighter;
+
+        private bool showLineNumbers = false;
 
         private LineProvider? provider;
         private int totalLines;
@@ -216,6 +221,55 @@ namespace FujiyNotepad.WinUI.Logic
         public double CharWidthPx => charWidth;
         public double HorizontalExtentPx => Math.Max(horizontalExtentPx, ViewportWidth);
         public TextPosition CaretPosition => caret;
+
+        /// <summary>
+        /// Whether the line-number gutter is drawn. The gutter is a fixed-width column on the left (it does not
+        /// scroll horizontally); turning it on/off shifts the text area and re-syncs the view.
+        /// </summary>
+        public bool ShowLineNumbers
+        {
+            get => showLineNumbers;
+            set
+            {
+                if (value != showLineNumbers)
+                {
+                    showLineNumbers = value;
+                    RaiseViewChanged();
+                    RaiseRedraw();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Width in pixels of the line-number gutter (0 when off): wide enough for the largest line number,
+        /// with a minimum of two digits so it doesn't jitter for tiny files.
+        /// </summary>
+        public double GutterWidthPx
+        {
+            get
+            {
+                if (!showLineNumbers || totalLines <= 0 || charWidth <= 0)
+                {
+                    return 0;
+                }
+                int digits = Math.Max(2, DigitCount(totalLines));
+                return digits * charWidth + GutterPaddingX * 2;
+            }
+        }
+
+        // Screen x of text column 0 before the horizontal scroll offset: the left padding, plus the gutter.
+        private double TextOriginX => TextPadding + GutterWidthPx;
+
+        private static int DigitCount(int value)
+        {
+            int digits = 1;
+            while (value >= 10)
+            {
+                value /= 10;
+                digits++;
+            }
+            return digits;
+        }
 
         /// <summary>True when there is a non-empty selection (the anchor and caret differ).</summary>
         public bool HasSelection => anchor != caret;
@@ -447,7 +501,7 @@ namespace FujiyNotepad.WinUI.Logic
             line = Math.Clamp(line, 0, totalLines - 1);
 
             LineColumns columns = GetColumns(line);
-            double column = (x - TextPadding + horizontalOffset) / charWidth;
+            double column = (x - TextOriginX + horizontalOffset) / charWidth;
             int charIndex = columns.CharIndexOfColumn(column);
             return new TextPosition(line, charIndex);
         }
@@ -620,14 +674,16 @@ namespace FujiyNotepad.WinUI.Logic
             }
             double caretX = GetColumns(caret.Line).ColumnOfCharIndex(caret.Column) * charWidth;
             // Keep a padding-sized gap on whichever edge the caret is scrolled to, matching the rendered inset.
+            // The visible text width is the viewport minus the fixed gutter.
             double rightInset = charWidth + TextPadding * 2;
+            double textViewport = ViewportWidth - GutterWidthPx;
             if (caretX < horizontalOffset)
             {
                 SetHorizontalOffset(caretX);
             }
-            else if (caretX > horizontalOffset + ViewportWidth - rightInset)
+            else if (caretX > horizontalOffset + textViewport - rightInset)
             {
-                SetHorizontalOffset(caretX - ViewportWidth + rightInset);
+                SetHorizontalOffset(caretX - textViewport + rightInset);
             }
         }
 
@@ -725,8 +781,8 @@ namespace FujiyNotepad.WinUI.Logic
                 {
                     int startCol = lineIndex == selStart.Line ? columns.ColumnOfCharIndex(selStart.Column) : 0;
                     int endCol = lineIndex == selEnd.Line ? columns.ColumnOfCharIndex(selEnd.Column) : columns.TotalColumns + 1;
-                    double x0 = startCol * charWidth - horizontalOffset + TextPadding;
-                    double x1 = endCol * charWidth - horizontalOffset + TextPadding;
+                    double x0 = startCol * charWidth - horizontalOffset + TextOriginX;
+                    double x1 = endCol * charWidth - horizontalOffset + TextOriginX;
                     if (x1 > x0)
                     {
                         lineHasSelection = true;
@@ -736,14 +792,14 @@ namespace FujiyNotepad.WinUI.Logic
                 }
 
                 bool hasCaret = hasFocus && caretVisible && caret.Line == lineIndex;
-                double caretX = hasCaret ? columns.ColumnOfCharIndex(caret.Column) * charWidth - horizontalOffset + TextPadding : 0;
+                double caretX = hasCaret ? columns.ColumnOfCharIndex(caret.Column) * charWidth - horizontalOffset + TextOriginX : 0;
 
                 lines.Add(new VisibleLine
                 {
                     LineIndex = lineIndex,
                     Y = y,
                     Display = columns.Display,
-                    TextX = TextPadding - horizontalOffset,
+                    TextX = TextOriginX - horizontalOffset,
                     HasSelection = lineHasSelection,
                     SelectionX = selectionX,
                     SelectionWidth = selectionWidth,
@@ -753,7 +809,7 @@ namespace FujiyNotepad.WinUI.Logic
                 });
             }
 
-            double newExtent = Math.Max(maxWidth + TextPadding * 2, ViewportWidth);
+            double newExtent = Math.Max(maxWidth + GutterWidthPx + TextPadding * 2, ViewportWidth);
             if (Math.Abs(newExtent - horizontalExtentPx) > 0.5)
             {
                 horizontalExtentPx = newExtent;
@@ -795,8 +851,8 @@ namespace FujiyNotepad.WinUI.Logic
             {
                 int startCol = columns.ColumnOfCharIndex(start);
                 int endCol = columns.ColumnOfCharIndex(start + length);
-                double x0 = startCol * charWidth - horizontalOffset + TextPadding;
-                double x1 = endCol * charWidth - horizontalOffset + TextPadding;
+                double x0 = startCol * charWidth - horizontalOffset + TextOriginX;
+                double x1 = endCol * charWidth - horizontalOffset + TextOriginX;
                 if (x1 > x0)
                 {
                     rects.Add(new HighlightRect(x0, x1 - x0));

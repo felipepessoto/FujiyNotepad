@@ -15,6 +15,9 @@ namespace FujiyNotepad.WinUI.Logic
         /// <summary>Font size in points (drives zoom). Defaults to 14.</summary>
         public double FontSize { get; set; } = 14;
 
+        /// <summary>Whether the line-number gutter is shown. Off by default.</summary>
+        public bool ShowLineNumbers { get; set; }
+
         /// <summary>Last window width in physical pixels; 0 means "unset, use the default size".</summary>
         public int WindowWidth { get; set; }
 
