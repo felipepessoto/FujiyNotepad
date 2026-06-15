@@ -26,12 +26,20 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Test
         run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release
 
   build:
     name: Publish ${{ matrix.rid }}
-    needs: test
+    # Not gated on `test`: the AOT publishes run in parallel with the Test job to shorten the release
+    # critical path. The final `release` job below still requires BOTH `test` and `build` to succeed.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -58,6 +66,17 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+
+      # Cache the global NuGet package folder per architecture (self-contained AOT restores arch-specific
+      # runtime packs). On a miss it restores from nuget.org as before.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ matrix.rid }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-${{ matrix.rid }}-
+            nuget-${{ runner.os }}-
 
       - name: Resolve version
         id: version
@@ -136,7 +155,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [build, test]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
 

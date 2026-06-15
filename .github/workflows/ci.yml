@@ -27,6 +27,15 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Cache the global NuGet package folder so restores reuse already-downloaded packages across runs.
+      # Keyed on the project files; on a miss it simply restores from nuget.org as before.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Restore
         run: dotnet restore src/FujiyNotepad.WinUI.slnx
 
