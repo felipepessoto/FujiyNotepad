@@ -72,6 +72,13 @@ The app is **unpackaged** (`WindowsPackageType=None`), so the produced `.exe` ru
 release build additionally uses **Native AOT** (`PublishAot=true`); building AOT locally requires
 the *Desktop development with C++* workload (the CI runner already has it).
 
+## Release
+
+A `v*` tag triggers [`release.yml`](.github/workflows/release.yml), which publishes a self-contained
+**Native AOT** build for each architecture (`win-x64`, `win-arm64`, `win-x86`) — native code with the
+.NET and Windows App SDK runtimes bundled — then zips it and attaches it to a GitHub Release. The same
+workflow has a manual `workflow_dispatch` dry-run that produces the artifacts without creating a release.
+
 ## Project layout
 
 | Path | Description |
@@ -82,7 +89,18 @@ the *Desktop development with C++* workload (the CI runner already has it).
 | `src/FujiyNotepad.WinUI.Logic.Tests` | xUnit tests for the view logic and render model. |
 | `src/FujiyNotepad.WinUI` | The WinUI 3 app: `Controls/TextCanvas.cs` (Win2D surface that paints the engine's render model and forwards input) and `MainWindow` (menus, scrollbars, status bar, Go To Line, Find bar). |
 
-See [`src/FujiyNotepad.WinUI/README.md`](src/FujiyNotepad.WinUI/README.md) for architecture details.
+## Architecture
+
+WinUI has no text control that virtualizes over a file — its virtualization seam lives only in the
+items controls — so the view is a **custom text surface drawn from scratch with Win2D**
+(`CanvasControl` + DirectWrite), not a `TextBox`/`ListView`. `TextCanvas` is a thin Win2D shell: it
+owns the `CanvasControl`, font metrics, focus, the clipboard, and the caret-blink/auto-scroll timers,
+maps pointer/keyboard input to the engine, and paints its per-line render model. All scroll/caret/
+selection math lives in `FujiyNotepad.WinUI.Logic`, and the on-disk engine lives in
+`FujiyNotepad.Core`; both are free of any Win2D/WinUI/WinRT dependency, so they're covered by xUnit
+tests that run on a normal .NET host. Windows App SDK UI can't be driven on headless CI, so
+interaction and visual details (selection feel, scrolling, rendering crispness) are best confirmed
+hands-on on a real desktop.
 
 ## License
 
