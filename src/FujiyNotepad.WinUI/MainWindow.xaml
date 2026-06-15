@@ -66,23 +66,40 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBox x:Name="FindBox" Grid.Column="0" PlaceholderText="Find" VerticalAlignment="Center"
                      KeyDown="FindBox_KeyDown" />
 
-            <Button x:Name="FindNextButton" Grid.Column="1" Content="Find Next" VerticalAlignment="Center"
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <ToggleButton x:Name="MatchCaseToggle" Content="Aa" MinWidth="36" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Match case"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+                <ToggleButton x:Name="WholeWordToggle" Content="[ab]" MinWidth="40" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Match whole word"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+                <ToggleButton x:Name="RegexToggle" Content=".*" MinWidth="36" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Use regular expression"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+            </StackPanel>
+
+            <Button x:Name="FindNextButton" Grid.Column="2" Content="Find Next" VerticalAlignment="Center"
                     Click="FindNext_Click" />
 
-            <ProgressBar x:Name="FindProgress" Grid.Column="2" Width="120" Minimum="0" Maximum="100"
+            <ProgressBar x:Name="FindProgress" Grid.Column="3" Width="120" Minimum="0" Maximum="100"
                          VerticalAlignment="Center" Visibility="Collapsed" />
 
-            <Button x:Name="FindCancelButton" Grid.Column="3" Content="Cancel" VerticalAlignment="Center"
+            <Button x:Name="FindCancelButton" Grid.Column="4" Content="Cancel" VerticalAlignment="Center"
                     Visibility="Collapsed" Click="FindCancel_Click" />
 
-            <TextBlock x:Name="FindStatus" Grid.Column="4" VerticalAlignment="Center" Margin="4,0" />
+            <TextBlock x:Name="FindStatus" Grid.Column="5" VerticalAlignment="Center" Margin="4,0" />
 
-            <Button Grid.Column="5" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
+            <TextBlock x:Name="FindCount" Grid.Column="6" VerticalAlignment="Center" Margin="4,0"
+                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
+
+            <Button Grid.Column="7" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
                     ToolTipService.ToolTip="Close" />
         </Grid>
 

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using FujiyNotepad.Core;
 using FujiyNotepad.WinUI.Controls;
 using FujiyNotepad.WinUI.Logic;
@@ -32,8 +33,15 @@ namespace FujiyNotepad.WinUI
         // Find state: the controller decides where each forward "find next" starts; findCts cancels an
         // in-progress search; isFinding guards against starting a second search while one runs.
         private readonly FindController find = new();
+        private readonly RegexFindController regexFind = new();
         private CancellationTokenSource? findCts;
         private bool isFinding;
+
+        // Background match-count state: countedKey caches the last term/options counted; countCts cancels an
+        // in-flight count; suppressFindOptionEvents silences the toggle handlers while applying saved options.
+        private CancellationTokenSource? countCts;
+        private string? countedKey;
+        private bool suppressFindOptionEvents;
 
         public MainWindow()
         {
@@ -159,6 +167,10 @@ namespace FujiyNotepad.WinUI
             LineIndexer = new LineIndexer(searcher);
             provider = new LineProvider(source, LineIndexer);
             find.Reset();
+            regexFind.Reset();
+            countCts?.Cancel();
+            countedKey = null;
+            FindCount.Text = string.Empty;
 
             View.SetProvider(provider);
             Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
@@ -409,9 +421,8 @@ namespace FujiyNotepad.WinUI
             View.FocusCanvas();
         }
 
-        // Runs a forward "find next" off the UI thread, reporting progress and honouring cancellation. The
-        // FindController decides where to start (past the last hit, or from the caret when the term changed
-        // or the previous search wrapped).
+        // "Find next" reads the option toggles, dispatches to the literal byte search or the line-scoped
+        // regex search, and (when the term/options change) kicks off a background total-match count.
         private async Task RunFindNext()
         {
             if (provider is null || isFinding)
@@ -425,12 +436,55 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
+            bool matchCase = MatchCaseToggle.IsChecked == true;
+            bool wholeWord = WholeWordToggle.IsChecked == true;
+            bool useRegex = RegexToggle.IsChecked == true;
+
+            Regex? regex = null;
+            byte[]? pattern = null;
+            SearchOptions options = default;
+            if (useRegex)
+            {
+                try
+                {
+                    regex = BuildRegex(text, matchCase, wholeWord);
+                }
+                catch (ArgumentException)
+                {
+                    FindStatus.Text = "Invalid regex";
+                    FindCount.Text = string.Empty;
+                    countedKey = null;
+                    return;
+                }
+            }
+            else
+            {
+                options = new SearchOptions { IgnoreCase = !matchCase, WholeWord = wholeWord };
+                pattern = Encoding.UTF8.GetBytes(text);
+            }
+
+            RefreshMatchCount($"{useRegex}|{matchCase}|{wholeWord}|{text}", useRegex, pattern, options, regex);
+
+            if (useRegex)
+            {
+                await RunFindNextRegex(regex!);
+            }
+            else
+            {
+                await RunFindNextLiteral(text, pattern!, options);
+            }
+        }
+
+        // Forward literal byte search off the UI thread, honouring the case/whole-word options, progress and
+        // cancellation. The FindController decides where to start (past the last hit, or from the caret when
+        // the term changed or the previous search wrapped).
+        private async Task RunFindNextLiteral(string text, byte[] pattern, SearchOptions options)
+        {
             long start = find.PrepareForwardSearch(text, GetCaretAnchorOffset());
-            byte[] pattern = Encoding.UTF8.GetBytes(text);
 
             // Capture the provider so a concurrent file switch/close can be detected after the search and
             // its (stale) result ignored; the try/catch handles a torn-down read mid-search.
-            LineProvider activeProvider = provider;
+            LineProvider activeProvider = provider!;
 
             using var cts = new CancellationTokenSource();
             findCts = cts;
@@ -442,7 +496,7 @@ namespace FujiyNotepad.WinUI
             {
                 try
                 {
-                    await foreach (long m in searcher.Search(start, pattern, progress, token))
+                    await foreach (long m in searcher.Search(start, pattern, options, progress, token))
                     {
                         return (long?)m;
                     }
@@ -497,15 +551,166 @@ namespace FujiyNotepad.WinUI
             }
         }
 
-        private void SetFindBusy(bool busy)
+        // Forward line-scoped regex search. Only indexed lines are searched, so a match is always resolvable
+        // (no indexed-frontier guard needed). Runs off the UI thread; cancellation is checked between lines.
+        private async Task RunFindNextRegex(Regex regex)
+        {
+            (int startLine, int startChar) = regexFind.PrepareForwardSearch(FindBox.Text, GetCaretLineForFind(), 0);
+            LineProvider activeProvider = provider!;
+
+            using var cts = new CancellationTokenSource();
+            findCts = cts;
+            CancellationToken token = cts.Token;
+            SetFindBusy(true, indeterminate: true);
+
+            RegexLineSearcher.LineMatch? match = await Task.Run(() =>
+            {
+                try
+                {
+                    return new RegexLineSearcher(activeProvider).FindNext(regex, startLine, startChar, token);
+                }
+                catch (ObjectDisposedException)
+                {
+                    return (RegexLineSearcher.LineMatch?)null;
+                }
+            });
+
+            SetFindBusy(false);
+            findCts = null;
+
+            if (!ReferenceEquals(provider, activeProvider))
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested)
+            {
+                FindStatus.Text = "Cancelled";
+                return;
+            }
+
+            if (match is { } m)
+            {
+                regexFind.RecordMatch(m.LineIndex, m.CharStart);
+                View.SelectMatch(m.LineIndex, m.CharStart, m.CharLength);
+                FindStatus.Text = $"Ln {m.LineIndex + 1}";
+            }
+            else
+            {
+                regexFind.RecordNoMatch();
+                FindStatus.Text = "No matches";
+            }
+        }
+
+        // Builds the per-line regex for the current options: whole-word wraps the term in \b...\b, and
+        // match-case off adds IgnoreCase. Throws ArgumentException for an invalid pattern.
+        private static Regex BuildRegex(string text, bool matchCase, bool wholeWord)
+        {
+            RegexOptions options = RegexOptions.CultureInvariant;
+            if (!matchCase)
+            {
+                options |= RegexOptions.IgnoreCase;
+            }
+            string pattern = wholeWord ? $@"\b(?:{text})\b" : text;
+            return new Regex(pattern, options);
+        }
+
+        private int GetCaretLineForFind()
+        {
+            TextPosition caret = View.CaretPosition;
+            return (provider != null && caret.Line >= 0 && caret.Line < provider.LineCount) ? caret.Line : 0;
+        }
+
+        // Recomputes the total match count in the background whenever the term/options change, updating the
+        // count label. Each request cancels the previous one, and a result for a superseded key is dropped.
+        private async void RefreshMatchCount(string key, bool useRegex, byte[]? pattern, SearchOptions options, Regex? regex)
+        {
+            if (string.Equals(key, countedKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+            countedKey = key;
+            countCts?.Cancel();
+            using var cts = new CancellationTokenSource();
+            countCts = cts;
+            CancellationToken token = cts.Token;
+            LineProvider activeProvider = provider!;
+            FindCount.Text = "counting\u2026";
+
+            int count = await Task.Run(async () =>
+            {
+                try
+                {
+                    if (useRegex)
+                    {
+                        return new RegexLineSearcher(activeProvider).CountAll(regex!, null, token);
+                    }
+
+                    int n = 0;
+                    await foreach (long _ in searcher.Search(0, pattern!, options, null, token))
+                    {
+                        n++;
+                    }
+                    return n;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return -1;
+                }
+            });
+
+            if (ReferenceEquals(countCts, cts))
+            {
+                countCts = null;
+            }
+            if (token.IsCancellationRequested || !ReferenceEquals(provider, activeProvider)
+                || !string.Equals(key, countedKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            FindCount.Text = count < 0 ? string.Empty : count == 1 ? "1 match" : $"{count:N0} matches";
+        }
+
+        // Persists an option change, invalidates the find position and count, and re-runs the search so the
+        // user sees the effect immediately. Silenced while saved options are applied at startup.
+        private async void FindOption_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (suppressFindOptionEvents)
+            {
+                return;
+            }
+
+            settings.FindMatchCase = MatchCaseToggle.IsChecked == true;
+            settings.FindWholeWord = WholeWordToggle.IsChecked == true;
+            settings.FindUseRegex = RegexToggle.IsChecked == true;
+            settingsStore.Save(settings);
+
+            find.Reset();
+            regexFind.Reset();
+            countCts?.Cancel();
+            countedKey = null;
+            FindCount.Text = string.Empty;
+
+            if (FindBar.Visibility == Visibility.Visible && !string.IsNullOrEmpty(FindBox.Text))
+            {
+                await RunFindNext();
+            }
+        }
+
+        private void SetFindBusy(bool busy, bool indeterminate = false)
         {
             isFinding = busy;
             FindNextButton.IsEnabled = !busy;
             FindCancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
             FindProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            FindProgress.IsIndeterminate = busy && indeterminate;
             if (busy)
             {
-                FindProgress.Value = 0;
+                if (!indeterminate)
+                {
+                    FindProgress.Value = 0;
+                }
                 FindStatus.Text = "Searching\u2026";
             }
         }
@@ -547,6 +752,12 @@ namespace FujiyNotepad.WinUI
             int tab = settings.TabWidth is 2 or 4 or 8 ? settings.TabWidth : 4;
             View.TabSize = tab;
             (tab switch { 2 => TabWidth2, 8 => TabWidth8, _ => TabWidth4 }).IsChecked = true;
+
+            suppressFindOptionEvents = true;
+            MatchCaseToggle.IsChecked = settings.FindMatchCase;
+            WholeWordToggle.IsChecked = settings.FindWholeWord;
+            RegexToggle.IsChecked = settings.FindUseRegex;
+            suppressFindOptionEvents = false;
 
             if (settings.WindowWidth >= 320 && settings.WindowHeight >= 240)
             {
