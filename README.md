@@ -18,17 +18,23 @@ constant regardless of file size.
 ## Download
 
 Grab the latest build from the [Releases page](https://github.com/felipepessoto/FujiyNotepad/releases).
-Each release publishes a **self-contained** [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
-build for every Windows architecture — each bundles the .NET runtime **and** the Windows App SDK runtime,
-so you just unzip and run `FujiyNotepad.WinUI.exe` with **no prerequisites**, nothing to install:
+Pick the architecture for your PC — **x64** for most Intel/AMD machines, **arm64** for Windows on Arm
+(Snapdragon, Surface Pro X), or **x86** for 32-bit Windows — then choose one of two flavors:
 
-| Your PC | Download |
-| --- | --- |
-| Most desktops & laptops (Intel/AMD, 64-bit) | **`FujiyNotepad-<version>-win-x64.zip`** |
-| Windows on Arm (e.g. Snapdragon, Surface Pro X) | **`FujiyNotepad-<version>-win-arm64.zip`** |
-| 32-bit Windows | **`FujiyNotepad-<version>-win-x86.zip`** |
+**Standalone (recommended)** — `FujiyNotepad-<version>-win-<arch>.zip`
 
-The builds are unsigned, so Windows SmartScreen may warn on first run (*More info → Run anyway*).
+A **self-contained** [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/) build
+that bundles the .NET runtime **and** the Windows App SDK runtime. Unzip and run
+`FujiyNotepad.WinUI.exe` — **no prerequisites**, nothing to install (~50 MB).
+
+**Small** — `FujiyNotepad-<version>-win-<arch>-framework-dependent.zip`
+
+A much smaller download (~11 MB) that bundles nothing. It needs both of these installed first:
+
+- the [**.NET 10 Runtime**](https://dotnet.microsoft.com/download/dotnet/10.0) (the plain *.NET Runtime* is enough), and
+- the [**Windows App SDK Runtime**](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads) (the "Windows App Runtime" redistributable).
+
+Both flavors are unsigned, so Windows SmartScreen may warn on first run (*More info → Run anyway*).
 
 ## Features
 
@@ -52,7 +58,7 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 ## Requirements
 
 - Windows 10 (version 1809 / build 17763) or Windows 11 — **x64, Arm64, or x86**.
-- Released builds need **nothing** installed (self-contained Native AOT).
+- The **standalone** download needs nothing installed; the **small** (framework-dependent) download needs the .NET 10 Runtime and the Windows App SDK Runtime — see [Download](#download).
 - To build from source: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ## Build & run
