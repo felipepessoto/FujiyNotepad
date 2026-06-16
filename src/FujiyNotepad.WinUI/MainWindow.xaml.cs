@@ -1614,9 +1614,9 @@ namespace FujiyNotepad.WinUI
             string stored = string.IsNullOrEmpty(settings.HighlightRulesText)
                 ? HighlightRuleText.DefaultExample
                 : settings.HighlightRulesText;
-            // Display with Windows "\r\n" line breaks (stored as "\n"); together with assigning Text after
-            // AcceptsReturn below, this shows every rule.
-            string editorText = stored.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
+            // Normalize to "\n" (defensive against any stored "\r"); the TextBox renders "\n" breaks fine once
+            // it is multi-line, which it is because Text is assigned after AcceptsReturn below.
+            string editorText = stored.Replace("\r\n", "\n").Replace('\r', '\n');
 
             var editor = new TextBox
             {
