@@ -121,6 +121,9 @@ namespace FujiyNotepad.WinUI.Logic
         /// set). Painted under the Find highlight and the text, so a search still reads over a coloured line.
         /// </summary>
         public IReadOnlyList<RuleHighlightRect> RuleHighlights { get; init; }
+
+        /// <summary>True when this line is bookmarked (the gutter paints a marker for it).</summary>
+        public bool IsBookmarked { get; init; }
     }
 
     /// <summary>
@@ -160,6 +163,8 @@ namespace FujiyNotepad.WinUI.Logic
 
         private static readonly IReadOnlyList<RuleHighlightRect> NoRuleHighlights = Array.Empty<RuleHighlightRect>();
         private HighlightRuleSet? highlightRules;
+
+        private readonly BookmarkSet bookmarks = new();
 
         private bool showLineNumbers = false;
 
@@ -390,6 +395,7 @@ namespace FujiyNotepad.WinUI.Logic
             caret = anchor = new TextPosition(0, 0);
             desiredColumn = -1;
             columnsCache.Clear();
+            bookmarks.Clear(); // bookmarks are line indices into the previous file
             RaiseViewChanged();
             RaiseCaretChanged();
             RaiseRedraw();
@@ -425,6 +431,49 @@ namespace FujiyNotepad.WinUI.Logic
             RaiseBlinkReset();
             RaiseCaretChanged();
             RaiseRedraw();
+        }
+
+        // ----- Bookmarks (toggle on the caret line; jump next/previous with wrap-around) -----
+
+        /// <summary>Whether any line is bookmarked (lets the host enable/disable navigation commands).</summary>
+        public bool HasBookmarks => bookmarks.Count > 0;
+
+        /// <summary>Toggles the bookmark on the caret's line and redraws; returns true if it is now bookmarked.</summary>
+        public bool ToggleBookmarkAtCaret()
+        {
+            bool added = bookmarks.Toggle(caret.Line);
+            RaiseRedraw();
+            return added;
+        }
+
+        /// <summary>Moves the caret to the next bookmarked line (wrapping); no-op when there are no bookmarks.</summary>
+        public void GoToNextBookmark()
+        {
+            int? next = bookmarks.NextAfter(caret.Line);
+            if (next.HasValue)
+            {
+                GoToLine(next.Value);
+            }
+        }
+
+        /// <summary>Moves the caret to the previous bookmarked line (wrapping); no-op when there are none.</summary>
+        public void GoToPreviousBookmark()
+        {
+            int? prev = bookmarks.PreviousBefore(caret.Line);
+            if (prev.HasValue)
+            {
+                GoToLine(prev.Value);
+            }
+        }
+
+        /// <summary>Removes every bookmark and redraws.</summary>
+        public void ClearBookmarks()
+        {
+            if (bookmarks.Count > 0)
+            {
+                bookmarks.Clear();
+                RaiseRedraw();
+            }
         }
 
         /// <summary>
@@ -921,6 +970,7 @@ namespace FujiyNotepad.WinUI.Logic
                     CaretX = caretX,
                     Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns),
                     RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns),
+                    IsBookmarked = bookmarks.Count > 0 && bookmarks.Contains(lineIndex),
                 });
             }
 

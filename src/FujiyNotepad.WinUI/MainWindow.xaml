@@ -69,6 +69,23 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Toggle Bookmark" Click="ToggleBookmark_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="F2" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Next Bookmark" Click="NextBookmark_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F2" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Previous Bookmark" Click="PreviousBookmark_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Shift" Key="F2" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Clear All Bookmarks" Click="ClearBookmarks_Click" />
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem x:Name="StartIndexingItem" Text="Start indexing" Click="StartIndexing_Click" IsEnabled="False" />
                 <MenuFlyoutItem x:Name="StopIndexingItem" Text="Stop indexing" Click="StopIndexing_Click" IsEnabled="False" />
                 <MenuFlyoutSeparator />

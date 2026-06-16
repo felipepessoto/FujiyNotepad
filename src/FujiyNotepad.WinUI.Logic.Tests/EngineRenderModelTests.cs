@@ -341,6 +341,71 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.Empty(e.GetVisibleLines(hasFocus: false, caretVisible: false)[0].RuleHighlights);
         }
 
+        // ----- Bookmarks -----
+
+        [Fact]
+        public async Task ToggleBookmarkAtCaret_MarksTheCaretLineInTheRenderModel()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("LINE", 20), cw: 10, lh: 20, vw: 200, vh: 200);
+
+            e.GoToLine(3);
+            Assert.True(e.ToggleBookmarkAtCaret());   // now bookmarked
+            Assert.True(e.HasBookmarks);
+
+            e.GoToLine(0); // scroll to top so visible index == line index
+            IReadOnlyList<VisibleLine> lines = e.GetVisibleLines(hasFocus: false, caretVisible: false);
+            Assert.True(lines[3].IsBookmarked);
+            Assert.False(lines[2].IsBookmarked);
+
+            e.GoToLine(3);
+            Assert.False(e.ToggleBookmarkAtCaret());  // toggled off
+            Assert.False(e.HasBookmarks);
+        }
+
+        [Fact]
+        public async Task BookmarkNavigation_MovesCaretWithWrapAround()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("LINE", 20), cw: 10, lh: 20, vw: 200, vh: 200);
+            e.GoToLine(2); e.ToggleBookmarkAtCaret();
+            e.GoToLine(8); e.ToggleBookmarkAtCaret();
+
+            e.GoToLine(0);
+            e.GoToNextBookmark();
+            Assert.Equal(2, e.CaretPosition.Line);
+            e.GoToNextBookmark();
+            Assert.Equal(8, e.CaretPosition.Line);
+            e.GoToNextBookmark();                     // past the last -> wrap to first
+            Assert.Equal(2, e.CaretPosition.Line);
+            e.GoToPreviousBookmark();                 // before the first -> wrap to last
+            Assert.Equal(8, e.CaretPosition.Line);
+        }
+
+        [Fact]
+        public async Task ClearBookmarks_RemovesAll()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("LINE", 20), cw: 10, lh: 20, vw: 200, vh: 200);
+            e.GoToLine(3); e.ToggleBookmarkAtCaret();
+
+            e.ClearBookmarks();
+
+            Assert.False(e.HasBookmarks);
+            e.GoToLine(0);
+            Assert.False(e.GetVisibleLines(hasFocus: false, caretVisible: false)[3].IsBookmarked);
+        }
+
+        [Fact]
+        public async Task SetProvider_ClearsBookmarks()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("LINE", 20), cw: 10, lh: 20, vw: 200, vh: 200);
+            e.GoToLine(3); e.ToggleBookmarkAtCaret();
+            Assert.True(e.HasBookmarks);
+
+            LineProvider another = await TestData.BuildProviderAsync("a\nb\nc");
+            e.SetProvider(another);
+
+            Assert.False(e.HasBookmarks); // bookmarks are line indices into the previous file
+        }
+
         // ----- Selection statistics (status bar) -----
 
         [Fact]

@@ -47,6 +47,7 @@ namespace FujiyNotepad.WinUI.Controls
         private Color matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
         private Color gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
         private Color gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
+        private Color bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
 
         // Right margin (px) between a line number and the gutter's edge; mirrors the engine's gutter padding.
         private const double GutterRightMargin = 6d;
@@ -272,6 +273,21 @@ namespace FujiyNotepad.WinUI.Controls
 
         /// <summary>Sets (or clears, with null) the persistent highlight rules painted across the whole file.</summary>
         public void SetHighlightRules(HighlightRuleSet? rules) => engine.SetHighlightRules(rules);
+
+        /// <summary>Toggles a bookmark on the caret line; returns true if it is now bookmarked.</summary>
+        public bool ToggleBookmark() => engine.ToggleBookmarkAtCaret();
+
+        /// <summary>Moves the caret to the next bookmarked line (wrapping).</summary>
+        public void GoToNextBookmark() => engine.GoToNextBookmark();
+
+        /// <summary>Moves the caret to the previous bookmarked line (wrapping).</summary>
+        public void GoToPreviousBookmark() => engine.GoToPreviousBookmark();
+
+        /// <summary>Removes every bookmark.</summary>
+        public void ClearBookmarks() => engine.ClearBookmarks();
+
+        /// <summary>Whether any line is bookmarked.</summary>
+        public bool HasBookmarks => engine.HasBookmarks;
 
         /// <summary>Whether the line-number gutter is shown.</summary>
         public bool ShowLineNumbers
@@ -572,6 +588,15 @@ namespace FujiyNotepad.WinUI.Controls
 
             foreach (VisibleLine line in lines)
             {
+                if (line.IsBookmarked)
+                {
+                    // A small dot near the gutter's left edge (numbers are right-aligned, so this stays clear).
+                    float r = (float)Math.Min(lineHeight * 0.18, 4.0);
+                    float cx = r + 1.5f;
+                    float cy = (float)(line.Y + lineHeight / 2);
+                    ds.FillEllipse(cx, cy, r, r, bookmarkColor);
+                }
+
                 string number = (line.LineIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 float x = (float)(gutterWidth - GutterRightMargin - number.Length * charWidth);
                 ds.DrawText(number, new Vector2(x, (float)line.Y), gutterTextColor, textFormat);
@@ -604,6 +629,7 @@ namespace FujiyNotepad.WinUI.Controls
                 matchHighlightColor = Color.FromArgb(255, 0x66, 0x51, 0x18);
                 gutterTextColor = Color.FromArgb(255, 0x85, 0x85, 0x85);
                 gutterSeparatorColor = Color.FromArgb(255, 0x33, 0x33, 0x33);
+                bookmarkColor = Color.FromArgb(255, 0x4F, 0xA3, 0xE3);
             }
             else
             {
@@ -614,6 +640,7 @@ namespace FujiyNotepad.WinUI.Controls
                 matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
                 gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
                 gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
+                bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
             }
 
             canvas?.Invalidate();

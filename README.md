@@ -58,6 +58,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   whole file — e.g. `ERROR` red and `WARN` amber — with literal or **regex** rules, **per-rule colours**
   (names or hex), and an optional case-sensitive flag. Rules are edited as text, **persist across sessions**,
   and apply on top of the filter view. Distinct from Find (which highlights the current search term only).
+- **Bookmarks**: toggle a bookmark on the caret line (`Ctrl+F2`) and jump to the next / previous one
+  (`F2` / `Shift+F2`, wrapping around), to flag points of interest in a large file. Bookmarked lines show a
+  dot in the line-number gutter (*View ▸ Line Numbers*); *Edit ▸ Clear All Bookmarks* removes them.
 - **Character encoding**: auto-detects **UTF-8**, **UTF-16** (LE/BE) and **UTF-32** (LE/BE) from the
   byte-order mark or a heuristic, with **Windows-1252 (ANSI)** as a fallback, so Windows logs and
   exports don't render as mojibake. The *Encoding* menu shows the detection and lets you override it.
