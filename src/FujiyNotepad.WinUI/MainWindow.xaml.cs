@@ -1714,6 +1714,29 @@ namespace FujiyNotepad.WinUI
             View.FocusCanvas();
         }
 
+        private void Theme_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is RadioMenuFlyoutItem item && item.Tag is string theme)
+            {
+                settings.Theme = theme;
+                settingsStore.Save(settings);
+                ApplyThemeSetting(theme);
+                View.FocusCanvas();
+            }
+        }
+
+        // Applies the theme override to the window's root element (System = follow the OS). The text canvas
+        // repaints from its resolved ActualTheme, which RequestedTheme drives, so the whole UI re-themes.
+        private void ApplyThemeSetting(string theme)
+        {
+            RootGrid.RequestedTheme = theme switch
+            {
+                "Light" => ElementTheme.Light,
+                "Dark" => ElementTheme.Dark,
+                _ => ElementTheme.Default,
+            };
+        }
+
         // Parses the persisted rules text and pushes the compiled rule set to the view (null when there are
         // none, so the engine skips the per-line work). Called on startup and whenever the rules are edited.
         private void ApplyHighlightRules()
@@ -1870,6 +1893,12 @@ namespace FujiyNotepad.WinUI
 
             WhitespaceToggle.IsChecked = settings.ShowWhitespace;
             View.ShowWhitespace = settings.ShowWhitespace;
+
+            string theme = settings.Theme is "Light" or "Dark" ? settings.Theme : "System";
+            ThemeSystem.IsChecked = theme == "System";
+            ThemeLight.IsChecked = theme == "Light";
+            ThemeDark.IsChecked = theme == "Dark";
+            ApplyThemeSetting(theme);
 
             ApplyHighlightRules();
 
