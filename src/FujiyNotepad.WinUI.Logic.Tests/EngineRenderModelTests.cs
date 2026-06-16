@@ -489,5 +489,25 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.Equal(-1, stats.Characters); // too large to count cheaply
             Assert.Equal(6000, stats.Lines);
         }
+
+        // ----- Copy with line numbers -----
+
+        [Fact]
+        public async Task BuildCopyTextWithLineNumbers_NoSelection_CopiesCaretLine()
+        {
+            TextLayoutEngine e = await NewEngineAsync("alpha\nbeta\ngamma", cw: 10, lh: 20);
+            e.GoToLine(1); // caret on "beta" (line index 1 -> number 2), no selection
+
+            Assert.Equal("2: beta", e.BuildCopyTextWithLineNumbers());
+        }
+
+        [Fact]
+        public async Task BuildCopyTextWithLineNumbers_SelectAll_NumbersEveryLine()
+        {
+            TextLayoutEngine e = await NewEngineAsync("alpha\nbeta", cw: 10, lh: 20);
+            e.HandleKey(NavKey.SelectAll, shift: false);
+
+            Assert.Equal("1: alpha\r\n2: beta", e.BuildCopyTextWithLineNumbers());
+        }
     }
 }

@@ -294,6 +294,8 @@ namespace FujiyNotepad.WinUI
             EditMenu.IsEnabled = true;
             EncodingMenu.IsEnabled = true;
             ReloadItem.IsEnabled = true;
+            CopyPathItem.IsEnabled = true;
+            RevealItem.IsEnabled = true;
             UpdateEncodingUi();
             RefreshCharacterCount();
             UpdateLineEndingLabel();
@@ -790,6 +792,58 @@ namespace FujiyNotepad.WinUI
             View.ClearBookmarks();
             RefreshMarkerMargin();
             View.FocusCanvas();
+        }
+
+        // ----- Quick clipboard / file actions -----
+
+        private void CopyWithLineNumbers_Click(object sender, RoutedEventArgs e)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+            View.CopySelectionWithLineNumbers();
+            View.FocusCanvas();
+        }
+
+        private void CopyFilePath_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(currentFilePath))
+            {
+                return;
+            }
+            try
+            {
+                var package = new DataPackage();
+                package.SetText(currentFilePath);
+                Clipboard.SetContent(package);
+            }
+            catch (Exception)
+            {
+                // Best-effort: the clipboard can be transiently locked by another process.
+            }
+        }
+
+        private void RevealInExplorer_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(currentFilePath) || !File.Exists(currentFilePath))
+            {
+                return;
+            }
+            try
+            {
+                // Open the containing folder with the file selected.
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"/select,\"{currentFilePath}\"",
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception)
+            {
+                // Best-effort: launching Explorer can fail (e.g. policy); never crash the app.
+            }
         }
 
         // Paints the scrollbar marker margin: find-match ticks (orange, under) and bookmark ticks (blue, on top).
