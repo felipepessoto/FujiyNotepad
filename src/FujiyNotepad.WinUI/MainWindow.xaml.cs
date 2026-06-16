@@ -739,6 +739,48 @@ namespace FujiyNotepad.WinUI
             FindBox.SelectAll();
         }
 
+        // ----- Bookmarks (toggle on the caret line; jump next/previous, both wrap around) -----
+
+        private void ToggleBookmark_Click(object sender, RoutedEventArgs e)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+            View.ToggleBookmark();
+            View.FocusCanvas();
+        }
+
+        private void NextBookmark_Click(object sender, RoutedEventArgs e)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+            View.GoToNextBookmark();
+            View.FocusCanvas();
+        }
+
+        private void PreviousBookmark_Click(object sender, RoutedEventArgs e)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+            View.GoToPreviousBookmark();
+            View.FocusCanvas();
+        }
+
+        private void ClearBookmarks_Click(object sender, RoutedEventArgs e)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+            View.ClearBookmarks();
+            View.FocusCanvas();
+        }
+
         // ----- Filter / grep view (show only matching lines) -----
 
         private void Filter_Click(object sender, RoutedEventArgs e)
