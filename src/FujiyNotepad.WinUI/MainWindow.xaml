@@ -72,6 +72,8 @@
                         <KeyboardAccelerator Modifiers="Control,Shift" Key="F" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutItem x:Name="CopyMatchingItem" Text="Copy Matching Lines" Click="CopyMatchingLines_Click" IsEnabled="False" />
+                <MenuFlyoutItem x:Name="SaveMatchingItem" Text="Save Matching Lines As..." Click="SaveMatchingLines_Click" IsEnabled="False" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Toggle Bookmark" Click="ToggleBookmark_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>

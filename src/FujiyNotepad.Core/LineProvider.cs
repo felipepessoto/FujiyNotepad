@@ -22,6 +22,10 @@ namespace FujiyNotepad.Core
         private readonly long fileSize;
         private readonly bool endsWithNewline;
         private readonly Dictionary<int, string> cache = new();
+        // The cache is the only mutable shared state: viewport rendering (UI thread) and the filter scan /
+        // matching-line export (background threads) all call GetLine concurrently, and the underlying
+        // positional byte reads are thread-safe, so this lock just keeps the dictionary itself consistent.
+        private readonly object cacheLock = new();
 
         public LineProvider(IByteSource source, LineIndexer indexer, TextEncoding? encoding = null)
         {
@@ -78,18 +82,26 @@ namespace FujiyNotepad.Core
         /// <summary>Returns the decoded text of line <paramref name="lineIndex"/> (0-based), without its terminator.</summary>
         public string GetLine(int lineIndex)
         {
-            if (cache.TryGetValue(lineIndex, out string? cached))
+            lock (cacheLock)
             {
-                return cached;
+                if (cache.TryGetValue(lineIndex, out string? cached))
+                {
+                    return cached;
+                }
             }
 
+            // Decode outside the lock: ReadLine only does positional (thread-safe) reads and touches no
+            // shared mutable state, so concurrent callers can decode different lines in parallel.
             string text = ReadLine(lineIndex);
 
-            if (cache.Count >= MaxCachedLines)
+            lock (cacheLock)
             {
-                cache.Clear();
+                if (cache.Count >= MaxCachedLines)
+                {
+                    cache.Clear();
+                }
+                cache[lineIndex] = text;
             }
-            cache[lineIndex] = text;
             return text;
         }
 

@@ -54,7 +54,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   so you can see where they are across the whole file), with a progress bar and cancel.
 - **Filter / grep view** (`Ctrl+Shift+F`): show only the lines that contain a term (or match a regular
   expression), with **match case** and **regex** options, so you can sift a huge log down to what matters;
-  clear the filter to return to the full file.
+  clear the filter to return to the full file. While filtering, *Edit ▸ Copy Matching Lines* and
+  *Edit ▸ Save Matching Lines As…* export just the matching lines — the GUI equivalent of
+  `grep PATTERN file > out.txt` (copy is size-capped; save is streamed and uncapped, in UTF-8).
 - **Persistent highlight rules** (*View ▸ Highlight Rules…*): colour matching text by pattern across the
   whole file — e.g. `ERROR` red and `WARN` amber — with literal or **regex** rules, **per-rule colours**
   (names or hex), and an optional case-sensitive flag. Rules are edited as text, **persist across sessions**,

@@ -13,9 +13,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.Windows.Storage.Pickers;
 using Windows.Graphics;
 using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace FujiyNotepad.WinUI
@@ -147,15 +147,13 @@ namespace FujiyNotepad.WinUI
 
         private async void Open_Click(object sender, RoutedEventArgs e)
         {
-            var picker = new FileOpenPicker();
-            nint hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-            picker.FileTypeFilter.Add("*");
-
-            Windows.Storage.StorageFile? file = await picker.PickSingleFileAsync();
-            if (file != null)
+            // Modern Windows App SDK desktop picker (constructed from the window id; Native-AOT safe). The
+            // legacy Windows.Storage.Pickers.FileOpenPicker required the InitializeWithWindow interop hack.
+            var picker = new FileOpenPicker(AppWindow.Id);
+            PickFileResult? result = await picker.PickSingleFileAsync();
+            if (result is not null && !string.IsNullOrEmpty(result.Path))
             {
-                await OpenFile(file.Path);
+                await OpenFile(result.Path);
             }
         }
 
@@ -1020,6 +1018,8 @@ namespace FujiyNotepad.WinUI
 
             filteredSource = new FilteredLineSource(activeProvider, matches);
             View.SetProvider(filteredSource);
+            CopyMatchingItem.IsEnabled = true;
+            SaveMatchingItem.IsEnabled = true;
             FilterStatus.Text = capped
                 ? $"{matches.Count:N0} matching lines (capped)"
                 : $"{matches.Count:N0} matching lines";
@@ -1033,6 +1033,8 @@ namespace FujiyNotepad.WinUI
             filterCts?.Cancel();
             filterCts = null;
             filteredSource = null;
+            CopyMatchingItem.IsEnabled = false;
+            SaveMatchingItem.IsEnabled = false;
             FilterStatus.Text = string.Empty;
             FilterBar.Visibility = Visibility.Collapsed;
         }
@@ -1047,6 +1049,85 @@ namespace FujiyNotepad.WinUI
                 View.SetProvider(provider);
                 LblStatus.Text = $"{provider.LineCount:N0} lines";
                 RefreshMarkerMargin(); // the filter cleared bookmarks, so clear their ticks too
+            }
+        }
+
+        // Copies just the matching (filtered) lines to the clipboard — the GUI equivalent of piping grep's
+        // output. The set can be large, so it is gathered off the UI thread and capped to a bounded string.
+        private async void CopyMatchingLines_Click(object sender, RoutedEventArgs e)
+        {
+            FilteredLineSource? lines = filteredSource;
+            if (lines is null)
+            {
+                return;
+            }
+
+            FilterStatus.Text = "Copying\u2026";
+            try
+            {
+                (string text, int lineCount, bool truncated) =
+                    await Task.Run(() => MatchingLinesExporter.BuildClipboardText(lines));
+
+                var package = new DataPackage();
+                package.SetText(text);
+                Clipboard.SetContent(package);
+
+                FilterStatus.Text = truncated
+                    ? $"Copied first {lineCount:N0} matching lines (capped)"
+                    : $"Copied {lineCount:N0} matching lines";
+            }
+            catch (Exception)
+            {
+                // Best-effort: the clipboard can be transiently locked by another process.
+                FilterStatus.Text = "Copy failed";
+            }
+        }
+
+        // Saves the matching (filtered) lines to a file - the GUI equivalent of "grep PATTERN file > out.txt".
+        // Streamed and uncapped, in UTF-8, off the UI thread so an arbitrarily large match set stays responsive.
+        private async void SaveMatchingLines_Click(object sender, RoutedEventArgs e)
+        {
+            FilteredLineSource? lines = filteredSource;
+            if (lines is null)
+            {
+                return;
+            }
+
+            // Modern Windows App SDK desktop picker: constructed from the window id (no InitializeWithWindow)
+            // and Native-AOT safe. The legacy Windows.Storage.Pickers.FileSavePicker can't be used here - its
+            // FileTypeChoices requires a managed List<string>, which CsWinRT can't marshal into WinRT under AOT,
+            // so the picker throws before it ever shows. We set a default extension instead of FileTypeChoices
+            // to avoid handing any managed collection across the WinRT boundary.
+            var picker = new FileSavePicker(AppWindow.Id)
+            {
+                SuggestedFileName = string.IsNullOrEmpty(currentFilePath)
+                    ? "filtered-lines"
+                    : Path.GetFileNameWithoutExtension(currentFilePath) + "-filtered",
+                DefaultFileExtension = ".txt",
+            };
+
+            PickFileResult? result = await picker.PickSaveFileAsync();
+            if (result is null || string.IsNullOrEmpty(result.Path))
+            {
+                return;
+            }
+
+            string path = result.Path;
+            FilterStatus.Text = "Saving\u2026";
+            try
+            {
+                await Task.Run(() =>
+                {
+                    // UTF-8 without BOM: faithful to the decoded text and broadly compatible, regardless of
+                    // the source file's own encoding.
+                    using var writer = new StreamWriter(path, append: false, new UTF8Encoding(false));
+                    MatchingLinesExporter.Write(lines, writer);
+                });
+                FilterStatus.Text = $"Saved {lines.LineCount:N0} matching lines";
+            }
+            catch (Exception)
+            {
+                FilterStatus.Text = "Save failed";
             }
         }
 
