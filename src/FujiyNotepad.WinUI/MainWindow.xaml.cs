@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using FujiyNotepad.Core;
 using FujiyNotepad.WinUI.Controls;
-using FujiyNotepad.WinUI.Logic;
+using FujiyNotepad.Presentation;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Dispatching;

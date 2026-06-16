@@ -7,7 +7,7 @@
     Launches the *published* WinUI app on a sample file and drives it through Windows UI Automation to
     assert the app-layer glue works end to end: the XAML loads, the window and menus render, the file opens
     and the status bar populates, the Find bar wires up, and the process does not crash. This is the one
-    layer the FujiyNotepad.Core / FujiyNotepad.WinUI.Logic unit tests cannot cover (it needs a real desktop
+    layer the FujiyNotepad.Core / FujiyNotepad.Presentation unit tests cannot cover (it needs a real desktop
     session and a built app), so it runs as a dedicated CI job rather than via `dotnet test`.
 
     It targets the published Native-AOT executable on purpose: this app's nastiest regressions (e.g. the

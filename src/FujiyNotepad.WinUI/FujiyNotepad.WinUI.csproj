@@ -70,7 +70,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FujiyNotepad.Core\FujiyNotepad.Core.csproj" />
-    <ProjectReference Include="..\FujiyNotepad.WinUI.Logic\FujiyNotepad.WinUI.Logic.csproj" />
+    <ProjectReference Include="..\FujiyNotepad.Presentation\FujiyNotepad.Presentation.csproj" />
   </ItemGroup>
 
   <!--
