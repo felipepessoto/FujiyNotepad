@@ -98,6 +98,7 @@
             </MenuBarItem>
             <MenuBarItem x:Name="ViewMenu" Title="View">
                 <ToggleMenuFlyoutItem x:Name="LineNumbersToggle" Text="Line Numbers" Click="LineNumbers_Click" />
+                <ToggleMenuFlyoutItem x:Name="WhitespaceToggle" Text="Show Whitespace" Click="Whitespace_Click" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Zoom In" Click="ZoomIn_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>

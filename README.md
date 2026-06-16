@@ -63,6 +63,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   (`F2` / `Shift+F2`, wrapping around), to flag points of interest in a large file. Bookmarked lines show a
   dot in the line-number gutter (*View ▸ Line Numbers*) and a **tick on the scrollbar** so you can see where
   they are at a glance; *Edit ▸ Clear All Bookmarks* removes them.
+- **Show whitespace** (*View ▸ Show Whitespace*): overlay faint markers for **spaces** (dots), **tabs**
+  (arrows) and other **control characters** (boxes), with **trailing** whitespace emphasized, for inspecting
+  log/data files where exact spacing matters.
 - **Character encoding**: auto-detects **UTF-8**, **UTF-16** (LE/BE) and **UTF-32** (LE/BE) from the
   byte-order mark or a heuristic, with **Windows-1252 (ANSI)** as a fallback, so Windows logs and
   exports don't render as mojibake. The *Encoding* menu shows the detection and lets you override it.

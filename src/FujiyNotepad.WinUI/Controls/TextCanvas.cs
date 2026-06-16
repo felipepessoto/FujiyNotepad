@@ -48,6 +48,9 @@ namespace FujiyNotepad.WinUI.Controls
         private Color gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
         private Color gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
         private Color bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
+        private Color whitespaceColor = Color.FromArgb(120, 0x80, 0x80, 0x80);
+        private Color trailingWhitespaceColor = Color.FromArgb(180, 0xE0, 0x6C, 0x6C);
+        private Color controlCharColor = Color.FromArgb(180, 0xE0, 0x6C, 0x6C);
 
         // Right margin (px) between a line number and the gutter's edge; mirrors the engine's gutter padding.
         private const double GutterRightMargin = 6d;
@@ -297,6 +300,12 @@ namespace FujiyNotepad.WinUI.Controls
         {
             get => engine.ShowLineNumbers;
             set => engine.ShowLineNumbers = value;
+        }
+
+        public bool ShowWhitespace
+        {
+            get => engine.ShowWhitespace;
+            set => engine.ShowWhitespace = value;
         }
 
         public void FocusCanvas() => Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
@@ -565,6 +574,11 @@ namespace FujiyNotepad.WinUI.Controls
 
                 ds.DrawText(line.Display, new Vector2((float)line.TextX, (float)line.Y), textColor, textFormat);
 
+                if (line.Whitespace is { Count: > 0 })
+                {
+                    DrawWhitespaceMarkers(ds, line);
+                }
+
                 if (line.HasCaret)
                 {
                     ds.FillRectangle((float)line.CaretX, (float)line.Y, 1.0f, (float)lineHeight, caretColor);
@@ -572,6 +586,45 @@ namespace FujiyNotepad.WinUI.Controls
             }
 
             DrawGutter(ds, sender, lines);
+        }
+
+        // Overlays faint markers for spaces (dot), tabs (arrow) and other control chars (box) when
+        // "Show Whitespace" is on; trailing space/tab runs use a more visible colour so they stand out.
+        private void DrawWhitespaceMarkers(CanvasDrawingSession ds, VisibleLine line)
+        {
+            float cw = (float)charWidth;
+            float h = (float)lineHeight;
+            float midY = (float)line.Y + h / 2f;
+
+            foreach (WhitespaceMarker m in line.Whitespace)
+            {
+                float x = (float)line.TextX + m.Column * cw;
+                Windows.UI.Color color = m.Trailing ? trailingWhitespaceColor : whitespaceColor;
+
+                switch (m.Kind)
+                {
+                    case WhitespaceKind.Space:
+                        float r = Math.Max(1f, cw * 0.08f);
+                        ds.FillEllipse(x + cw / 2f, midY, r, r, color);
+                        break;
+
+                    case WhitespaceKind.Tab:
+                        float w = m.Width * cw;
+                        float x0 = x + 2f;
+                        float x1 = x + w - 2f;
+                        if (x1 > x0)
+                        {
+                            ds.DrawLine(x0, midY, x1, midY, color, 1f);
+                            ds.DrawLine(x1 - 3f, midY - 3f, x1, midY, color, 1f); // arrowhead
+                            ds.DrawLine(x1 - 3f, midY + 3f, x1, midY, color, 1f);
+                        }
+                        break;
+
+                    case WhitespaceKind.Control:
+                        ds.DrawRectangle(x + 1f, (float)line.Y + 2f, cw - 2f, h - 4f, controlCharColor, 1f);
+                        break;
+                }
+            }
         }
 
         // Draws the line-number gutter on top of the text (its opaque background masks any text scrolled under
@@ -633,6 +686,9 @@ namespace FujiyNotepad.WinUI.Controls
                 gutterTextColor = Color.FromArgb(255, 0x85, 0x85, 0x85);
                 gutterSeparatorColor = Color.FromArgb(255, 0x33, 0x33, 0x33);
                 bookmarkColor = Color.FromArgb(255, 0x4F, 0xA3, 0xE3);
+                whitespaceColor = Color.FromArgb(130, 0x9A, 0x9A, 0x9A);
+                trailingWhitespaceColor = Color.FromArgb(200, 0xE6, 0x7C, 0x7C);
+                controlCharColor = Color.FromArgb(200, 0xE6, 0x7C, 0x7C);
             }
             else
             {
@@ -644,6 +700,9 @@ namespace FujiyNotepad.WinUI.Controls
                 gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
                 gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
                 bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
+                whitespaceColor = Color.FromArgb(120, 0x80, 0x80, 0x80);
+                trailingWhitespaceColor = Color.FromArgb(180, 0xD0, 0x40, 0x40);
+                controlCharColor = Color.FromArgb(180, 0xD0, 0x40, 0x40);
             }
 
             canvas?.Invalidate();

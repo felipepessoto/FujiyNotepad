@@ -406,6 +406,27 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.False(e.HasBookmarks); // bookmarks are line indices into the previous file
         }
 
+        // ----- Whitespace / control-character markers -----
+
+        [Fact]
+        public async Task ShowWhitespace_PopulatesMarkersOnlyWhenOn()
+        {
+            TextLayoutEngine e = await NewEngineAsync("a b\tc", cw: 10, lh: 20, vw: 400, vh: 100);
+
+            // Off by default -> no markers.
+            Assert.Empty(e.GetVisibleLines(hasFocus: false, caretVisible: false)[0].Whitespace);
+
+            e.ShowWhitespace = true;
+            IReadOnlyList<WhitespaceMarker> ws = e.GetVisibleLines(hasFocus: false, caretVisible: false)[0].Whitespace;
+
+            // One space + one tab.
+            Assert.Contains(ws, m => m.Kind == WhitespaceKind.Space);
+            Assert.Contains(ws, m => m.Kind == WhitespaceKind.Tab);
+
+            e.ShowWhitespace = false;
+            Assert.Empty(e.GetVisibleLines(hasFocus: false, caretVisible: false)[0].Whitespace);
+        }
+
         // ----- Selection statistics (status bar) -----
 
         [Fact]

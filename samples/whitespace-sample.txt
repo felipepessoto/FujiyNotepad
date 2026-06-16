@@ -1,0 +1,7 @@
+function foo() {
+	indented with a tab
+trailing spaces follow this   
+		double tab, then text
+mixed	tab and trailing spaces  
+}
+no whitespace markers on this line

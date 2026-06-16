@@ -1706,6 +1706,14 @@ namespace FujiyNotepad.WinUI
             settingsStore.Save(settings);
         }
 
+        private void Whitespace_Click(object sender, RoutedEventArgs e)
+        {
+            View.ShowWhitespace = WhitespaceToggle.IsChecked;
+            settings.ShowWhitespace = WhitespaceToggle.IsChecked;
+            settingsStore.Save(settings);
+            View.FocusCanvas();
+        }
+
         // Parses the persisted rules text and pushes the compiled rule set to the view (null when there are
         // none, so the engine skips the per-line work). Called on startup and whenever the rules are edited.
         private void ApplyHighlightRules()
@@ -1859,6 +1867,9 @@ namespace FujiyNotepad.WinUI
 
             LineNumbersToggle.IsChecked = settings.ShowLineNumbers;
             View.ShowLineNumbers = settings.ShowLineNumbers;
+
+            WhitespaceToggle.IsChecked = settings.ShowWhitespace;
+            View.ShowWhitespace = settings.ShowWhitespace;
 
             ApplyHighlightRules();
 

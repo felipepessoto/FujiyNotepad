@@ -124,6 +124,12 @@ namespace FujiyNotepad.WinUI.Logic
 
         /// <summary>True when this line is bookmarked (the gutter paints a marker for it).</summary>
         public bool IsBookmarked { get; init; }
+
+        /// <summary>
+        /// Whitespace/control markers to overlay on this line (empty unless "Show Whitespace" is on). Each gives
+        /// a display column, width, kind (space/tab/control) and whether it is part of the trailing run.
+        /// </summary>
+        public IReadOnlyList<WhitespaceMarker> Whitespace { get; init; }
     }
 
     /// <summary>
@@ -164,9 +170,12 @@ namespace FujiyNotepad.WinUI.Logic
         private static readonly IReadOnlyList<RuleHighlightRect> NoRuleHighlights = Array.Empty<RuleHighlightRect>();
         private HighlightRuleSet? highlightRules;
 
+        private static readonly IReadOnlyList<WhitespaceMarker> NoWhitespace = Array.Empty<WhitespaceMarker>();
+
         private readonly BookmarkSet bookmarks = new();
 
         private bool showLineNumbers = false;
+        private bool showWhitespace = false;
 
         private ILineSource? provider;
         private int totalLines;
@@ -262,6 +271,23 @@ namespace FujiyNotepad.WinUI.Logic
                 {
                     showLineNumbers = value;
                     RaiseViewChanged();
+                    RaiseRedraw();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Whether whitespace/control markers (space dots, tab arrows, trailing emphasis, control boxes) are
+        /// overlaid on the rendered text. Pure overlay - it doesn't change layout, only requests a redraw.
+        /// </summary>
+        public bool ShowWhitespace
+        {
+            get => showWhitespace;
+            set
+            {
+                if (value != showWhitespace)
+                {
+                    showWhitespace = value;
                     RaiseRedraw();
                 }
             }
@@ -974,6 +1000,7 @@ namespace FujiyNotepad.WinUI.Logic
                     Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns),
                     RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns),
                     IsBookmarked = bookmarks.Count > 0 && bookmarks.Contains(lineIndex),
+                    Whitespace = showWhitespace ? WhitespaceMarkers.Compute(columns) : NoWhitespace,
                 });
             }
 
