@@ -16,7 +16,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid KeyboardAcceleratorPlacementMode="Hidden" AllowDrop="True"
+    <Grid x:Name="RootGrid" KeyboardAcceleratorPlacementMode="Hidden" AllowDrop="True"
           DragOver="Root_DragOver" Drop="Root_Drop">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F3" Invoked="FindNextAccelerator_Invoked" />
@@ -122,6 +122,11 @@
                     <RadioMenuFlyoutItem x:Name="FontCascadiaCode" Text="Cascadia Code" GroupName="Font" Tag="Cascadia Code" Click="Font_Click" />
                     <RadioMenuFlyoutItem x:Name="FontCourierNew" Text="Courier New" GroupName="Font" Tag="Courier New" Click="Font_Click" />
                     <RadioMenuFlyoutItem x:Name="FontLucidaConsole" Text="Lucida Console" GroupName="Font" Tag="Lucida Console" Click="Font_Click" />
+                </MenuFlyoutSubItem>
+                <MenuFlyoutSubItem Text="Theme">
+                    <RadioMenuFlyoutItem x:Name="ThemeSystem" Text="System" GroupName="Theme" Tag="System" Click="Theme_Click" />
+                    <RadioMenuFlyoutItem x:Name="ThemeLight" Text="Light" GroupName="Theme" Tag="Light" Click="Theme_Click" />
+                    <RadioMenuFlyoutItem x:Name="ThemeDark" Text="Dark" GroupName="Theme" Tag="Dark" Click="Theme_Click" />
                 </MenuFlyoutSubItem>
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Highlight Rules..." Click="HighlightRules_Click" />

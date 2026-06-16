@@ -21,6 +21,9 @@ namespace FujiyNotepad.WinUI.Logic
         /// <summary>Whether whitespace/control markers are overlaid on the text. Off by default.</summary>
         public bool ShowWhitespace { get; set; }
 
+        /// <summary>App theme override: "System" (default), "Light", or "Dark".</summary>
+        public string Theme { get; set; } = "System";
+
         /// <summary>Last window width in physical pixels; 0 means "unset, use the default size".</summary>
         public int WindowWidth { get; set; }
 
