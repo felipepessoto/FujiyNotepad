@@ -30,11 +30,15 @@
 
         <MenuBar Grid.Row="0">
             <MenuBarItem Title="File">
-                <MenuFlyoutItem Text="Open..." Click="Open_Click" />
+                <MenuFlyoutItem Text="Open..." Click="Open_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="O" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutItem Text="Open Sample" Click="OpenSample_Click" />
                 <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent" />
                 <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="Exit" Click="Exit_Click" />
+                <MenuFlyoutItem Text="Exit" Click="Exit_Click" KeyboardAcceleratorTextOverride="Alt+F4" />
             </MenuBarItem>
             <MenuBarItem x:Name="EditMenu" Title="Edit" IsEnabled="False">
                 <MenuFlyoutItem Text="Go To Line..." Click="GoTo_Click">
