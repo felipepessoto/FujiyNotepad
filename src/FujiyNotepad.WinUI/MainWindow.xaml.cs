@@ -282,6 +282,7 @@ namespace FujiyNotepad.WinUI
             ReloadItem.IsEnabled = true;
             UpdateEncodingUi();
             RefreshCharacterCount();
+            UpdateLineEndingLabel();
             StartWatchingFile(path);
 
             if (addToRecent)
@@ -413,6 +414,15 @@ namespace FujiyNotepad.WinUI
             EncUtf32Le.IsChecked = !encodingAutoDetect && currentEncoding.Id == "utf-32le";
             EncUtf32Be.IsChecked = !encodingAutoDetect && currentEncoding.Id == "utf-32be";
             EncWindows1252.IsChecked = !encodingAutoDetect && currentEncoding.Id == "windows-1252";
+        }
+
+        // Shows the file's newline convention (LF / CRLF / Mixed) in the status bar, detected from a leading
+        // sample in the current encoding. Blank when no newline is found or no file is open.
+        private void UpdateLineEndingLabel()
+        {
+            LblLineEnding.Text = source is null
+                ? string.Empty
+                : LineEndingDetector.ToLabel(LineEndingDetector.Detect(source, currentEncoding));
         }
 
         private void StartIndexing()
