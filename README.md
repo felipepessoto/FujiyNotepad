@@ -36,6 +36,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   lines currently on screen, reading each on demand.
 - **Open a file** by dragging it onto the window, from *File ▸ Open* (`Ctrl+O`), or via a command-line
   argument / file association; recently opened files appear under *File ▸ Open Recent*.
+- **Open several files at once** — *File ▸ New Window* (`Ctrl+N`) opens another viewer window, and
+  *File ▸ Open in New Window* (`Ctrl+Shift+O`) opens a chosen file in its own window, so logs can be
+  compared side by side.
 - **Reload** the open file (`F5`, or *File ▸ Reload*) to pick up on-disk changes, keeping the scroll
   position; when the file changes underneath you, a non-blocking **"file changed on disk"** hint
   appears in the status bar so you can reload on demand (handy for growing logs).

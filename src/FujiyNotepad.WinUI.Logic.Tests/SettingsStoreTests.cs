@@ -65,5 +65,26 @@ namespace FujiyNotepad.WinUI.Logic.Tests
                 File.Delete(path);
             }
         }
+
+        [Fact]
+        public void Save_OverwritesAtomically_LeavingNoTempFiles()
+        {
+            string path = TempPath();
+            string dir = Path.GetDirectoryName(path)!;
+            try
+            {
+                var store = new SettingsStore(path);
+                store.Save(new AppSettings { TabWidth = 2 });
+                store.Save(new AppSettings { TabWidth = 8 }); // overwrite an existing file
+
+                Assert.Equal(8, store.Load().TabWidth);
+                // The atomic save writes to "<path>.<guid>.tmp" then moves it into place; none must linger.
+                Assert.Empty(Directory.GetFiles(dir, Path.GetFileName(path) + ".*.tmp"));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
     }
 }

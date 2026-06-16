@@ -63,8 +63,21 @@ namespace FujiyNotepad.WinUI.Logic
                     Directory.CreateDirectory(dir);
                 }
 
-                File.WriteAllText(filePath,
-                    JsonSerializer.Serialize(settings, SettingsJsonContext.Default.AppSettings));
+                string json = JsonSerializer.Serialize(settings, SettingsJsonContext.Default.AppSettings);
+
+                // Write to a unique temp file then atomically replace, so a concurrent save from another
+                // window (the app can have several open) can never leave a half-written settings file.
+                string tempPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+                try
+                {
+                    File.WriteAllText(tempPath, json);
+                    File.Move(tempPath, filePath, overwrite: true);
+                }
+                catch
+                {
+                    try { File.Delete(tempPath); } catch { /* ignore cleanup failure */ }
+                    throw;
+                }
             }
             catch
             {

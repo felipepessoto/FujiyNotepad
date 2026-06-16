@@ -96,12 +96,35 @@ namespace FujiyNotepad.WinUI
                 findCts?.Cancel();
                 source?.Dispose();
             };
+        }
 
-            // Open a file passed on the command line (file association / "open with" / drag-onto-exe).
-            string? fileArg = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(File.Exists);
-            if (fileArg != null)
+        /// <summary>
+        /// Opens <paramref name="path"/> in this window once it is ready (used by the app to load a file passed
+        /// on the command line, and to load the chosen file into a freshly created "Open in New Window").
+        /// </summary>
+        public void OpenPath(string path)
+        {
+            DispatcherQueue.TryEnqueue(() => { _ = OpenFile(path); });
+        }
+
+        private void NewWindow_Click(object sender, RoutedEventArgs e)
+        {
+            App.NewWindow().Activate();
+        }
+
+        private async void OpenInNewWindow_Click(object sender, RoutedEventArgs e)
+        {
+            var picker = new FileOpenPicker();
+            nint hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            picker.FileTypeFilter.Add("*");
+
+            Windows.Storage.StorageFile? file = await picker.PickSingleFileAsync();
+            if (file != null)
             {
-                DispatcherQueue.TryEnqueue(() => { _ = OpenFile(fileArg); });
+                MainWindow window = App.NewWindow();
+                window.OpenPath(file.Path);
+                window.Activate();
             }
         }
 

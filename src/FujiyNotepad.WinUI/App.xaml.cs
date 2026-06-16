@@ -26,7 +26,9 @@ namespace FujiyNotepad.WinUI
     /// </summary>
     public partial class App : Application
     {
-        private Window? _window;
+        // Every open viewer window. WinUI 3 does not terminate the process when the last window closes, so the
+        // app tracks its windows and exits explicitly once none remain.
+        private static readonly List<Window> _windows = new();
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -43,8 +45,36 @@ namespace FujiyNotepad.WinUI
         /// <param name="args">Details about the launch request and process.</param>
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
-            _window = new MainWindow();
-            _window.Activate();
+            MainWindow window = NewWindow();
+
+            // Open a file passed on the command line (file association / "open with" / drag-onto-exe) in the
+            // first window. Subsequent windows (New Window / Open in New Window) start empty / load their own.
+            string? fileArg = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(File.Exists);
+            if (fileArg != null)
+            {
+                window.OpenPath(fileArg);
+            }
+
+            window.Activate();
+        }
+
+        /// <summary>
+        /// Creates and registers a new top-level viewer window (caller still <see cref="Window.Activate"/>s it).
+        /// The window is removed from the registry on close, and the app exits when the last one closes.
+        /// </summary>
+        public static MainWindow NewWindow()
+        {
+            var window = new MainWindow();
+            _windows.Add(window);
+            window.Closed += (_, _) =>
+            {
+                _windows.Remove(window);
+                if (_windows.Count == 0)
+                {
+                    Current.Exit();
+                }
+            };
+            return window;
         }
     }
 }
