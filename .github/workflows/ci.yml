@@ -58,6 +58,13 @@ jobs:
           path: ${{ github.workspace }}/TestResults/**/coverage.cobertura.xml
           if-no-files-found: warn
 
+      # Surface the per-library coverage as a table in the run summary (so the percentage is visible without
+      # downloading the artifact) and fail the build if a production library's line coverage drops below the
+      # floor. Scoped to Core + Presentation; the WinUI app is covered by the UI smoke job, not unit coverage.
+      - name: Coverage summary & gate
+        shell: pwsh
+        run: ./scripts/check-coverage.ps1 -ResultsDir "${{ github.workspace }}/TestResults" -Threshold 85
+
   # App-layer UI smoke test. The build-and-test job above covers the engine and the device-free logic
   # libraries, but the WinUI app itself (XAML, menu wiring, canvas, pickers) has no unit tests because a
   # Windows App SDK host can't start headlessly. Instead we publish the real Native-AOT executable and drive
