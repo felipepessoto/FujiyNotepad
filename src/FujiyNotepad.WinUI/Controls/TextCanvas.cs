@@ -48,9 +48,9 @@ namespace FujiyNotepad.WinUI.Controls
         private Color gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
         private Color gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
         private Color bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
-        private Color whitespaceColor = Color.FromArgb(120, 0x80, 0x80, 0x80);
-        private Color trailingWhitespaceColor = Color.FromArgb(180, 0xE0, 0x6C, 0x6C);
-        private Color controlCharColor = Color.FromArgb(180, 0xE0, 0x6C, 0x6C);
+        private Color whitespaceColor = Color.FromArgb(210, 0x5A, 0x5A, 0x5A);
+        private Color trailingWhitespaceColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
+        private Color controlCharColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
 
         // Right margin (px) between a line number and the gutter's edge; mirrors the engine's gutter padding.
         private const double GutterRightMargin = 6d;
@@ -588,8 +588,8 @@ namespace FujiyNotepad.WinUI.Controls
             DrawGutter(ds, sender, lines);
         }
 
-        // Overlays faint markers for spaces (dot), tabs (arrow) and other control chars (box) when
-        // "Show Whitespace" is on; trailing space/tab runs use a more visible colour so they stand out.
+        // Overlays markers for spaces (dot), tabs (arrow) and other control chars (box) when "Show Whitespace"
+        // is on; trailing space/tab runs use a stronger (reddish) colour so they stand out.
         private void DrawWhitespaceMarkers(CanvasDrawingSession ds, VisibleLine line)
         {
             float cw = (float)charWidth;
@@ -604,7 +604,7 @@ namespace FujiyNotepad.WinUI.Controls
                 switch (m.Kind)
                 {
                     case WhitespaceKind.Space:
-                        float r = Math.Max(1f, cw * 0.08f);
+                        float r = Math.Max(1.5f, cw * 0.14f);
                         ds.FillEllipse(x + cw / 2f, midY, r, r, color);
                         break;
 
@@ -614,14 +614,14 @@ namespace FujiyNotepad.WinUI.Controls
                         float x1 = x + w - 2f;
                         if (x1 > x0)
                         {
-                            ds.DrawLine(x0, midY, x1, midY, color, 1f);
-                            ds.DrawLine(x1 - 3f, midY - 3f, x1, midY, color, 1f); // arrowhead
-                            ds.DrawLine(x1 - 3f, midY + 3f, x1, midY, color, 1f);
+                            ds.DrawLine(x0, midY, x1, midY, color, 1.5f);
+                            ds.DrawLine(x1 - 4f, midY - 4f, x1, midY, color, 1.5f); // arrowhead
+                            ds.DrawLine(x1 - 4f, midY + 4f, x1, midY, color, 1.5f);
                         }
                         break;
 
                     case WhitespaceKind.Control:
-                        ds.DrawRectangle(x + 1f, (float)line.Y + 2f, cw - 2f, h - 4f, controlCharColor, 1f);
+                        ds.DrawRectangle(x + 1f, (float)line.Y + 2f, cw - 2f, h - 4f, controlCharColor, 1.5f);
                         break;
 
                     case WhitespaceKind.Lf:
@@ -644,7 +644,7 @@ namespace FujiyNotepad.WinUI.Controls
             if (crlf)
             {
                 // CR tick: a short vertical bar just before the LF arrow.
-                ds.FillRectangle(baseX + 1f, yTop + h * 0.30f, 1.5f, h * 0.40f, color);
+                ds.FillRectangle(baseX + 1f, yTop + h * 0.30f, 2f, h * 0.40f, color);
                 baseX += 4f;
             }
 
@@ -653,10 +653,10 @@ namespace FujiyNotepad.WinUI.Controls
             float botY = yTop + h * 0.60f;
             float leftX = baseX + cw * 0.18f;
 
-            ds.DrawLine(riserX, topY, riserX, botY, color, 1f);          // vertical riser
-            ds.DrawLine(riserX, botY, leftX, botY, color, 1f);           // base, leftward
-            ds.DrawLine(leftX, botY, leftX + 3f, botY - 3f, color, 1f);  // arrowhead
-            ds.DrawLine(leftX, botY, leftX + 3f, botY + 3f, color, 1f);
+            ds.DrawLine(riserX, topY, riserX, botY, color, 1.5f);          // vertical riser
+            ds.DrawLine(riserX, botY, leftX, botY, color, 1.5f);           // base, leftward
+            ds.DrawLine(leftX, botY, leftX + 4f, botY - 4f, color, 1.5f);  // arrowhead
+            ds.DrawLine(leftX, botY, leftX + 4f, botY + 4f, color, 1.5f);
         }
 
         // Draws the line-number gutter on top of the text (its opaque background masks any text scrolled under
@@ -718,9 +718,9 @@ namespace FujiyNotepad.WinUI.Controls
                 gutterTextColor = Color.FromArgb(255, 0x85, 0x85, 0x85);
                 gutterSeparatorColor = Color.FromArgb(255, 0x33, 0x33, 0x33);
                 bookmarkColor = Color.FromArgb(255, 0x4F, 0xA3, 0xE3);
-                whitespaceColor = Color.FromArgb(130, 0x9A, 0x9A, 0x9A);
-                trailingWhitespaceColor = Color.FromArgb(200, 0xE6, 0x7C, 0x7C);
-                controlCharColor = Color.FromArgb(200, 0xE6, 0x7C, 0x7C);
+                whitespaceColor = Color.FromArgb(205, 0xC8, 0xC8, 0xC8);
+                trailingWhitespaceColor = Color.FromArgb(235, 0xF0, 0x6A, 0x6A);
+                controlCharColor = Color.FromArgb(235, 0xF0, 0x6A, 0x6A);
             }
             else
             {
@@ -732,9 +732,9 @@ namespace FujiyNotepad.WinUI.Controls
                 gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
                 gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
                 bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
-                whitespaceColor = Color.FromArgb(120, 0x80, 0x80, 0x80);
-                trailingWhitespaceColor = Color.FromArgb(180, 0xD0, 0x40, 0x40);
-                controlCharColor = Color.FromArgb(180, 0xD0, 0x40, 0x40);
+                whitespaceColor = Color.FromArgb(210, 0x5A, 0x5A, 0x5A);
+                trailingWhitespaceColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
+                controlCharColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
             }
 
             canvas?.Invalidate();
