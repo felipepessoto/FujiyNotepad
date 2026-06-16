@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FujiyNotepad.Core\FujiyNotepad.Core.csproj" />
+    <ProjectReference Include="..\FujiyNotepad.TestSupport\FujiyNotepad.TestSupport.csproj" />
   </ItemGroup>
 
   <ItemGroup>

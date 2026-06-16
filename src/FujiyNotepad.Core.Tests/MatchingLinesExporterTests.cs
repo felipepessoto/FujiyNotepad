@@ -1,34 +1,11 @@
 using System.IO;
 using FujiyNotepad.Core;
+using FujiyNotepad.TestSupport;
 
 namespace FujiyNotepad.Core.Tests
 {
     public class MatchingLinesExporterTests
     {
-        // Lines plus optional per-line endings; when endings is null the source does NOT implement
-        // ILineEndingSource, exercising the fallback separator path.
-        private sealed class FakeLines : ILineSource
-        {
-            private readonly string[] lines;
-            public FakeLines(params string[] lines) => this.lines = lines;
-            public int LineCount => lines.Length;
-            public string GetLine(int lineIndex) => lines[lineIndex];
-        }
-
-        private sealed class FakeLinesWithEndings : ILineSource, ILineEndingSource
-        {
-            private readonly string[] lines;
-            private readonly LineEnding[] endings;
-            public FakeLinesWithEndings(string[] lines, LineEnding[] endings)
-            {
-                this.lines = lines;
-                this.endings = endings;
-            }
-            public int LineCount => lines.Length;
-            public string GetLine(int lineIndex) => lines[lineIndex];
-            public LineEnding GetLineEnding(int lineIndex) => endings[lineIndex];
-        }
-
         [Fact]
         public void BuildClipboardText_Empty_ReturnsEmpty()
         {

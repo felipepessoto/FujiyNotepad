@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Shared test helpers (in-memory byte source + ILineSource fakes) referenced by both the
+    FujiyNotepad.Core.Tests and FujiyNotepad.Presentation.Tests projects, so the same fakes are defined
+    once instead of being copy-pasted per test project. Not a test project itself - it pulls in no test
+    framework - just a plain library of reusable doubles.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FujiyNotepad.Core\FujiyNotepad.Core.csproj" />
+  </ItemGroup>
+
+</Project>

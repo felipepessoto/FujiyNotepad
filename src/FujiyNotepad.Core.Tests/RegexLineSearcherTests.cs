@@ -1,18 +1,11 @@
 using System.Text.RegularExpressions;
 using FujiyNotepad.Core;
+using FujiyNotepad.TestSupport;
 
 namespace FujiyNotepad.Core.Tests
 {
     public class RegexLineSearcherTests
     {
-        private sealed class FakeLines : ILineSource
-        {
-            private readonly string[] lines;
-            public FakeLines(params string[] lines) => this.lines = lines;
-            public int LineCount => lines.Length;
-            public string GetLine(int lineIndex) => lines[lineIndex];
-        }
-
         private static RegexLineSearcher Searcher(params string[] lines) => new(new FakeLines(lines));
 
         [Fact]

@@ -1,13 +1,13 @@
 using System.Text;
 using FujiyNotepad.Core;
 
-namespace FujiyNotepad.Core.Tests
+namespace FujiyNotepad.TestSupport
 {
     /// <summary>
     /// In-memory <see cref="IByteSource"/> for fast, file-free engine tests. ASCII content keeps a
     /// one-byte-per-character mapping that matches the byte-level search.
     /// </summary>
-    internal sealed class InMemoryByteSource : IByteSource
+    public sealed class InMemoryByteSource : IByteSource
     {
         private readonly byte[] data;
 

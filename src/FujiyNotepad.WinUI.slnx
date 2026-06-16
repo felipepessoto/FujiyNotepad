@@ -13,4 +13,5 @@
   </Project>
   <Project Path="FujiyNotepad.Presentation/FujiyNotepad.Presentation.csproj" />
   <Project Path="FujiyNotepad.Presentation.Tests/FujiyNotepad.Presentation.Tests.csproj" />
+  <Project Path="FujiyNotepad.TestSupport/FujiyNotepad.TestSupport.csproj" />
 </Solution>
