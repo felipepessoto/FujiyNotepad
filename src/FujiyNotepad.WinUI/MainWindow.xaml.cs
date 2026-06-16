@@ -1615,7 +1615,7 @@ namespace FujiyNotepad.WinUI
             {
                 Text = string.IsNullOrEmpty(settings.HighlightRulesText)
                     ? HighlightRuleText.DefaultExample
-                    : settings.HighlightRulesText,
+                    : settings.HighlightRulesText.Replace("\r\n", "\n").Replace('\r', '\n'),
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.NoWrap,
                 FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
@@ -1651,7 +1651,9 @@ namespace FujiyNotepad.WinUI
 
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
-                settings.HighlightRulesText = editor.Text;
+                // WinUI's multiline TextBox returns '\r' line breaks; normalize to '\n' so the stored text and
+                // the dialog round-trip (and the parser) stay consistent.
+                settings.HighlightRulesText = editor.Text.Replace("\r\n", "\n").Replace('\r', '\n');
                 settingsStore.Save(settings);
                 ApplyHighlightRules();
                 View.FocusCanvas();

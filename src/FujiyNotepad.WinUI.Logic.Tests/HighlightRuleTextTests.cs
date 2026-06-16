@@ -58,6 +58,18 @@ namespace FujiyNotepad.WinUI.Logic.Tests
         }
 
         [Fact]
+        public void Parse_HandlesLoneCrLineEndings()
+        {
+            // WinUI's multiline TextBox.Text uses lone '\r' between lines; all rules must still parse.
+            List<HighlightRule> rules = HighlightRuleText.Parse("red ERROR\rorange WARN\rgreen INFO");
+
+            Assert.Equal(3, rules.Count);
+            Assert.Equal("ERROR", rules[0].Pattern);
+            Assert.Equal("WARN", rules[1].Pattern);
+            Assert.Equal("INFO", rules[2].Pattern);
+        }
+
+        [Fact]
         public void Parse_MissingColor_LeavesDefault()
         {
             // A leading "/regex" (no colour before the slash) keeps the rule's default colour.

@@ -30,7 +30,10 @@ namespace FujiyNotepad.WinUI.Logic
                 return rules;
             }
 
-            foreach (string rawLine in text.Split('\n'))
+            // Split on CR and/or LF: WinUI's multiline TextBox.Text uses lone '\r' as its line separator, while
+            // files/settings use '\n' or '\r\n'. Splitting on both makes every source parse the same (empty
+            // pieces from a '\r\n' pair are dropped by the blank-line check below).
+            foreach (string rawLine in text.Split('\r', '\n'))
             {
                 string line = rawLine.Trim();
                 if (line.Length == 0)
