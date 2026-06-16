@@ -1,0 +1,11 @@
+# Highlight rules for samples/highlight-rules-sample.txt
+# Paste these into  View > Highlight Rules...  and click Apply.
+# Format:  color[/flags] pattern     (lines starting with # are ignored)
+red ERROR
+orange WARN
+green INFO
+gray DEBUG
+#FF00FF/case FATAL
+blue/regex \b[45]\d{2}\b
+teal/regex \b\d{4}-\d{2}-\d{2}\b
+purple TODO
