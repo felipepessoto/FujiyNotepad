@@ -13,9 +13,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.Windows.Storage.Pickers;
 using Windows.Graphics;
 using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace FujiyNotepad.WinUI
@@ -147,15 +147,13 @@ namespace FujiyNotepad.WinUI
 
         private async void Open_Click(object sender, RoutedEventArgs e)
         {
-            var picker = new FileOpenPicker();
-            nint hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-            picker.FileTypeFilter.Add("*");
-
-            Windows.Storage.StorageFile? file = await picker.PickSingleFileAsync();
-            if (file != null)
+            // Modern Windows App SDK desktop picker (constructed from the window id; Native-AOT safe). The
+            // legacy Windows.Storage.Pickers.FileOpenPicker required the InitializeWithWindow interop hack.
+            var picker = new FileOpenPicker(AppWindow.Id);
+            PickFileResult? result = await picker.PickSingleFileAsync();
+            if (result is not null && !string.IsNullOrEmpty(result.Path))
             {
-                await OpenFile(file.Path);
+                await OpenFile(result.Path);
             }
         }
 
@@ -1085,7 +1083,7 @@ namespace FujiyNotepad.WinUI
             }
         }
 
-        // Saves the matching (filtered) lines to a file — the GUI equivalent of "grep PATTERN file > out.txt".
+        // Saves the matching (filtered) lines to a file - the GUI equivalent of "grep PATTERN file > out.txt".
         // Streamed and uncapped, in UTF-8, off the UI thread so an arbitrarily large match set stays responsive.
         private async void SaveMatchingLines_Click(object sender, RoutedEventArgs e)
         {
@@ -1095,22 +1093,26 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
-            var picker = new FileSavePicker();
-            nint hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
-            picker.FileTypeChoices.Add("Text file", new List<string> { ".txt" });
-            picker.FileTypeChoices.Add("Log file", new List<string> { ".log" });
-            picker.SuggestedFileName = string.IsNullOrEmpty(currentFilePath)
-                ? "filtered-lines"
-                : Path.GetFileNameWithoutExtension(currentFilePath) + "-filtered";
+            // Modern Windows App SDK desktop picker: constructed from the window id (no InitializeWithWindow)
+            // and Native-AOT safe. The legacy Windows.Storage.Pickers.FileSavePicker can't be used here - its
+            // FileTypeChoices requires a managed List<string>, which CsWinRT can't marshal into WinRT under AOT,
+            // so the picker throws before it ever shows. We set a default extension instead of FileTypeChoices
+            // to avoid handing any managed collection across the WinRT boundary.
+            var picker = new FileSavePicker(AppWindow.Id)
+            {
+                SuggestedFileName = string.IsNullOrEmpty(currentFilePath)
+                    ? "filtered-lines"
+                    : Path.GetFileNameWithoutExtension(currentFilePath) + "-filtered",
+                DefaultFileExtension = ".txt",
+            };
 
-            StorageFile? file = await picker.PickSaveFileAsync();
-            if (file is null)
+            PickFileResult? result = await picker.PickSaveFileAsync();
+            if (result is null || string.IsNullOrEmpty(result.Path))
             {
                 return;
             }
 
-            string path = file.Path;
+            string path = result.Path;
             FilterStatus.Text = "Saving\u2026";
             try
             {
