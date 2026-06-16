@@ -1020,6 +1020,8 @@ namespace FujiyNotepad.WinUI
 
             filteredSource = new FilteredLineSource(activeProvider, matches);
             View.SetProvider(filteredSource);
+            CopyMatchingItem.IsEnabled = true;
+            SaveMatchingItem.IsEnabled = true;
             FilterStatus.Text = capped
                 ? $"{matches.Count:N0} matching lines (capped)"
                 : $"{matches.Count:N0} matching lines";
@@ -1033,6 +1035,8 @@ namespace FujiyNotepad.WinUI
             filterCts?.Cancel();
             filterCts = null;
             filteredSource = null;
+            CopyMatchingItem.IsEnabled = false;
+            SaveMatchingItem.IsEnabled = false;
             FilterStatus.Text = string.Empty;
             FilterBar.Visibility = Visibility.Collapsed;
         }
@@ -1047,6 +1051,81 @@ namespace FujiyNotepad.WinUI
                 View.SetProvider(provider);
                 LblStatus.Text = $"{provider.LineCount:N0} lines";
                 RefreshMarkerMargin(); // the filter cleared bookmarks, so clear their ticks too
+            }
+        }
+
+        // Copies just the matching (filtered) lines to the clipboard — the GUI equivalent of piping grep's
+        // output. The set can be large, so it is gathered off the UI thread and capped to a bounded string.
+        private async void CopyMatchingLines_Click(object sender, RoutedEventArgs e)
+        {
+            FilteredLineSource? lines = filteredSource;
+            if (lines is null)
+            {
+                return;
+            }
+
+            FilterStatus.Text = "Copying\u2026";
+            try
+            {
+                (string text, int lineCount, bool truncated) =
+                    await Task.Run(() => MatchingLinesExporter.BuildClipboardText(lines));
+
+                var package = new DataPackage();
+                package.SetText(text);
+                Clipboard.SetContent(package);
+
+                FilterStatus.Text = truncated
+                    ? $"Copied first {lineCount:N0} matching lines (capped)"
+                    : $"Copied {lineCount:N0} matching lines";
+            }
+            catch (Exception)
+            {
+                // Best-effort: the clipboard can be transiently locked by another process.
+                FilterStatus.Text = "Copy failed";
+            }
+        }
+
+        // Saves the matching (filtered) lines to a file — the GUI equivalent of "grep PATTERN file > out.txt".
+        // Streamed and uncapped, in UTF-8, off the UI thread so an arbitrarily large match set stays responsive.
+        private async void SaveMatchingLines_Click(object sender, RoutedEventArgs e)
+        {
+            FilteredLineSource? lines = filteredSource;
+            if (lines is null)
+            {
+                return;
+            }
+
+            var picker = new FileSavePicker();
+            nint hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            picker.FileTypeChoices.Add("Text file", new List<string> { ".txt" });
+            picker.FileTypeChoices.Add("Log file", new List<string> { ".log" });
+            picker.SuggestedFileName = string.IsNullOrEmpty(currentFilePath)
+                ? "filtered-lines"
+                : Path.GetFileNameWithoutExtension(currentFilePath) + "-filtered";
+
+            StorageFile? file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            string path = file.Path;
+            FilterStatus.Text = "Saving\u2026";
+            try
+            {
+                await Task.Run(() =>
+                {
+                    // UTF-8 without BOM: faithful to the decoded text and broadly compatible, regardless of
+                    // the source file's own encoding.
+                    using var writer = new StreamWriter(path, append: false, new UTF8Encoding(false));
+                    MatchingLinesExporter.Write(lines, writer);
+                });
+                FilterStatus.Text = $"Saved {lines.LineCount:N0} matching lines";
+            }
+            catch (Exception)
+            {
+                FilterStatus.Text = "Save failed";
             }
         }
 
