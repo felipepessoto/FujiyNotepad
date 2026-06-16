@@ -148,7 +148,7 @@ namespace FujiyNotepad.WinUI.Logic
 
         private bool showLineNumbers = false;
 
-        private LineProvider? provider;
+        private ILineSource? provider;
         private int totalLines;
         private int firstVisibleLine;
         private double horizontalOffset;
@@ -354,7 +354,7 @@ namespace FujiyNotepad.WinUI.Logic
             RaiseRedraw();
         }
 
-        public void SetProvider(LineProvider? newProvider)
+        public void SetProvider(ILineSource? newProvider)
         {
             provider = newProvider;
             totalLines = newProvider?.LineCount ?? 0;

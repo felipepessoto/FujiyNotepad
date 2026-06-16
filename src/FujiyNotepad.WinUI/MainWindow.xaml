@@ -24,6 +24,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -60,6 +61,11 @@
                 <MenuFlyoutItem Text="Find..." Click="Find_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Modifiers="Control" Key="F" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Filter..." Click="Filter_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control,Shift" Key="F" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
@@ -171,7 +177,32 @@
                     ToolTipService.ToolTip="Close" />
         </Grid>
 
-        <Grid Grid.Row="2">
+        <Grid x:Name="FilterBar" Grid.Row="2" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"
+              Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="FilterBox" Grid.Column="0" PlaceholderText="Filter — show only lines that match"
+                     VerticalAlignment="Center" KeyDown="FilterBox_KeyDown" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <ToggleButton x:Name="FilterMatchCase" Content="Aa" MinWidth="36" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Match case" />
+                <ToggleButton x:Name="FilterRegex" Content=".*" MinWidth="36" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Use regular expression" />
+            </StackPanel>
+            <Button Grid.Column="2" Content="Apply" Click="FilterApply_Click" VerticalAlignment="Center"
+                    ToolTipService.ToolTip="Show only matching lines (Enter)" />
+            <TextBlock x:Name="FilterStatus" Grid.Column="3" VerticalAlignment="Center" Margin="8,0"
+                       TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="4" Content="&#x2715;" VerticalAlignment="Center" Click="FilterClose_Click"
+                    ToolTipService.ToolTip="Clear filter and close (Esc)" />
+        </Grid>
+
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -196,7 +227,7 @@
             <Border Grid.Row="1" Grid.Column="1" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" />
         </Grid>
 
-        <Grid Grid.Row="3" Padding="8,3" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+        <Grid Grid.Row="4" Padding="8,3" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
