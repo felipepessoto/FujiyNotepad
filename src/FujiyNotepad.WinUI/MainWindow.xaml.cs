@@ -67,6 +67,11 @@ namespace FujiyNotepad.WinUI
         // Cancels an in-flight background character count (re-run on file open / encoding change).
         private CancellationTokenSource? charCountCts;
 
+        // Filter / grep view: while active (filteredSource is not null), the engine renders only the matching
+        // lines (a FilteredLineSource wrapping the real provider) and filterCts cancels an in-flight scan.
+        private FilteredLineSource? filteredSource;
+        private CancellationTokenSource? filterCts;
+
         public MainWindow()
         {
             this.InitializeComponent();
@@ -265,6 +270,7 @@ namespace FujiyNotepad.WinUI
             countedKey = null;
             FindCount.Text = string.Empty;
             View.SetHighlighter(null);
+            ResetFilter();
 
             View.SetProvider(provider);
             // Restore the scroll position (Reload) or start at the top (a new file); the index tick keeps
@@ -466,17 +472,22 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
-            View.UpdateTotalLines(provider.LineCount);
-
-            // Keep nudging a reloaded view toward its saved scroll position as the rebuilt index grows; stop
-            // once the target line is reachable (or indexing finished) so it no longer fights the user.
-            if (pendingRestoreFirstLine >= 0)
+            // While the filter view is active the engine renders the fixed matching-line set, so don't push the
+            // real provider's (growing) line count into it; just keep the timer alive until indexing finishes.
+            if (filteredSource is null)
             {
-                View.FirstVisibleLine = pendingRestoreFirstLine;
-                View.HorizontalOffset = pendingRestoreHorizontalOffset;
-                if (View.MaxFirstLine >= pendingRestoreFirstLine || LineIndexer.IsCompleted)
+                View.UpdateTotalLines(provider.LineCount);
+
+                // Keep nudging a reloaded view toward its saved scroll position as the rebuilt index grows; stop
+                // once the target line is reachable (or indexing finished) so it no longer fights the user.
+                if (pendingRestoreFirstLine >= 0)
                 {
-                    pendingRestoreFirstLine = -1;
+                    View.FirstVisibleLine = pendingRestoreFirstLine;
+                    View.HorizontalOffset = pendingRestoreHorizontalOffset;
+                    if (View.MaxFirstLine >= pendingRestoreFirstLine || LineIndexer.IsCompleted)
+                    {
+                        pendingRestoreFirstLine = -1;
+                    }
                 }
             }
 
@@ -484,7 +495,10 @@ namespace FujiyNotepad.WinUI
             {
                 indexRefreshTimer.Stop();
                 StopIndexingItem.IsEnabled = false;
-                LblStatus.Text = $"{provider.LineCount:N0} lines";
+                if (filteredSource is null)
+                {
+                    LblStatus.Text = $"{provider.LineCount:N0} lines";
+                }
             }
         }
 
@@ -543,7 +557,11 @@ namespace FujiyNotepad.WinUI
 
         private void UpdateCursorStatus(TextPosition pos)
         {
-            string text = $"Ln {pos.Line + 1}, Col {pos.Column + 1}";
+            // While filtering, the engine's line index is a filtered row; show the real source line number.
+            int displayLine = filteredSource is not null && pos.Line >= 0 && pos.Line < filteredSource.LineCount
+                ? filteredSource.SourceLineAt(pos.Line)
+                : pos.Line;
+            string text = $"Ln {displayLine + 1}, Col {pos.Column + 1}";
 
             SelectionStats selection = View.GetSelectionStats();
             if (selection.Lines == 1)
@@ -585,6 +603,7 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
+            ExitFilterToFullView();
             var input = new TextBox { PlaceholderText = "Line number" };
             var dialog = new ContentDialog
             {
@@ -623,6 +642,7 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
+            ExitFilterToFullView();
             var input = new TextBox { PlaceholderText = "Byte offset (decimal, or 0x for hex)" };
             var dialog = new ContentDialog
             {
@@ -713,9 +733,172 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
+            ExitFilterToFullView();
             FindBar.Visibility = Visibility.Visible;
             FindBox.Focus(FocusState.Programmatic);
             FindBox.SelectAll();
+        }
+
+        // ----- Filter / grep view (show only matching lines) -----
+
+        private void Filter_Click(object sender, RoutedEventArgs e)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+
+            FilterBar.Visibility = Visibility.Visible;
+            FilterBox.Focus(FocusState.Programmatic);
+            FilterBox.SelectAll();
+        }
+
+        private async void FilterBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter)
+            {
+                e.Handled = true;
+                await ApplyFilter();
+            }
+            else if (e.Key == Windows.System.VirtualKey.Escape)
+            {
+                e.Handled = true;
+                FilterClose_Click(sender, e);
+            }
+        }
+
+        private async void FilterApply_Click(object sender, RoutedEventArgs e) => await ApplyFilter();
+
+        private void FilterClose_Click(object sender, RoutedEventArgs e)
+        {
+            ExitFilterToFullView();
+            View.FocusCanvas();
+        }
+
+        // Builds the per-line predicate from the filter box + options, or null when blank or invalid.
+        private Func<string, bool>? BuildFilterPredicate(out string? error)
+        {
+            error = null;
+            string term = FilterBox.Text;
+            if (string.IsNullOrEmpty(term))
+            {
+                return null;
+            }
+
+            bool matchCase = FilterMatchCase.IsChecked == true;
+            if (FilterRegex.IsChecked == true)
+            {
+                try
+                {
+                    var regex = new Regex(term, matchCase ? RegexOptions.None : RegexOptions.IgnoreCase);
+                    return line => regex.IsMatch(line);
+                }
+                catch (ArgumentException)
+                {
+                    error = "Invalid regex";
+                    return null;
+                }
+            }
+
+            StringComparison comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+            return line => line.Contains(term, comparison);
+        }
+
+        // Scans the file off the UI thread for lines matching the filter, then swaps the view to render only
+        // those lines (a FilteredLineSource). Cancellable and bounded so it stays responsive on huge files.
+        private async Task ApplyFilter()
+        {
+            if (provider is null)
+            {
+                return;
+            }
+
+            Func<string, bool>? predicate = BuildFilterPredicate(out string? error);
+            if (error is not null)
+            {
+                FilterStatus.Text = error;
+                return;
+            }
+
+            if (predicate is null)
+            {
+                // A blank term clears the filter back to the full view but keeps the bar open to retype.
+                ExitFilterToFullView();
+                FilterBar.Visibility = Visibility.Visible;
+                return;
+            }
+
+            filterCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            filterCts = cts;
+            CancellationToken token = cts.Token;
+
+            FilterStatus.Text = "Filtering\u2026";
+            LineProvider activeProvider = provider;
+            var progress = new Progress<int>(p =>
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    FilterStatus.Text = $"Filtering\u2026 {p}%";
+                }
+            });
+
+            List<int> matches;
+            bool capped = false;
+            try
+            {
+                matches = await Task.Run(() =>
+                {
+                    List<int> hits = LineFilter.Match(activeProvider, predicate, out bool c, progress: progress, token: token);
+                    capped = c;
+                    return hits;
+                }, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return; // superseded by a newer filter or a clear
+            }
+            catch (Exception)
+            {
+                FilterStatus.Text = "Filter failed";
+                return;
+            }
+
+            // Ignore a stale result (the file changed or another filter started while we scanned).
+            if (token.IsCancellationRequested || !ReferenceEquals(provider, activeProvider))
+            {
+                return;
+            }
+
+            filteredSource = new FilteredLineSource(activeProvider, matches);
+            View.SetProvider(filteredSource);
+            FilterStatus.Text = capped
+                ? $"{matches.Count:N0} matching lines (capped)"
+                : $"{matches.Count:N0} matching lines";
+            LblStatus.Text = $"Filtered: {matches.Count:N0} of {activeProvider.LineCount:N0} lines";
+            View.FocusCanvas();
+        }
+
+        // Clears the filter state and hides the bar (does not itself restore the view).
+        private void ResetFilter()
+        {
+            filterCts?.Cancel();
+            filterCts = null;
+            filteredSource = null;
+            FilterStatus.Text = string.Empty;
+            FilterBar.Visibility = Visibility.Collapsed;
+        }
+
+        // Leaves the filter view: clears the filter and restores the full file in the canvas.
+        private void ExitFilterToFullView()
+        {
+            bool wasFiltering = filteredSource is not null;
+            ResetFilter();
+            if (wasFiltering && provider is not null)
+            {
+                View.SetProvider(provider);
+                LblStatus.Text = $"{provider.LineCount:N0} lines";
+            }
         }
 
         private async void FindBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -828,6 +1011,10 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
+            // Find works on real file offsets; if a filter view is active (e.g. F3 with a leftover term), leave it
+            // first so the match is selected in the full document rather than against the filtered row set.
+            ExitFilterToFullView();
+
             if (useRegex)
             {
                 await RunFindNextRegex(regex!);
@@ -846,6 +1033,9 @@ namespace FujiyNotepad.WinUI
             {
                 return;
             }
+
+            // See RunFindNext: drop the filter view before selecting so the match maps to the full document.
+            ExitFilterToFullView();
 
             if (useRegex)
             {

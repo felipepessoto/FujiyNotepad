@@ -278,6 +278,29 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.True(redraws >= 1);
         }
 
+        // ----- Filter / grep view (filtered line source rendered by the engine) -----
+
+        [Fact]
+        public async Task FilteredLineSource_EngineRendersOnlyMatchingLines()
+        {
+            // A filtered source feeds the engine only the matching lines; the render model must show exactly
+            // those (in order), proving the filter view reuses the normal rendering path.
+            LineProvider provider = await TestData.BuildProviderAsync("apple\nBANANA\ncherry\nBANANA split\ndate");
+            System.Collections.Generic.List<int> matches =
+                LineFilter.Match(provider, l => l.Contains("BANANA", System.StringComparison.Ordinal), out _);
+            var filtered = new FilteredLineSource(provider, matches);
+
+            var e = new TextLayoutEngine { ViewportWidth = 400, ViewportHeight = 200 };
+            e.SetMetrics(10, 20);
+            e.SetProvider(filtered);
+
+            Assert.Equal(2, e.TotalLines);
+            IReadOnlyList<VisibleLine> lines = e.GetVisibleLines(hasFocus: false, caretVisible: false);
+            Assert.Equal(2, lines.Count);
+            Assert.Equal("BANANA", lines[0].Display);
+            Assert.Equal("BANANA split", lines[1].Display);
+        }
+
         // ----- Selection statistics (status bar) -----
 
         [Fact]

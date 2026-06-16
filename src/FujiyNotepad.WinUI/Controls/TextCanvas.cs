@@ -237,7 +237,7 @@ namespace FujiyNotepad.WinUI.Controls
             FontChanged?.Invoke();
         }
 
-        public void SetProvider(LineProvider? newProvider)
+        public void SetProvider(ILineSource? newProvider)
         {
             Ready();
             engine.SetProvider(newProvider);
