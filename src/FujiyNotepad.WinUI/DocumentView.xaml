@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="FujiyNotepad.WinUI.DocumentView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:FujiyNotepad.WinUI"
+    xmlns:controls="using:FujiyNotepad.WinUI.Controls"
+    xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid KeyboardAcceleratorPlacementMode="Hidden" AllowDrop="True"
+          DragOver="Root_DragOver" Drop="Root_Drop">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="F3" Invoked="FindNextAccelerator_Invoked" />
+            <KeyboardAccelerator Modifiers="Shift" Key="F3" Invoked="FindPreviousAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <MenuBar Grid.Row="0">
+            <MenuBarItem Title="File">
+                <MenuFlyoutItem Text="Open..." Click="Open_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="O" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Open Sample" Click="OpenSample_Click" />
+                <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="ReloadItem" Text="Reload" Click="Reload_Click" IsEnabled="False">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F5" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Exit" Click="Exit_Click" KeyboardAcceleratorTextOverride="Alt+F4" />
+            </MenuBarItem>
+            <MenuBarItem x:Name="EditMenu" Title="Edit" IsEnabled="False">
+                <MenuFlyoutItem Text="Go To Line..." Click="GoTo_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="G" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Go To Offset..." Click="GoToOffset_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control,Shift" Key="G" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Find..." Click="Find_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="F" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="StartIndexingItem" Text="Start indexing" Click="StartIndexing_Click" IsEnabled="False" />
+                <MenuFlyoutItem x:Name="StopIndexingItem" Text="Stop indexing" Click="StopIndexing_Click" IsEnabled="False" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutSubItem Text="Tab Width">
+                    <RadioMenuFlyoutItem x:Name="TabWidth2" Text="2" GroupName="TabWidth" Tag="2" Click="TabWidth_Click" />
+                    <RadioMenuFlyoutItem x:Name="TabWidth4" Text="4" GroupName="TabWidth" Tag="4" Click="TabWidth_Click" />
+                    <RadioMenuFlyoutItem x:Name="TabWidth8" Text="8" GroupName="TabWidth" Tag="8" Click="TabWidth_Click" />
+                </MenuFlyoutSubItem>
+            </MenuBarItem>
+            <MenuBarItem x:Name="ViewMenu" Title="View">
+                <ToggleMenuFlyoutItem x:Name="LineNumbersToggle" Text="Line Numbers" Click="LineNumbers_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Zoom In" Click="ZoomIn_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Add" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Zoom Out" Click="ZoomOut_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Subtract" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Reset Zoom" Click="ResetZoom_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="Number0" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutSubItem Text="Font">
+                    <RadioMenuFlyoutItem x:Name="FontConsolas" Text="Consolas" GroupName="Font" Tag="Consolas" Click="Font_Click" />
+                    <RadioMenuFlyoutItem x:Name="FontCascadiaMono" Text="Cascadia Mono" GroupName="Font" Tag="Cascadia Mono" Click="Font_Click" />
+                    <RadioMenuFlyoutItem x:Name="FontCascadiaCode" Text="Cascadia Code" GroupName="Font" Tag="Cascadia Code" Click="Font_Click" />
+                    <RadioMenuFlyoutItem x:Name="FontCourierNew" Text="Courier New" GroupName="Font" Tag="Courier New" Click="Font_Click" />
+                    <RadioMenuFlyoutItem x:Name="FontLucidaConsole" Text="Lucida Console" GroupName="Font" Tag="Lucida Console" Click="Font_Click" />
+                </MenuFlyoutSubItem>
+            </MenuBarItem>
+            <MenuBarItem x:Name="EncodingMenu" Title="Encoding" IsEnabled="False">
+                <RadioMenuFlyoutItem x:Name="EncAuto" Text="Auto-detect" GroupName="Encoding" Tag="" Click="Encoding_Click" />
+                <MenuFlyoutSeparator />
+                <RadioMenuFlyoutItem x:Name="EncUtf8" Text="UTF-8" GroupName="Encoding" Tag="utf-8" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf8Bom" Text="UTF-8 with BOM" GroupName="Encoding" Tag="utf-8-bom" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf16Le" Text="UTF-16 LE" GroupName="Encoding" Tag="utf-16le" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf16Be" Text="UTF-16 BE" GroupName="Encoding" Tag="utf-16be" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf32Le" Text="UTF-32 LE" GroupName="Encoding" Tag="utf-32le" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncUtf32Be" Text="UTF-32 BE" GroupName="Encoding" Tag="utf-32be" Click="Encoding_Click" />
+                <RadioMenuFlyoutItem x:Name="EncWindows1252" Text="Windows-1252 (ANSI)" GroupName="Encoding" Tag="windows-1252" Click="Encoding_Click" />
+            </MenuBarItem>
+            <MenuBarItem Title="Help">
+                <MenuFlyoutItem Text="About FujiyNotepad..." Click="About_Click" />
+            </MenuBarItem>
+        </MenuBar>
+
+        <Grid x:Name="FindBar" Grid.Row="1" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"
+              Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+            <!-- The search box is the only flexible (*) column; every variable-width widget to its right
+                 (status text, match count, and the search-progress area) has a fixed-width column. That
+                 keeps the * column - and therefore the option toggles and Find Next button - from shifting
+                 when those labels change between empty / "counting…" / a count / a line number. -->
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="184" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBox x:Name="FindBox" Grid.Column="0" PlaceholderText="Find" VerticalAlignment="Center"
+                     KeyDown="FindBox_KeyDown" />
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <ToggleButton x:Name="MatchCaseToggle" Content="Aa" MinWidth="36" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Match case"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+                <ToggleButton x:Name="WholeWordToggle" Content="[ab]" MinWidth="40" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Match whole word"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+                <ToggleButton x:Name="RegexToggle" Content=".*" MinWidth="36" Padding="6,2"
+                              FontFamily="Consolas" ToolTipService.ToolTip="Use regular expression"
+                              Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button x:Name="FindPrevButton" Content="Find Previous" Click="FindPrev_Click"
+                        ToolTipService.ToolTip="Find previous (Shift+F3)" />
+                <Button x:Name="FindNextButton" Content="Find Next" Click="FindNext_Click"
+                        ToolTipService.ToolTip="Find next (F3)" />
+            </StackPanel>
+
+            <TextBlock x:Name="FindStatus" Grid.Column="3" VerticalAlignment="Center" Margin="4,0"
+                       TextTrimming="CharacterEllipsis" />
+
+            <TextBlock x:Name="FindCount" Grid.Column="4" VerticalAlignment="Center" Margin="4,0"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" />
+
+            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <ProgressBar x:Name="FindProgress" Width="100" Minimum="0" Maximum="100"
+                             VerticalAlignment="Center" Visibility="Collapsed" />
+                <Button x:Name="FindCancelButton" Content="Cancel" VerticalAlignment="Center"
+                        Visibility="Collapsed" Click="FindCancel_Click" />
+            </StackPanel>
+
+            <Button Grid.Column="6" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
+                    ToolTipService.ToolTip="Close" />
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <controls:TextCanvas x:Name="View" Grid.Row="0" Grid.Column="0" />
+
+            <primitives:ScrollBar x:Name="VScroll" Grid.Row="0" Grid.Column="1"
+                                  Orientation="Vertical" Width="16"
+                                  IndicatorMode="MouseIndicator" Visibility="Visible"
+                                  Scroll="VScroll_Scroll" />
+
+            <primitives:ScrollBar x:Name="HScroll" Grid.Row="1" Grid.Column="0"
+                                  Orientation="Horizontal" Height="16"
+                                  IndicatorMode="MouseIndicator" Visibility="Visible"
+                                  Scroll="HScroll_Scroll" />
+
+            <Border Grid.Row="1" Grid.Column="1" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" />
+        </Grid>
+
+        <Grid Grid.Row="3" Padding="8,3" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="LblStatus" Grid.Column="0" FontSize="12" VerticalAlignment="Center" />
+            <HyperlinkButton x:Name="ReloadHint" Grid.Column="1" Visibility="Collapsed"
+                             Content="↻ File changed on disk — Reload" FontSize="12"
+                             Padding="6,0" MinHeight="0" Margin="0,0,16,0" VerticalAlignment="Center"
+                             ToolTipService.ToolTip="The file changed on disk. Click or press F5 to reload."
+                             Click="Reload_Click" />
+            <TextBlock x:Name="LblCharCount" Grid.Column="2" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblZoom" Grid.Column="3" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblEncoding" Grid.Column="4" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblLineEnding" Grid.Column="5" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center"
+                       ToolTipService.ToolTip="Line endings used by the file" />
+            <TextBlock x:Name="LblCursor" Grid.Column="6" FontSize="12" VerticalAlignment="Center" />
+        </Grid>
+    </Grid>
+</UserControl>
