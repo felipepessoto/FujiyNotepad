@@ -16,6 +16,18 @@ namespace FujiyNotepad.Core.Tests
         private static RegexLineSearcher Searcher(params string[] lines) => new(new FakeLines(lines));
 
         [Fact]
+        public void CountAll_ReportsEachMatchingLineOnce()
+        {
+            var s = Searcher("foo", "bar", "foo bar foo", "baz");
+            var hitLines = new System.Collections.Generic.List<int>();
+
+            int total = s.CountAll(new Regex("foo"), null, default, line => hitLines.Add(line));
+
+            Assert.Equal(3, total);                 // foo, foo, foo
+            Assert.Equal(new[] { 0, 2 }, hitLines); // one callback per line that has >=1 match
+        }
+
+        [Fact]
         public void FindNext_ReturnsFirstMatch()
         {
             var s = Searcher("abc abc");

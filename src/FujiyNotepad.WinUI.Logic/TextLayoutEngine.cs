@@ -438,6 +438,9 @@ namespace FujiyNotepad.WinUI.Logic
         /// <summary>Whether any line is bookmarked (lets the host enable/disable navigation commands).</summary>
         public bool HasBookmarks => bookmarks.Count > 0;
 
+        /// <summary>The bookmarked line indices in ascending order (e.g. for the scrollbar marker margin).</summary>
+        public IReadOnlyCollection<int> BookmarkLines => bookmarks.Lines;
+
         /// <summary>Toggles the bookmark on the caret's line and redraws; returns true if it is now bookmarked.</summary>
         public bool ToggleBookmarkAtCaret()
         {

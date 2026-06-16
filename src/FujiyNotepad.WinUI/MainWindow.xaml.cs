@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 using FujiyNotepad.Core;
 using FujiyNotepad.WinUI.Controls;
 using FujiyNotepad.WinUI.Logic;
+using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -63,6 +65,10 @@ namespace FujiyNotepad.WinUI
         private CancellationTokenSource? countCts;
         private string? countedKey;
         private bool suppressFindOptionEvents;
+
+        // Bucketed positions of the current find's matches, painted on the scrollbar marker margin (null when
+        // there is no active find). Bounded to MatchMarks.Resolution buckets, so it stays small on huge files.
+        private MatchMarks? matchMarks;
 
         // Cancels an in-flight background character count (re-run on file open / encoding change).
         private CancellationTokenSource? charCountCts;
@@ -270,9 +276,11 @@ namespace FujiyNotepad.WinUI
             countedKey = null;
             FindCount.Text = string.Empty;
             View.SetHighlighter(null);
+            matchMarks = null; // the margin is repainted by RefreshMarkerMargin() after SetProvider below
             ResetFilter();
 
             View.SetProvider(provider);
+            RefreshMarkerMargin(); // clear any previous file's bookmark ticks
             // Restore the scroll position (Reload) or start at the top (a new file); the index tick keeps
             // nudging toward the saved line until the rebuilt index reaches it.
             pendingRestoreFirstLine = restoreFirstLine;
@@ -477,6 +485,7 @@ namespace FujiyNotepad.WinUI
             if (filteredSource is null)
             {
                 View.UpdateTotalLines(provider.LineCount);
+                RefreshMarkerMargin(); // bookmark tick positions shift as the total line count grows
 
                 // Keep nudging a reloaded view toward its saved scroll position as the rebuilt index grows; stop
                 // once the target line is reachable (or indexing finished) so it no longer fights the user.
@@ -748,6 +757,7 @@ namespace FujiyNotepad.WinUI
                 return;
             }
             View.ToggleBookmark();
+            RefreshMarkerMargin();
             View.FocusCanvas();
         }
 
@@ -778,7 +788,49 @@ namespace FujiyNotepad.WinUI
                 return;
             }
             View.ClearBookmarks();
+            RefreshMarkerMargin();
             View.FocusCanvas();
+        }
+
+        // Paints the scrollbar marker margin: find-match ticks (orange, under) and bookmark ticks (blue, on top).
+        private void MarkerMargin_Draw(CanvasControl sender, CanvasDrawEventArgs args)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+
+            CanvasDrawingSession ds = args.DrawingSession;
+            double height = sender.Size.Height;
+            float width = (float)sender.Size.Width;
+
+            // Find-match ticks reflect real-file lines, so suppress them while the filter view is active.
+            if (filteredSource is null && matchMarks is { Count: > 0 })
+            {
+                Windows.UI.Color matchColor = Windows.UI.Color.FromArgb(255, 0xE0, 0x6C, 0x00);
+                foreach (int row in ScrollbarMarkers.Rows(matchMarks.Buckets, MatchMarks.Resolution, height))
+                {
+                    ds.FillRectangle(2f, row, width - 4f, 2f, matchColor);
+                }
+            }
+
+            Windows.UI.Color bookmarkColor = Windows.UI.Color.FromArgb(255, 0x2E, 0x8B, 0xE6);
+            foreach (int row in ScrollbarMarkers.Rows(View.BookmarkLines, View.TotalLines, height))
+            {
+                ds.FillRectangle(2f, row, width - 4f, 2f, bookmarkColor);
+            }
+        }
+
+        private void RefreshMarkerMargin() => MarkerMargin.Invalidate();
+
+        // Drops the find-match ticks (when the find is dismissed / its term cleared) and repaints the margin.
+        private void ClearMatchMarks()
+        {
+            if (matchMarks != null)
+            {
+                matchMarks = null;
+                RefreshMarkerMargin();
+            }
         }
 
         // ----- Filter / grep view (show only matching lines) -----
@@ -940,6 +992,7 @@ namespace FujiyNotepad.WinUI
             {
                 View.SetProvider(provider);
                 LblStatus.Text = $"{provider.LineCount:N0} lines";
+                RefreshMarkerMargin(); // the filter cleared bookmarks, so clear their ticks too
             }
         }
 
@@ -1041,6 +1094,7 @@ namespace FujiyNotepad.WinUI
             findCts?.Cancel();
             FindBar.Visibility = Visibility.Collapsed;
             View.SetHighlighter(null);
+            ClearMatchMarks();
             View.FocusCanvas();
         }
 
@@ -1132,6 +1186,7 @@ namespace FujiyNotepad.WinUI
                     FindCount.Text = string.Empty;
                     countedKey = null;
                     View.SetHighlighter(null);
+                    ClearMatchMarks();
                     return false;
                 }
             }
@@ -1434,6 +1489,7 @@ namespace FujiyNotepad.WinUI
             countCts = cts;
             CancellationToken token = cts.Token;
             LineProvider activeProvider = provider!;
+            var marks = new MatchMarks(activeProvider.LineCount);
             FindCount.Text = "counting\u2026";
 
             int count = await Task.Run(async () =>
@@ -1442,13 +1498,18 @@ namespace FujiyNotepad.WinUI
                 {
                     if (useRegex)
                     {
-                        return new RegexLineSearcher(activeProvider).CountAll(regex!, null, token);
+                        return new RegexLineSearcher(activeProvider).CountAll(regex!, null, token,
+                            line => { if (!marks.IsFull) marks.Add(line); });
                     }
 
                     int n = 0;
-                    await foreach (long _ in searcher.Search(0, pattern!, options, null, token))
+                    await foreach (long offset in searcher.Search(0, pattern!, options, null, token))
                     {
                         n++;
+                        if (!marks.IsFull)
+                        {
+                            marks.Add(LineIndexer.GetLineNumberFromOffset(offset));
+                        }
                     }
                     return n;
                 }
@@ -1469,6 +1530,8 @@ namespace FujiyNotepad.WinUI
             }
 
             FindCount.Text = count < 0 ? string.Empty : count == 1 ? "1 match" : $"{count:N0} matches";
+            matchMarks = count < 0 ? null : marks;
+            RefreshMarkerMargin();
         }
 
         // Persists an option change and invalidates the current find position and cached count, but does NOT
@@ -1491,6 +1554,7 @@ namespace FujiyNotepad.WinUI
             countedKey = null;
             FindCount.Text = string.Empty;
             View.SetHighlighter(null);
+            ClearMatchMarks();
         }
 
         private void SetFindBusy(bool busy, bool indeterminate = false)
