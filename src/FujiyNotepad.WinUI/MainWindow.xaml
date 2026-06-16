@@ -38,6 +38,12 @@
                 <MenuFlyoutItem Text="Open Sample" Click="OpenSample_Click" />
                 <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent" />
                 <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="ReloadItem" Text="Reload" Click="Reload_Click" IsEnabled="False">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F5" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click" KeyboardAcceleratorTextOverride="Alt+F4" />
             </MenuBarItem>
             <MenuBarItem x:Name="EditMenu" Title="Edit" IsEnabled="False">
@@ -197,12 +203,18 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="LblStatus" Grid.Column="0" FontSize="12" />
-            <TextBlock x:Name="LblCharCount" Grid.Column="1" FontSize="12" Margin="0,0,16,0" />
-            <TextBlock x:Name="LblZoom" Grid.Column="2" FontSize="12" Margin="0,0,16,0" />
-            <TextBlock x:Name="LblEncoding" Grid.Column="3" FontSize="12" Margin="0,0,16,0" />
-            <TextBlock x:Name="LblCursor" Grid.Column="4" FontSize="12" />
+            <TextBlock x:Name="LblStatus" Grid.Column="0" FontSize="12" VerticalAlignment="Center" />
+            <HyperlinkButton x:Name="ReloadHint" Grid.Column="1" Visibility="Collapsed"
+                             Content="↻ File changed on disk — Reload" FontSize="12"
+                             Padding="6,0" MinHeight="0" Margin="0,0,16,0" VerticalAlignment="Center"
+                             ToolTipService.ToolTip="The file changed on disk. Click or press F5 to reload."
+                             Click="Reload_Click" />
+            <TextBlock x:Name="LblCharCount" Grid.Column="2" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblZoom" Grid.Column="3" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblEncoding" Grid.Column="4" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblCursor" Grid.Column="5" FontSize="12" VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </Window>

@@ -34,8 +34,11 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 
 - Open multi-gigabyte text files with near-constant memory usage — a custom view draws only the
   lines currently on screen, reading each on demand.
-- **Open a file** by dragging it onto the window, from *File ▸ Open*, or via a command-line
+- **Open a file** by dragging it onto the window, from *File ▸ Open* (`Ctrl+O`), or via a command-line
   argument / file association; recently opened files appear under *File ▸ Open Recent*.
+- **Reload** the open file (`F5`, or *File ▸ Reload*) to pick up on-disk changes, keeping the scroll
+  position; when the file changes underneath you, a non-blocking **"file changed on disk"** hint
+  appears in the status bar so you can reload on demand (handy for growing logs).
 - **Looks at home on Windows**: a Mica backdrop on Windows 11, the open file's name in the title bar,
   and a text view that follows the system **light / dark** theme.
 - Native-style navigation: mouse wheel, a line-based vertical scrollbar, a horizontal scrollbar,
