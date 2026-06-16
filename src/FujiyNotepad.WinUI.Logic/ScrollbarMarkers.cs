@@ -21,18 +21,31 @@ namespace FujiyNotepad.WinUI.Logic
                 return Array.Empty<int>();
             }
 
-            int lastLine = totalLines - 1;
-            int lastRow = height - 1;
             var rows = new SortedSet<int>();
-
             foreach (int line in lines)
             {
-                int clamped = line < 0 ? 0 : (line > lastLine ? lastLine : line);
-                int row = lastLine == 0 ? 0 : (int)Math.Round((double)clamped / lastLine * lastRow);
-                rows.Add(row);
+                rows.Add(RowOf(line, totalLines, height));
             }
 
             return rows.Count == 0 ? Array.Empty<int>() : new List<int>(rows);
+        }
+
+        /// <summary>
+        /// Maps a single line index to its pixel row in <c>[0, height)</c> (line <c>0</c> -> top, line
+        /// <c>totalLines - 1</c> -> bottom), clamping out-of-range indices. Returns 0 for a non-positive track or
+        /// total. Also used to pre-bucket a huge match set into a fixed-resolution space.
+        /// </summary>
+        public static int RowOf(int line, int totalLines, int height)
+        {
+            if (totalLines <= 0 || height <= 0)
+            {
+                return 0;
+            }
+
+            int lastLine = totalLines - 1;
+            int lastRow = height - 1;
+            int clamped = line < 0 ? 0 : (line > lastLine ? lastLine : line);
+            return lastLine == 0 ? 0 : (int)Math.Round((double)clamped / lastLine * lastRow);
         }
     }
 }

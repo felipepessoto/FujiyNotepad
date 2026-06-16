@@ -50,7 +50,8 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 - **Go To Line** (`Ctrl+G`) and **Go To Offset** (`Ctrl+Shift+G`, decimal or `0x` hex byte position), plus
   a non-modal **Find** bar (`Ctrl+F`): find next (`Enter`/`F3`) and
   find previous (`Shift+Enter`/`Shift+F3`), **match case**, **whole word**, **regular expressions**,
-  a live **match count**, and **all matches highlighted** in the viewport, with a progress bar and cancel.
+  a live **match count**, and **all matches highlighted** in the viewport (and as **ticks on the scrollbar**,
+  so you can see where they are across the whole file), with a progress bar and cancel.
 - **Filter / grep view** (`Ctrl+Shift+F`): show only the lines that contain a term (or match a regular
   expression), with **match case** and **regex** options, so you can sift a huge log down to what matters;
   clear the filter to return to the full file.

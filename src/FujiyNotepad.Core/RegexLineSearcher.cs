@@ -1,3 +1,4 @@
+using System;
 using System.Text.RegularExpressions;
 
 namespace FujiyNotepad.Core
@@ -98,7 +99,7 @@ namespace FujiyNotepad.Core
         /// Counts every non-empty match across all available lines. Cancellation stops early and returns the
         /// partial count; progress is reported as a 0-100 percentage of lines scanned.
         /// </summary>
-        public int CountAll(Regex regex, IProgress<int>? progress = null, CancellationToken token = default)
+        public int CountAll(Regex regex, IProgress<int>? progress = null, CancellationToken token = default, Action<int>? onLineWithMatch = null)
         {
             int count = lines.LineCount;
             int total = 0;
@@ -112,12 +113,18 @@ namespace FujiyNotepad.Core
                     return total;
                 }
 
+                int before = total;
                 foreach (Match m in regex.Matches(lines.GetLine(line)))
                 {
                     if (m.Length > 0)
                     {
                         total++;
                     }
+                }
+
+                if (onLineWithMatch != null && total > before)
+                {
+                    onLineWithMatch(line);
                 }
 
                 if (progress != null && count > 0)
