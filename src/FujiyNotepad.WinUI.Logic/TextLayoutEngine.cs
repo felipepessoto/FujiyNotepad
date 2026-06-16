@@ -64,6 +64,12 @@ namespace FujiyNotepad.WinUI.Logic
     public readonly record struct HighlightRect(double X, double Width);
 
     /// <summary>
+    /// A persistent-highlight-rule rectangle: like <see cref="HighlightRect"/> but carrying the rule's packed
+    /// 0xAARRGGBB colour, since each rule paints in its own colour (unlike the single-colour Find highlight).
+    /// </summary>
+    public readonly record struct RuleHighlightRect(double X, double Width, uint Argb);
+
+    /// <summary>
     /// Size of the current selection. <see cref="Lines"/> is 0 when nothing is selected, otherwise the number
     /// of lines it touches. <see cref="Characters"/> is the selected character count, or -1 when the selection
     /// is too large to count cheaply (only the line count is shown then).
@@ -109,6 +115,12 @@ namespace FujiyNotepad.WinUI.Logic
         /// under the text; the currently-selected match is drawn over its highlight by the selection layer.
         /// </summary>
         public IReadOnlyList<HighlightRect> Matches { get; init; }
+
+        /// <summary>
+        /// Persistent highlight-rule rectangles on this line, each in its rule's colour (empty when no rules are
+        /// set). Painted under the Find highlight and the text, so a search still reads over a coloured line.
+        /// </summary>
+        public IReadOnlyList<RuleHighlightRect> RuleHighlights { get; init; }
     }
 
     /// <summary>
@@ -145,6 +157,9 @@ namespace FujiyNotepad.WinUI.Logic
 
         private static readonly IReadOnlyList<HighlightRect> NoHighlights = Array.Empty<HighlightRect>();
         private ILineHighlighter? highlighter;
+
+        private static readonly IReadOnlyList<RuleHighlightRect> NoRuleHighlights = Array.Empty<RuleHighlightRect>();
+        private HighlightRuleSet? highlightRules;
 
         private bool showLineNumbers = false;
 
@@ -351,6 +366,18 @@ namespace FujiyNotepad.WinUI.Logic
         public void SetHighlighter(ILineHighlighter? value)
         {
             highlighter = value;
+            RaiseRedraw();
+        }
+
+        /// <summary>
+        /// Sets (or clears, with <c>null</c>) the persistent highlight rules and requests a redraw. These are a
+        /// separate channel from <see cref="SetHighlighter"/> (Find), so they survive opening/closing the Find
+        /// bar and apply across every open file. Each visible line's <see cref="VisibleLine.RuleHighlights"/> is
+        /// recomputed from this rule set on the next <see cref="GetVisibleLines"/>.
+        /// </summary>
+        public void SetHighlightRules(HighlightRuleSet? value)
+        {
+            highlightRules = value is { Count: > 0 } ? value : null;
             RaiseRedraw();
         }
 
@@ -893,6 +920,7 @@ namespace FujiyNotepad.WinUI.Logic
                     HasCaret = hasCaret,
                     CaretX = caretX,
                     Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns),
+                    RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns),
                 });
             }
 
@@ -946,6 +974,31 @@ namespace FujiyNotepad.WinUI.Logic
                 }
             }
             return rects.Count > 0 ? rects : NoHighlights;
+        }
+
+        // Maps the persistent rule set's coloured character spans on this line to viewport-pixel rectangles
+        // (same column/scroll math as ComputeHighlights), carrying each rule's colour through to the renderer.
+        private IReadOnlyList<RuleHighlightRect> ComputeRuleHighlights(LineColumns columns)
+        {
+            IReadOnlyList<HighlightSpan> spans = highlightRules!.Find(columns.Source);
+            if (spans.Count == 0)
+            {
+                return NoRuleHighlights;
+            }
+
+            var rects = new List<RuleHighlightRect>(spans.Count);
+            foreach (HighlightSpan span in spans)
+            {
+                int startCol = columns.ColumnOfCharIndex(span.Start);
+                int endCol = columns.ColumnOfCharIndex(span.Start + span.Length);
+                double x0 = startCol * charWidth - horizontalOffset + TextOriginX;
+                double x1 = endCol * charWidth - horizontalOffset + TextOriginX;
+                if (x1 > x0)
+                {
+                    rects.Add(new RuleHighlightRect(x0, x1 - x0, span.Argb));
+                }
+            }
+            return rects.Count > 0 ? rects : NoRuleHighlights;
         }
 
         #endregion

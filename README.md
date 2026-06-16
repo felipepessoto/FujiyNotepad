@@ -54,6 +54,10 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 - **Filter / grep view** (`Ctrl+Shift+F`): show only the lines that contain a term (or match a regular
   expression), with **match case** and **regex** options, so you can sift a huge log down to what matters;
   clear the filter to return to the full file.
+- **Persistent highlight rules** (*View ▸ Highlight Rules…*): colour matching text by pattern across the
+  whole file — e.g. `ERROR` red and `WARN` amber — with literal or **regex** rules, **per-rule colours**
+  (names or hex), and an optional case-sensitive flag. Rules are edited as text, **persist across sessions**,
+  and apply on top of the filter view. Distinct from Find (which highlights the current search term only).
 - **Character encoding**: auto-detects **UTF-8**, **UTF-16** (LE/BE) and **UTF-32** (LE/BE) from the
   byte-order mark or a heuristic, with **Windows-1252 (ANSI)** as a fallback, so Windows logs and
   exports don't render as mojibake. The *Encoding* menu shows the detection and lets you override it.
@@ -103,7 +107,7 @@ workflow has a manual `workflow_dispatch` dry-run that produces the artifacts wi
 | `src/FujiyNotepad.Core.Tests` | xUnit tests for the engine (run headless, no UI). |
 | `src/FujiyNotepad.WinUI.Logic` | Framework-independent text-view logic: scroll/caret/selection, hit-testing, word selection, copy, and the per-line render model. No Win2D/WinUI dependency, so it unit-tests on a normal test host. |
 | `src/FujiyNotepad.WinUI.Logic.Tests` | xUnit tests for the view logic and render model. |
-| `src/FujiyNotepad.WinUI` | The WinUI 3 app: `Controls/TextCanvas.cs` (Win2D surface that paints the engine's render model and forwards input) and `MainWindow` (menus, scrollbars, status bar, Go To Line, Find bar, Filter bar). |
+| `src/FujiyNotepad.WinUI` | The WinUI 3 app: `Controls/TextCanvas.cs` (Win2D surface that paints the engine's render model and forwards input) and `MainWindow` (menus, scrollbars, status bar, Go To Line, Find bar, Filter bar, highlight rules). |
 
 ## Architecture
 

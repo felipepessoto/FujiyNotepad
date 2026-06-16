@@ -270,6 +270,9 @@ namespace FujiyNotepad.WinUI.Controls
         /// <summary>Sets (or clears, with null) the highlighter that paints every Find match in the viewport.</summary>
         public void SetHighlighter(ILineHighlighter? highlighter) => engine.SetHighlighter(highlighter);
 
+        /// <summary>Sets (or clears, with null) the persistent highlight rules painted across the whole file.</summary>
+        public void SetHighlightRules(HighlightRuleSet? rules) => engine.SetHighlightRules(rules);
+
         /// <summary>Whether the line-number gutter is shown.</summary>
         public bool ShowLineNumbers
         {
@@ -516,6 +519,16 @@ namespace FujiyNotepad.WinUI.Controls
             IReadOnlyList<VisibleLine> lines = engine.GetVisibleLines(hasFocusInternal, caretBlinkOn);
             foreach (VisibleLine line in lines)
             {
+                // Persistent highlight-rule backgrounds (under everything), each in its own colour. Painted
+                // before the Find highlight so an active search still stands out over a coloured line.
+                if (line.RuleHighlights is { Count: > 0 })
+                {
+                    foreach (RuleHighlightRect r in line.RuleHighlights)
+                    {
+                        ds.FillRectangle((float)r.X, (float)line.Y, (float)r.Width, (float)lineHeight, ToColor(r.Argb));
+                    }
+                }
+
                 // Highlight every Find match (under the text); the selected match is drawn over its highlight
                 // by the selection layer below, so the current match reads as the selection colour.
                 if (line.Matches is { Count: > 0 })
@@ -574,6 +587,10 @@ namespace FujiyNotepad.WinUI.Controls
                 caretTimer.Start();
             }
         }
+
+        // Unpacks a 0xAARRGGBB highlight-rule colour into a Win2D Color.
+        private static Color ToColor(uint argb) =>
+            Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
 
         // Light/dark palette for the Win2D surface, selected from the control's resolved ActualTheme.
         private void ApplyTheme()

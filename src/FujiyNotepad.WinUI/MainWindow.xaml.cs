@@ -1600,6 +1600,64 @@ namespace FujiyNotepad.WinUI
             settingsStore.Save(settings);
         }
 
+        // Parses the persisted rules text and pushes the compiled rule set to the view (null when there are
+        // none, so the engine skips the per-line work). Called on startup and whenever the rules are edited.
+        private void ApplyHighlightRules()
+        {
+            List<HighlightRule> rules = HighlightRuleText.Parse(settings.HighlightRulesText);
+            View.SetHighlightRules(rules.Count > 0 ? HighlightRuleSet.Build(rules) : null);
+        }
+
+        // View > Highlight Rules...: edit the persistent, per-pattern highlight rules as text.
+        private async void HighlightRules_Click(object sender, RoutedEventArgs e)
+        {
+            var editor = new TextBox
+            {
+                Text = string.IsNullOrEmpty(settings.HighlightRulesText)
+                    ? HighlightRuleText.DefaultExample
+                    : settings.HighlightRulesText,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.NoWrap,
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                Width = 460,
+                Height = 240,
+            };
+            ScrollViewer.SetVerticalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
+            ScrollViewer.SetHorizontalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
+
+            var help = new TextBlock
+            {
+                Text = "One rule per line:  color[/flags] pattern\n" +
+                       "Colors: red, orange, amber, yellow, green, teal, blue, cyan, purple, pink, gray, or #RRGGBB.\n" +
+                       "Flags: /regex and/or /case (e.g. blue/regex,case).  Lines starting with # are comments.",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.75,
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+
+            var panel = new StackPanel();
+            panel.Children.Add(help);
+            panel.Children.Add(editor);
+
+            var dialog = new ContentDialog
+            {
+                Title = "Highlight Rules",
+                Content = panel,
+                PrimaryButtonText = "Apply",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = Content.XamlRoot,
+            };
+
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                settings.HighlightRulesText = editor.Text;
+                settingsStore.Save(settings);
+                ApplyHighlightRules();
+                View.FocusCanvas();
+            }
+        }
+
         private void Font_Click(object sender, RoutedEventArgs e)
         {
             if (sender is RadioMenuFlyoutItem item && item.Tag is string family)
@@ -1685,6 +1743,8 @@ namespace FujiyNotepad.WinUI
 
             LineNumbersToggle.IsChecked = settings.ShowLineNumbers;
             View.ShowLineNumbers = settings.ShowLineNumbers;
+
+            ApplyHighlightRules();
 
             suppressFindOptionEvents = true;
             MatchCaseToggle.IsChecked = settings.FindMatchCase;
