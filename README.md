@@ -63,6 +63,9 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   (`F2` / `Shift+F2`, wrapping around), to flag points of interest in a large file. Bookmarked lines show a
   dot in the line-number gutter (*View ▸ Line Numbers*) and a **tick on the scrollbar** so you can see where
   they are at a glance; *Edit ▸ Clear All Bookmarks* removes them.
+- **Quick clipboard / file actions**: *Edit ▸ Copy with Line Numbers* (`Ctrl+Shift+C`) copies the selected
+  lines (or the caret line) each prefixed with its line number; *File ▸ Copy File Path* puts the open file's
+  full path on the clipboard; *File ▸ Reveal in Explorer* opens its folder with the file selected.
 - **Show whitespace** (*View ▸ Show Whitespace*): overlay faint markers for **spaces** (dots), **tabs**
   (arrows), **line endings** (a return mark, distinguishing **LF** from **CRLF**) and other **control
   characters** (boxes), with **trailing** whitespace emphasized, for inspecting log/data files where exact

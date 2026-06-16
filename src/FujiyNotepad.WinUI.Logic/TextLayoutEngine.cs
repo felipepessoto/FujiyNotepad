@@ -928,6 +928,33 @@ namespace FujiyNotepad.WinUI.Logic
             return s.Substring(start, end - start);
         }
 
+        /// <summary>
+        /// Builds the "Copy with Line Numbers" text: every full source line the selection spans (or just the
+        /// caret's line when there is no selection), each prefixed with its 1-based line number. Returns null
+        /// when no file is open. A selection that ends exactly at the start of a line does not include that line.
+        /// </summary>
+        public string? BuildCopyTextWithLineNumbers()
+        {
+            if (provider == null || totalLines == 0)
+            {
+                return null;
+            }
+
+            (TextPosition start, TextPosition end) = NormalizedSelection();
+            int firstLine = start.Line;
+            int lastLine = start == end
+                ? caret.Line
+                : (end.Column == 0 && end.Line > start.Line ? end.Line - 1 : end.Line);
+            lastLine = Math.Min(lastLine, totalLines - 1);
+
+            var lines = new List<string>(lastLine - firstLine + 1);
+            for (int l = firstLine; l <= lastLine; l++)
+            {
+                lines.Add(GetColumns(l).Source);
+            }
+            return LineNumberedCopy.Format(firstLine + 1, lines);
+        }
+
         internal (TextPosition start, TextPosition end) NormalizedSelection()
             => anchor <= caret ? (anchor, caret) : (caret, anchor);
 

@@ -320,6 +320,16 @@ namespace FujiyNotepad.WinUI.Controls
             }
         }
 
+        /// <summary>Copies the selected lines (or the caret's line) prefixed with their 1-based line numbers.</summary>
+        public void CopySelectionWithLineNumbers()
+        {
+            string? text = engine.BuildCopyTextWithLineNumbers();
+            if (text != null)
+            {
+                CopyToClipboard(text);
+            }
+        }
+
         /// <summary>Selects the whole document.</summary>
         public void SelectAllText()
         {

@@ -46,6 +46,9 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="CopyPathItem" Text="Copy File Path" Click="CopyFilePath_Click" IsEnabled="False" />
+                <MenuFlyoutItem x:Name="RevealItem" Text="Reveal in Explorer" Click="RevealInExplorer_Click" IsEnabled="False" />
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Exit" Click="Exit_Click" KeyboardAcceleratorTextOverride="Alt+F4" />
             </MenuBarItem>
             <MenuBarItem x:Name="EditMenu" Title="Edit" IsEnabled="False">
@@ -86,6 +89,12 @@
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutItem Text="Clear All Bookmarks" Click="ClearBookmarks_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Copy with Line Numbers" Click="CopyWithLineNumbers_Click">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control,Shift" Key="C" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem x:Name="StartIndexingItem" Text="Start indexing" Click="StartIndexing_Click" IsEnabled="False" />
                 <MenuFlyoutItem x:Name="StopIndexingItem" Text="Stop indexing" Click="StopIndexing_Click" IsEnabled="False" />
