@@ -295,7 +295,7 @@ namespace FujiyNotepad.WinUI
             CopyPathItem.IsEnabled = true;
             RevealItem.IsEnabled = true;
             UpdateEncodingUi();
-            RefreshCharacterCount();
+            _ = RefreshCharacterCountAsync();
             UpdateLineEndingLabel();
             StartWatchingFile(path);
 
@@ -1339,7 +1339,7 @@ namespace FujiyNotepad.WinUI
                 pattern = currentEncoding.Encode(text);
             }
 
-            RefreshMatchCount(key, useRegex, pattern, options, regex);
+            _ = RefreshMatchCountAsync(key, useRegex, pattern, options, regex);
 
             // Highlight every match of the executed search in the viewport (the selected match stays distinct).
             View.SetHighlighter(useRegex
@@ -1612,7 +1612,7 @@ namespace FujiyNotepad.WinUI
 
         // Recomputes the total match count in the background whenever the term/options change, updating the
         // count label. Each request cancels the previous one, and a result for a superseded key is dropped.
-        private async void RefreshMatchCount(string key, bool useRegex, byte[]? pattern, SearchOptions options, Regex? regex)
+        private async Task RefreshMatchCountAsync(string key, bool useRegex, byte[]? pattern, SearchOptions options, Regex? regex)
         {
             if (string.Equals(key, countedKey, StringComparison.Ordinal))
             {
@@ -1627,32 +1627,44 @@ namespace FujiyNotepad.WinUI
             var marks = new MatchMarks(activeProvider.LineCount);
             FindCount.Text = "counting\u2026";
 
-            int count = await Task.Run(async () =>
+            int count;
+            try
             {
-                try
+                count = await Task.Run(async () =>
                 {
-                    if (useRegex)
+                    try
                     {
-                        return new RegexLineSearcher(activeProvider).CountAll(regex!, null, token,
-                            line => { if (!marks.IsFull) marks.Add(line); });
-                    }
-
-                    int n = 0;
-                    await foreach (long offset in searcher.Search(0, pattern!, options, null, token))
-                    {
-                        n++;
-                        if (!marks.IsFull)
+                        if (useRegex)
                         {
-                            marks.Add(LineIndexer.GetLineNumberFromOffset(offset));
+                            return new RegexLineSearcher(activeProvider).CountAll(regex!, null, token,
+                                line => { if (!marks.IsFull) marks.Add(line); });
                         }
+
+                        int n = 0;
+                        await foreach (long offset in searcher.Search(0, pattern!, options, null, token))
+                        {
+                            n++;
+                            if (!marks.IsFull)
+                            {
+                                marks.Add(LineIndexer.GetLineNumberFromOffset(offset));
+                            }
+                        }
+                        return n;
                     }
-                    return n;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return -1;
-                }
-            });
+                    catch (ObjectDisposedException)
+                    {
+                        return -1;
+                    }
+                });
+            }
+            catch (Exception)
+            {
+                // Fire-and-forget UI counter: never let an unexpected failure escape and crash the process.
+                if (ReferenceEquals(countCts, cts)) countCts = null;
+                FindCount.Text = string.Empty;
+                matchMarks = null;
+                return;
+            }
 
             if (ReferenceEquals(countCts, cts))
             {
@@ -1969,7 +1981,7 @@ namespace FujiyNotepad.WinUI
 
         // Counts the file's total characters in the background (constant memory) and shows it in the status
         // bar. Each call cancels the previous one; a result for a superseded file/encoding is dropped.
-        private async void RefreshCharacterCount()
+        private async Task RefreshCharacterCountAsync()
         {
             if (source is null)
             {
@@ -1985,17 +1997,28 @@ namespace FujiyNotepad.WinUI
             TextEncoding encoding = currentEncoding;
             LblCharCount.Text = "counting\u2026";
 
-            long count = await Task.Run(async () =>
+            long count;
+            try
             {
-                try
+                count = await Task.Run(async () =>
                 {
-                    return await CharacterCounter.CountAsync(activeSource, encoding, null, token);
-                }
-                catch (ObjectDisposedException)
-                {
-                    return -1L;
-                }
-            });
+                    try
+                    {
+                        return await CharacterCounter.CountAsync(activeSource, encoding, null, token);
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        return -1L;
+                    }
+                });
+            }
+            catch (Exception)
+            {
+                // Fire-and-forget UI counter: never let an unexpected failure escape and crash the process.
+                if (ReferenceEquals(charCountCts, cts)) charCountCts = null;
+                LblCharCount.Text = string.Empty;
+                return;
+            }
 
             if (ReferenceEquals(charCountCts, cts))
             {
