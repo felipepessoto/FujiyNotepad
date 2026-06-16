@@ -58,3 +58,52 @@ jobs:
           path: ${{ github.workspace }}/TestResults/**/coverage.cobertura.xml
           if-no-files-found: warn
 
+  # App-layer UI smoke test. The build-and-test job above covers the engine and the device-free logic
+  # libraries, but the WinUI app itself (XAML, menu wiring, canvas, pickers) has no unit tests because a
+  # Windows App SDK host can't start headlessly. Instead we publish the real Native-AOT executable and drive
+  # it through Windows UI Automation with the winapp CLI (installed by microsoft/setup-WinAppCli), asserting
+  # the window/menus/status render and Find works without crashing. AOT on purpose: this app's worst bugs
+  # (CsWinRT picker CCW, missing resources.pri) only reproduce in the published AOT build.
+  ui-smoke:
+    name: UI smoke
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-win-x64-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-win-x64-
+            nuget-${{ runner.os }}-
+
+      - name: Set up winapp CLI
+        uses: microsoft/setup-WinAppCli@v0.1
+
+      # Mirrors the release publish (Properties/PublishProfiles/win-x64.pubxml): self-contained Native AOT,
+      # AOT linking via the runner's C++ toolchain. One arch (x64) is enough for a smoke test.
+      - name: Publish app (Native AOT, x64)
+        run: >
+          dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
+          -c Release
+          -p:Platform=x64
+          -p:PublishProfile=win-x64
+          -o publish/app
+
+      - name: UI smoke test
+        shell: pwsh
+        run: ./scripts/ui-smoke.ps1 -Exe "${{ github.workspace }}/publish/app/FujiyNotepad.WinUI.exe" -ArtifactDir "${{ github.workspace }}"
+
+      - name: Upload failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-smoke-failure
+          path: ${{ github.workspace }}/ui-smoke-failure.png
+          if-no-files-found: ignore
+
