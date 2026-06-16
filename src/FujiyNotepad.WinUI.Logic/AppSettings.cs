@@ -36,6 +36,12 @@ namespace FujiyNotepad.WinUI.Logic
         /// <summary>Find option: treat the search term as a regular expression (matched per line).</summary>
         public bool FindUseRegex { get; set; }
 
+        /// <summary>
+        /// The user's persistent highlight rules as editable text (one rule per line, see
+        /// <c>HighlightRuleText</c>). Stored verbatim so comments and ordering survive a round-trip.
+        /// </summary>
+        public string HighlightRulesText { get; set; } = "";
+
         /// <summary>Most-recently-opened file paths, newest first.</summary>
         public List<string> RecentFiles { get; set; } = new();
     }

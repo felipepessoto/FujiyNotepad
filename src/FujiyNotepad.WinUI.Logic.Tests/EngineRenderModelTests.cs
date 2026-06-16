@@ -301,6 +301,46 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.Equal("BANANA split", lines[1].Display);
         }
 
+        // ----- Persistent highlight rules (colour matches by pattern) -----
+
+        [Fact]
+        public async Task HighlightRules_EngineProducesColoredRectsForMatchingLines()
+        {
+            HighlightColors.TryParse("red", out uint red);
+            TextLayoutEngine e = await NewEngineAsync("ERROR here\nclean line", cw: 10, lh: 20, vw: 400, vh: 100);
+            e.SetHighlightRules(HighlightRuleSet.Build(new[]
+            {
+                new HighlightRule { Pattern = "ERROR", Color = "red" },
+            }));
+
+            IReadOnlyList<VisibleLine> lines = e.GetVisibleLines(hasFocus: false, caretVisible: false);
+
+            RuleHighlightRect rect = Assert.Single(lines[0].RuleHighlights);
+            Assert.Equal(red, rect.Argb);
+            Assert.Equal(TextLayoutEngine.TextPadding, rect.X);       // char 0 -> x = padding
+            Assert.Equal(50.0, rect.Width);                          // 5 chars * 10px
+            Assert.Empty(lines[1].RuleHighlights);                   // no match on the second line
+        }
+
+        [Fact]
+        public async Task HighlightRules_AreIndependentOfFindHighlighter()
+        {
+            TextLayoutEngine e = await NewEngineAsync("ERROR ERROR", cw: 10, lh: 20, vw: 400, vh: 100);
+            e.SetHighlightRules(HighlightRuleSet.Build(new[]
+            {
+                new HighlightRule { Pattern = "ERROR", Color = "red" },
+            }));
+
+            // No Find highlighter set: Matches stays empty while RuleHighlights are populated.
+            VisibleLine line = e.GetVisibleLines(hasFocus: false, caretVisible: false)[0];
+            Assert.Empty(line.Matches);
+            Assert.Equal(2, line.RuleHighlights.Count);
+
+            // Clearing the rules removes the rule highlights.
+            e.SetHighlightRules(null);
+            Assert.Empty(e.GetVisibleLines(hasFocus: false, caretVisible: false)[0].RuleHighlights);
+        }
+
         // ----- Selection statistics (status bar) -----
 
         [Fact]

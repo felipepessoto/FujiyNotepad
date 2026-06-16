@@ -104,6 +104,8 @@
                     <RadioMenuFlyoutItem x:Name="FontCourierNew" Text="Courier New" GroupName="Font" Tag="Courier New" Click="Font_Click" />
                     <RadioMenuFlyoutItem x:Name="FontLucidaConsole" Text="Lucida Console" GroupName="Font" Tag="Lucida Console" Click="Font_Click" />
                 </MenuFlyoutSubItem>
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Highlight Rules..." Click="HighlightRules_Click" />
             </MenuBarItem>
             <MenuBarItem x:Name="EncodingMenu" Title="Encoding" IsEnabled="False">
                 <RadioMenuFlyoutItem x:Name="EncAuto" Text="Auto-detect" GroupName="Encoding" Tag="" Click="Encoding_Click" />
