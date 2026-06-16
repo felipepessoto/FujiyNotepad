@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FujiyNotepad.Core;
+using FujiyNotepad.TestSupport;
 
 namespace FujiyNotepad.Core.Tests
 {

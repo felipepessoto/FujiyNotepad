@@ -1,5 +1,6 @@
 using System.Text;
 using FujiyNotepad.Core;
+using FujiyNotepad.TestSupport;
 
 namespace FujiyNotepad.Presentation.Tests
 {

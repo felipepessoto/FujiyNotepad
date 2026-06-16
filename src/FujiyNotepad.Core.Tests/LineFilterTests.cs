@@ -2,19 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using FujiyNotepad.Core;
+using FujiyNotepad.TestSupport;
 
 namespace FujiyNotepad.Core.Tests
 {
     public class LineFilterTests
     {
-        private sealed class FakeLines : ILineSource
-        {
-            private readonly string[] lines;
-            public FakeLines(params string[] lines) => this.lines = lines;
-            public int LineCount => lines.Length;
-            public string GetLine(int lineIndex) => lines[lineIndex];
-        }
-
         private static bool Contains(string line, string term) =>
             line.Contains(term, StringComparison.Ordinal);
 
