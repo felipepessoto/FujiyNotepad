@@ -33,13 +33,13 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
 
       - name: Restore
-        run: dotnet restore src/FujiyNotepad.WinUI.slnx
+        run: dotnet restore src/FujiyNotepad.slnx
 
       # Builds the shared engine (FujiyNotepad.Core), the WinUI text-view logic library and its tests, and
       # the WinUI app as a managed (RID-agnostic) build. The publish RID is selected at publish time by the
       # per-architecture publish profiles (Properties/PublishProfiles/win-*.pubxml), so no -r is needed here.
       - name: Build
-        run: dotnet build src/FujiyNotepad.WinUI.slnx --configuration Release --no-restore
+        run: dotnet build src/FujiyNotepad.slnx --configuration Release --no-restore
 
       # Runs the solution's tests: the shared engine (FujiyNotepad.Core) tests and the WinUI text-view logic
       # tests (FujiyNotepad.Presentation, including the render-model tests). Both are plain .NET test projects,
@@ -48,7 +48,7 @@ jobs:
       # logic library. Coverage is collected with coverlet (already referenced by the test projects) and
       # published as a build artifact for inspection.
       - name: Test
-        run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ${{ github.workspace }}/TestResults
+        run: dotnet test src/FujiyNotepad.slnx --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ${{ github.workspace }}/TestResults
 
       - name: Upload coverage
         if: always()
