@@ -288,7 +288,9 @@ namespace FujiyNotepad.WinUI
                 View.FirstVisibleLine = restoreFirstLine;
                 View.HorizontalOffset = restoreHorizontal;
             }
-            Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
+            // TEMP(ui-smoke validation): deliberately drop the file name from the window title to prove the
+            // UI smoke test detects an app-layer regression. THIS WILL BE REVERTED.
+            Title = "Fujiy Notepad";
             EditMenu.IsEnabled = true;
             EncodingMenu.IsEnabled = true;
             ReloadItem.IsEnabled = true;
