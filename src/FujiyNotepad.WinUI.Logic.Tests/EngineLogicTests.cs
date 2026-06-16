@@ -150,6 +150,54 @@ namespace FujiyNotepad.WinUI.Logic.Tests
             Assert.Equal(0, e.FirstVisibleLine);
         }
 
+        // ----- Go to line + column (Go To Offset) -----
+
+        [Fact]
+        public async Task GoToLineColumn_PlacesCaretAtColumnAndScrolls()
+        {
+            // "Line 50 : the quick brown fox" — land the caret on the 'q' (column 14), not the line start.
+            TextLayoutEngine e = await NewEngineAsync(TestData.ManyLines(100));
+
+            e.GoToLineColumn(50, 14);
+
+            Assert.Equal(50, e.FirstVisibleLine);
+            Assert.Equal(new TextPosition(50, 14), e.CaretPosition);
+            Assert.False(e.HasSelection);
+        }
+
+        [Fact]
+        public async Task GoToLineColumn_ClampsColumnToLineLength()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.ManyLines(100));
+            int lineLength = "Line 7 : the quick brown fox".Length;
+
+            e.GoToLineColumn(7, 10_000);
+
+            Assert.Equal(new TextPosition(7, lineLength), e.CaretPosition);
+        }
+
+        [Fact]
+        public async Task GoToLineColumn_ClampsLineAndNegativeColumn()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.ManyLines(100));
+
+            e.GoToLineColumn(10_000, -5);
+
+            Assert.Equal(new TextPosition(99, 0), e.CaretPosition);
+        }
+
+        [Fact]
+        public void GoToLineColumn_WithoutProvider_IsNoOp()
+        {
+            var e = new TextLayoutEngine { ViewportWidth = 100, ViewportHeight = 200 };
+            e.SetMetrics(10, 20);
+
+            e.GoToLineColumn(5, 3);
+
+            Assert.Equal(new TextPosition(0, 0), e.CaretPosition);
+            Assert.Equal(0, e.FirstVisibleLine);
+        }
+
         // ----- Total-line updates (background indexing) -----
 
         [Fact]

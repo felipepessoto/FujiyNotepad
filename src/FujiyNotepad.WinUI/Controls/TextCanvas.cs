@@ -255,6 +255,12 @@ namespace FujiyNotepad.WinUI.Controls
             engine.GoToLine(lineIndex);
         }
 
+        public void GoToLineColumn(int lineIndex, int column)
+        {
+            Ready();
+            engine.GoToLineColumn(lineIndex, column);
+        }
+
         public void SelectMatch(int lineIndex, int startColumn, int length)
         {
             Ready();

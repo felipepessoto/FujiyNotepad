@@ -44,7 +44,8 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   double-click to select a word) and **copy** (`Ctrl+C`), with a caret and an `Ln, Col` indicator.
 - Background **line indexing** with progress reporting and cancellation; the scrollbar extent grows
   as the indexer discovers lines.
-- **Go To Line** (`Ctrl+G`) and a non-modal **Find** bar (`Ctrl+F`): find next (`Enter`/`F3`) and
+- **Go To Line** (`Ctrl+G`) and **Go To Offset** (`Ctrl+Shift+G`, decimal or `0x` hex byte position), plus
+  a non-modal **Find** bar (`Ctrl+F`): find next (`Enter`/`F3`) and
   find previous (`Shift+Enter`/`Shift+F3`), **match case**, **whole word**, **regular expressions**,
   a live **match count**, and **all matches highlighted** in the viewport, with a progress bar and cancel.
 - **Character encoding**: auto-detects **UTF-8**, **UTF-16** (LE/BE) and **UTF-32** (LE/BE) from the
