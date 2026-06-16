@@ -89,5 +89,40 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(WhitespaceKind.Control, marker.Kind);
             Assert.False(marker.Trailing);
         }
+
+        [Fact]
+        public void LfEnding_AppendsReturnMarkerAtEndColumn()
+        {
+            IReadOnlyList<WhitespaceMarker> m = WhitespaceMarkers.Compute(LineColumns.Build("abc", 4), LineEnding.Lf);
+
+            WhitespaceMarker eol = Assert.Single(m);
+            Assert.Equal(WhitespaceKind.Lf, eol.Kind);
+            Assert.Equal(3, eol.Column); // after "abc"
+        }
+
+        [Fact]
+        public void CrLfEnding_AppendsCrLfMarker()
+        {
+            IReadOnlyList<WhitespaceMarker> m = WhitespaceMarkers.Compute(LineColumns.Build("abc", 4), LineEnding.CrLf);
+
+            Assert.Equal(WhitespaceKind.CrLf, Assert.Single(m).Kind);
+        }
+
+        [Fact]
+        public void NoneEnding_AppendsNoReturnMarker()
+        {
+            Assert.Empty(WhitespaceMarkers.Compute(LineColumns.Build("abc", 4), LineEnding.None));
+        }
+
+        [Fact]
+        public void Ending_MarkerFollowsWhitespaceMarkers()
+        {
+            // "a " with an LF: trailing space marker then the LF marker, in order.
+            IReadOnlyList<WhitespaceMarker> m = WhitespaceMarkers.Compute(LineColumns.Build("a ", 4), LineEnding.Lf);
+
+            Assert.Equal(2, m.Count);
+            Assert.Equal(WhitespaceKind.Space, m[0].Kind);
+            Assert.Equal(WhitespaceKind.Lf, m[1].Kind);
+        }
     }
 }

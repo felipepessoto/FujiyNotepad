@@ -623,8 +623,40 @@ namespace FujiyNotepad.WinUI.Controls
                     case WhitespaceKind.Control:
                         ds.DrawRectangle(x + 1f, (float)line.Y + 2f, cw - 2f, h - 4f, controlCharColor, 1f);
                         break;
+
+                    case WhitespaceKind.Lf:
+                        DrawReturnMark(ds, x, (float)line.Y, cw, h, crlf: false);
+                        break;
+
+                    case WhitespaceKind.CrLf:
+                        DrawReturnMark(ds, x, (float)line.Y, cw, h, crlf: true);
+                        break;
                 }
             }
+        }
+
+        // Draws a faint "return" mark at the end of a line for its terminator: a down-then-left arrow for LF,
+        // with a small leading CR tick for CRLF so the two endings are distinguishable (e.g. in a Mixed file).
+        private void DrawReturnMark(CanvasDrawingSession ds, float x, float yTop, float cw, float h, bool crlf)
+        {
+            Windows.UI.Color color = whitespaceColor;
+            float baseX = x;
+            if (crlf)
+            {
+                // CR tick: a short vertical bar just before the LF arrow.
+                ds.FillRectangle(baseX + 1f, yTop + h * 0.30f, 1.5f, h * 0.40f, color);
+                baseX += 4f;
+            }
+
+            float riserX = baseX + cw * 0.55f;
+            float topY = yTop + h * 0.28f;
+            float botY = yTop + h * 0.60f;
+            float leftX = baseX + cw * 0.18f;
+
+            ds.DrawLine(riserX, topY, riserX, botY, color, 1f);          // vertical riser
+            ds.DrawLine(riserX, botY, leftX, botY, color, 1f);           // base, leftward
+            ds.DrawLine(leftX, botY, leftX + 3f, botY - 3f, color, 1f);  // arrowhead
+            ds.DrawLine(leftX, botY, leftX + 3f, botY + 3f, color, 1f);
         }
 
         // Draws the line-number gutter on top of the text (its opaque background masks any text scrolled under

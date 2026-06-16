@@ -11,6 +11,12 @@ namespace FujiyNotepad.Core
 
         /// <summary>A C0/C1 control character other than tab - drawn as a small box.</summary>
         Control,
+
+        /// <summary>A line terminated by a bare <c>\n</c> - drawn as a return mark at the line's end.</summary>
+        Lf,
+
+        /// <summary>A line terminated by <c>\r\n</c> - drawn as a return mark (with a CR tick) at the line's end.</summary>
+        CrLf,
     }
 
     /// <summary>
@@ -32,9 +38,11 @@ namespace FujiyNotepad.Core
         /// <summary>
         /// The markers for <paramref name="columns"/>, in source order. Spaces and tabs after the last
         /// non-space/non-tab character are flagged <see cref="WhitespaceMarker.Trailing"/> (an all-blank line is
-        /// entirely trailing). Returns an empty list when the line has no whitespace or control characters.
+        /// entirely trailing). When <paramref name="ending"/> is <see cref="LineEnding.Lf"/> or
+        /// <see cref="LineEnding.CrLf"/>, a final marker of that kind is appended at the line's end column.
+        /// Returns an empty list when the line has no whitespace, control characters, or terminator to mark.
         /// </summary>
-        public static IReadOnlyList<WhitespaceMarker> Compute(LineColumns columns)
+        public static IReadOnlyList<WhitespaceMarker> Compute(LineColumns columns, LineEnding ending = LineEnding.None)
         {
             string source = columns.Source;
             int n = source.Length;
@@ -70,6 +78,13 @@ namespace FujiyNotepad.Core
                 {
                     (markers ??= new()).Add(new WhitespaceMarker(column, 1, WhitespaceKind.Control, false));
                 }
+            }
+
+            // A return mark at the end of the line for its terminator (None for the final unterminated line).
+            if (ending == LineEnding.Lf || ending == LineEnding.CrLf)
+            {
+                WhitespaceKind kind = ending == LineEnding.CrLf ? WhitespaceKind.CrLf : WhitespaceKind.Lf;
+                (markers ??= new()).Add(new WhitespaceMarker(columns.TotalColumns, 1, kind, false));
             }
 
             return (IReadOnlyList<WhitespaceMarker>?)markers ?? None;

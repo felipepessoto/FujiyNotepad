@@ -88,6 +88,39 @@ namespace FujiyNotepad.Core.Tests
         }
 
         [Fact]
+        public async Task GetLineEnding_DistinguishesLfCrLfAndNone()
+        {
+            // Line 0 ends with \n, line 1 with \r\n, line 2 is the final unterminated line.
+            var provider = await BuildAsync("a\nb\r\nc");
+
+            Assert.Equal(3, provider.LineCount);
+            Assert.Equal(LineEnding.Lf, provider.GetLineEnding(0));
+            Assert.Equal(LineEnding.CrLf, provider.GetLineEnding(1));
+            Assert.Equal(LineEnding.None, provider.GetLineEnding(2));
+        }
+
+        [Fact]
+        public async Task GetLineEnding_EmptyLines()
+        {
+            // A blank LF line and a blank CRLF line.
+            var provider = await BuildAsync("\n\r\nx");
+
+            Assert.Equal(LineEnding.Lf, provider.GetLineEnding(0));
+            Assert.Equal(LineEnding.CrLf, provider.GetLineEnding(1));
+        }
+
+        [Fact]
+        public async Task GetLineEnding_Utf16_DetectsCrLf()
+        {
+            // UTF-16LE "a\r\nb": 'a' 00, '\r' 00, '\n' 00, 'b' 00.
+            byte[] bytes = { (byte)'a', 0, 0x0D, 0, 0x0A, 0, (byte)'b', 0 };
+            var provider = await BuildAsync(new InMemoryByteSource(bytes), TextEncoding.Utf16Le);
+
+            Assert.Equal(LineEnding.CrLf, provider.GetLineEnding(0));
+            Assert.Equal(LineEnding.None, provider.GetLineEnding(1));
+        }
+
+        [Fact]
         public async Task Utf8Bom_StrippedFromFirstLine()
         {
             byte[] bytes = { 0xEF, 0xBB, 0xBF, (byte)'h', (byte)'i' };

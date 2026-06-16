@@ -9,7 +9,7 @@ namespace FujiyNotepad.Core
     /// re-read the disk. Line text never changes once its line is indexed (the index is append-only and
     /// only fully-terminated lines are exposed), so cached values stay valid.
     /// </summary>
-    public sealed class LineProvider : ILineSource
+    public sealed class LineProvider : ILineSource, ILineEndingSource
     {
         // Cap the bytes decoded for any one line so a pathologically long line cannot allocate without
         // bound; the remainder is elided with a marker (this is a viewer, not an editor).
@@ -102,6 +102,49 @@ namespace FujiyNotepad.Core
                 ? indexer.GetOffsetFromLineNumber(lineIndex + 2)
                 : fileSize;
             return (start, end);
+        }
+
+        /// <summary>
+        /// The terminator of line <paramref name="lineIndex"/>: <see cref="LineEnding.CrLf"/> when it ends with
+        /// an encoded <c>\r\n</c>, <see cref="LineEnding.Lf"/> for a bare <c>\n</c>, or <see cref="LineEnding.None"/>
+        /// for the file's final unterminated line. Reads only the line's trailing bytes (the terminator sits at
+        /// the end of the line's byte range), so it is cheap enough to call per visible line.
+        /// </summary>
+        public LineEnding GetLineEnding(int lineIndex)
+        {
+            byte[] nl = encoding.NewLineBytes;
+            byte[] cr = encoding.CarriageReturnBytes;
+            if (nl.Length == 0)
+            {
+                return LineEnding.None;
+            }
+
+            (long start, long end) = GetByteRange(lineIndex);
+            int tailLen = nl.Length + cr.Length;
+            long from = end - tailLen;
+            if (from < start)
+            {
+                from = start;
+                tailLen = (int)(end - start);
+            }
+            if (tailLen < nl.Length)
+            {
+                return LineEnding.None;
+            }
+
+            byte[] tail = new byte[tailLen];
+            int read = source.ReadFull(from, tail);
+            if (read < nl.Length || !tail.AsSpan(read - nl.Length, nl.Length).SequenceEqual(nl))
+            {
+                return LineEnding.None;
+            }
+
+            if (cr.Length > 0 && read >= nl.Length + cr.Length
+                && tail.AsSpan(read - nl.Length - cr.Length, cr.Length).SequenceEqual(cr))
+            {
+                return LineEnding.CrLf;
+            }
+            return LineEnding.Lf;
         }
 
         private string ReadLine(int lineIndex)

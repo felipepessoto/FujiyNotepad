@@ -1000,7 +1000,9 @@ namespace FujiyNotepad.WinUI.Logic
                     Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns),
                     RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns),
                     IsBookmarked = bookmarks.Count > 0 && bookmarks.Contains(lineIndex),
-                    Whitespace = showWhitespace ? WhitespaceMarkers.Compute(columns) : NoWhitespace,
+                    Whitespace = showWhitespace
+                        ? WhitespaceMarkers.Compute(columns, LineEndingOf(lineIndex))
+                        : NoWhitespace,
                 });
             }
 
@@ -1012,6 +1014,11 @@ namespace FujiyNotepad.WinUI.Logic
             }
             return lines;
         }
+
+        // The terminator of a line, when the provider can report it (real file or filtered view); None otherwise.
+        // Only consulted while "Show Whitespace" is on, so the extra index lookup is paid for visible lines only.
+        private LineEnding LineEndingOf(int lineIndex) =>
+            provider is ILineEndingSource endings ? endings.GetLineEnding(lineIndex) : LineEnding.None;
 
         private LineColumns GetColumns(int lineIndex)
         {
