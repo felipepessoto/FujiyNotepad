@@ -1614,19 +1614,22 @@ namespace FujiyNotepad.WinUI
             string stored = string.IsNullOrEmpty(settings.HighlightRulesText)
                 ? HighlightRuleText.DefaultExample
                 : settings.HighlightRulesText;
-            // The multiline TextBox only renders a line break for Windows "\r\n" (a lone "\n" or "\r" collapses
-            // to a single line), so display with "\r\n". The text is normalized back to "\n" on save.
+            // Display with Windows "\r\n" line breaks (stored as "\n"); together with assigning Text after
+            // AcceptsReturn below, this shows every rule.
             string editorText = stored.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
 
             var editor = new TextBox
             {
-                Text = editorText,
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.NoWrap,
                 FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
                 Width = 460,
                 Height = 240,
             };
+            // Assign Text AFTER AcceptsReturn is true: a single-line TextBox (the default) truncates a
+            // multi-line value at the first line break when it is assigned, and enabling AcceptsReturn
+            // afterward cannot recover the lost lines (verified via UI automation).
+            editor.Text = editorText;
             ScrollViewer.SetVerticalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
             ScrollViewer.SetHorizontalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
 
