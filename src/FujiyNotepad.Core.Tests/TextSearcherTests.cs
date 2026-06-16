@@ -413,5 +413,46 @@ namespace FujiyNotepad.Core.Tests
             long? hit = searcher.FindLastBefore(long.MaxValue, enc.GetBytes("cat"), new SearchOptions { WholeWord = true, UnitAlignment = 2, BigEndian = true });
             Assert.Equal(5 * 2, hit);
         }
+
+        // ----- FindForward (synchronous bounded forward scan, used by the sparse line index) -----
+
+        private static byte[] Ascii(string s) => System.Text.Encoding.ASCII.GetBytes(s);
+
+        [Fact]
+        public void FindForward_AppendsUpToMaxResults_Ascending()
+        {
+            var searcher = new TextSearcher(new InMemoryByteSource("a.b.c.d.e")); // '.' at 1,3,5,7
+            var results = new List<long>();
+            searcher.FindForward(0, Ascii("."), default, 3, results);
+            Assert.Equal(new long[] { 1, 3, 5 }, results); // bounded to maxResults, in order
+        }
+
+        [Fact]
+        public void FindForward_StartsAtOffset_AndStopsAtEof()
+        {
+            var searcher = new TextSearcher(new InMemoryByteSource("a.b.c")); // '.' at 1,3
+            var results = new List<long>();
+            searcher.FindForward(2, Ascii("."), default, 10, results);
+            Assert.Equal(new long[] { 3 }, results); // only the '.' at/after offset 2, fewer than maxResults
+        }
+
+        [Fact]
+        public void FindForward_AcrossChunkBoundary_FindsAll()
+        {
+            var searcher = new TextSearcher(new InMemoryByteSource("a.b.c.d.e.f"), chunkSize: 4); // '.' at 1,3,5,7,9
+            var results = new List<long>();
+            searcher.FindForward(0, Ascii("."), default, 100, results);
+            Assert.Equal(new long[] { 1, 3, 5, 7, 9 }, results);
+        }
+
+        [Fact]
+        public void FindForward_RespectsUnitAlignment()
+        {
+            // "AxAxxA": 'x' at 1, 3, 4; alignment 2 keeps only the even-offset one (4).
+            var searcher = new TextSearcher(new InMemoryByteSource("AxAxxA"));
+            var results = new List<long>();
+            searcher.FindForward(0, Ascii("x"), new SearchOptions { UnitAlignment = 2 }, 10, results);
+            Assert.Equal(new long[] { 4 }, results);
+        }
     }
 }
