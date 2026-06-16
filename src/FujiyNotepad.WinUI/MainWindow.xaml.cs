@@ -1611,11 +1611,16 @@ namespace FujiyNotepad.WinUI
         // View > Highlight Rules...: edit the persistent, per-pattern highlight rules as text.
         private async void HighlightRules_Click(object sender, RoutedEventArgs e)
         {
+            string stored = string.IsNullOrEmpty(settings.HighlightRulesText)
+                ? HighlightRuleText.DefaultExample
+                : settings.HighlightRulesText;
+            // The multiline TextBox only renders a line break for Windows "\r\n" (a lone "\n" or "\r" collapses
+            // to a single line), so display with "\r\n". The text is normalized back to "\n" on save.
+            string editorText = stored.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
+
             var editor = new TextBox
             {
-                Text = string.IsNullOrEmpty(settings.HighlightRulesText)
-                    ? HighlightRuleText.DefaultExample
-                    : settings.HighlightRulesText.Replace("\r\n", "\n").Replace('\r', '\n'),
+                Text = editorText,
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.NoWrap,
                 FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
