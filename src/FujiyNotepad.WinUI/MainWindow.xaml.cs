@@ -31,6 +31,17 @@ namespace FujiyNotepad.WinUI
         private TextEncoding currentEncoding = TextEncoding.Utf8;
         private bool encodingAutoDetect = true;
 
+        // Watches the open file's directory so an external change (e.g. a growing log) can be surfaced as a
+        // non-blocking "file changed" hint in the status bar. fileChangeSignaled coalesces the burst of events
+        // a single save produces so only the first marshals to the UI thread.
+        private FileSystemWatcher? fileWatcher;
+        private int fileChangeSignaled;
+
+        // When a Reload preserves the scroll position, the target first-visible line is re-applied on each index
+        // tick (until reachable) because a just-reloaded large file is only indexed up to its frontier. -1 = none.
+        private int pendingRestoreFirstLine = -1;
+        private double pendingRestoreHorizontalOffset;
+
         private readonly DispatcherQueueTimer indexRefreshTimer;
         private CancellationTokenSource? cancelIndexing;
         private Task indexingTask = Task.CompletedTask;
@@ -80,6 +91,7 @@ namespace FujiyNotepad.WinUI
             Closed += (_, _) =>
             {
                 SaveWindowState();
+                StopWatchingFile();
                 cancelIndexing?.Cancel();
                 findCts?.Cancel();
                 source?.Dispose();
@@ -218,7 +230,7 @@ namespace FujiyNotepad.WinUI
             };
         }
 
-        private async Task OpenFile(string path, bool addToRecent = true, TextEncoding? forcedEncoding = null)
+        private async Task OpenFile(string path, bool addToRecent = true, TextEncoding? forcedEncoding = null, bool preserveView = false)
         {
             // Open the new file before tearing down the current one, so a failure (missing/locked/denied
             // file) leaves the already-open file intact instead of half-closing it.
@@ -232,6 +244,10 @@ namespace FujiyNotepad.WinUI
                 await ShowOpenErrorAsync(path, ex);
                 return;
             }
+
+            // For a Reload, remember where the view was so it can be restored over the rebuilt index.
+            int restoreFirstLine = preserveView && provider is not null ? View.FirstVisibleLine : -1;
+            double restoreHorizontal = preserveView && provider is not null ? View.HorizontalOffset : 0;
 
             await StopIndexingAsync();
 
@@ -251,11 +267,22 @@ namespace FujiyNotepad.WinUI
             View.SetHighlighter(null);
 
             View.SetProvider(provider);
+            // Restore the scroll position (Reload) or start at the top (a new file); the index tick keeps
+            // nudging toward the saved line until the rebuilt index reaches it.
+            pendingRestoreFirstLine = restoreFirstLine;
+            pendingRestoreHorizontalOffset = restoreHorizontal;
+            if (restoreFirstLine >= 0)
+            {
+                View.FirstVisibleLine = restoreFirstLine;
+                View.HorizontalOffset = restoreHorizontal;
+            }
             Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
             EditMenu.IsEnabled = true;
             EncodingMenu.IsEnabled = true;
+            ReloadItem.IsEnabled = true;
             UpdateEncodingUi();
             RefreshCharacterCount();
+            StartWatchingFile(path);
 
             if (addToRecent)
             {
@@ -268,6 +295,79 @@ namespace FujiyNotepad.WinUI
             StartIndexing();
             SyncScrollBars();
             View.FocusCanvas();
+        }
+
+        // Reloads the currently-open file (F5 / File > Reload / the "file changed" status-bar hint): re-detects
+        // the encoding (unless one was chosen from the Encoding menu), rebuilds the index, and refreshes the
+        // view while trying to keep the scroll position. It is OpenFile with the current path and preserveView.
+        private async void Reload_Click(object sender, RoutedEventArgs e)
+        {
+            if (currentFilePath is not { } path)
+            {
+                return;
+            }
+
+            TextEncoding? forced = encodingAutoDetect ? null : currentEncoding;
+            await OpenFile(path, addToRecent: false, forcedEncoding: forced, preserveView: true);
+        }
+
+        // (Re)starts watching the open file's folder for external changes and clears any pending hint. Watching
+        // the folder (filtered to the file name) survives editors that replace the file via rename. Failures to
+        // watch (e.g. an unwatchable path) are non-fatal — Reload still works, there is just no change hint.
+        private void StartWatchingFile(string path)
+        {
+            StopWatchingFile();
+            Interlocked.Exchange(ref fileChangeSignaled, 0);
+            ReloadHint.Visibility = Visibility.Collapsed;
+
+            string? dir = Path.GetDirectoryName(path);
+            string name = Path.GetFileName(path);
+            if (string.IsNullOrEmpty(dir) || string.IsNullOrEmpty(name))
+            {
+                return;
+            }
+
+            try
+            {
+                var watcher = new FileSystemWatcher(dir, name)
+                {
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                };
+                watcher.Changed += OnWatchedFileChanged;
+                watcher.Created += OnWatchedFileChanged;
+                watcher.Deleted += OnWatchedFileChanged;
+                watcher.Renamed += OnWatchedFileChanged;
+                watcher.EnableRaisingEvents = true;
+                fileWatcher = watcher;
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or System.Security.SecurityException)
+            {
+                fileWatcher = null;
+            }
+        }
+
+        private void StopWatchingFile()
+        {
+            if (fileWatcher is { } watcher)
+            {
+                watcher.EnableRaisingEvents = false;
+                watcher.Changed -= OnWatchedFileChanged;
+                watcher.Created -= OnWatchedFileChanged;
+                watcher.Deleted -= OnWatchedFileChanged;
+                watcher.Renamed -= OnWatchedFileChanged;
+                watcher.Dispose();
+                fileWatcher = null;
+            }
+        }
+
+        // Fires on a thread-pool thread for every change event; coalesce the burst into a single UI update and
+        // reveal the non-blocking "file changed" hint. The user decides whether to reload — nothing is forced.
+        private void OnWatchedFileChanged(object sender, FileSystemEventArgs e)
+        {
+            if (Interlocked.Exchange(ref fileChangeSignaled, 1) == 0)
+            {
+                DispatcherQueue.TryEnqueue(() => ReloadHint.Visibility = Visibility.Visible);
+            }
         }
 
         private async Task ShowOpenErrorAsync(string path, Exception ex)
@@ -357,6 +457,18 @@ namespace FujiyNotepad.WinUI
             }
 
             View.UpdateTotalLines(provider.LineCount);
+
+            // Keep nudging a reloaded view toward its saved scroll position as the rebuilt index grows; stop
+            // once the target line is reachable (or indexing finished) so it no longer fights the user.
+            if (pendingRestoreFirstLine >= 0)
+            {
+                View.FirstVisibleLine = pendingRestoreFirstLine;
+                View.HorizontalOffset = pendingRestoreHorizontalOffset;
+                if (View.MaxFirstLine >= pendingRestoreFirstLine || LineIndexer.IsCompleted)
+                {
+                    pendingRestoreFirstLine = -1;
+                }
+            }
 
             if (LineIndexer.IsCompleted)
             {
