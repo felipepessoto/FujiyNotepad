@@ -42,7 +42,7 @@ jobs:
         run: dotnet build src/FujiyNotepad.WinUI.slnx --configuration Release --no-restore
 
       # Runs the solution's tests: the shared engine (FujiyNotepad.Core) tests and the WinUI text-view logic
-      # tests (FujiyNotepad.WinUI.Logic, including the render-model tests). Both are plain .NET test projects,
+      # tests (FujiyNotepad.Presentation, including the render-model tests). Both are plain .NET test projects,
       # so they run on the hosted runner. The WinUI app itself is not unit-tested here: Windows App SDK test
       # hosts can't start on headless GitHub-hosted runners, so all testable logic lives in the device-free
       # logic library. Coverage is collected with coverlet (already referenced by the test projects) and

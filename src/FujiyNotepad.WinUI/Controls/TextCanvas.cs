@@ -1,6 +1,6 @@
 using System.Numerics;
 using FujiyNotepad.Core;
-using FujiyNotepad.WinUI.Logic;
+using FujiyNotepad.Presentation;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Graphics.Canvas.UI.Xaml;

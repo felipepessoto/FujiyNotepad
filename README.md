@@ -120,8 +120,8 @@ workflow has a manual `workflow_dispatch` dry-run that produces the artifacts wi
 | --- | --- |
 | `src/FujiyNotepad.Core` | UI-agnostic engine: `FileByteSource` (positional `RandomAccess` I/O), `TextSearcher` (chunked, vectorized byte search), `LineIndexer` (background line-offset index), `LineProvider` (decode a line on demand), `LineColumns` (tab/column + wide-glyph mapping). |
 | `src/FujiyNotepad.Core.Tests` | xUnit tests for the engine (run headless, no UI). |
-| `src/FujiyNotepad.WinUI.Logic` | Framework-independent text-view logic: scroll/caret/selection, hit-testing, word selection, copy, and the per-line render model. No Win2D/WinUI dependency, so it unit-tests on a normal test host. |
-| `src/FujiyNotepad.WinUI.Logic.Tests` | xUnit tests for the view logic and render model. |
+| `src/FujiyNotepad.Presentation` | Framework-independent text-view logic: scroll/caret/selection, hit-testing, word selection, copy, and the per-line render model. No Win2D/WinUI dependency, so it unit-tests on a normal test host. |
+| `src/FujiyNotepad.Presentation.Tests` | xUnit tests for the view logic and render model. |
 | `src/FujiyNotepad.WinUI` | The WinUI 3 app: `Controls/TextCanvas.cs` (Win2D surface that paints the engine's render model and forwards input) and `MainWindow` (menus, scrollbars, status bar, Go To Line, Find bar, Filter bar, highlight rules). |
 
 ## Architecture
@@ -131,7 +131,7 @@ items controls — so the view is a **custom text surface drawn from scratch wit
 (`CanvasControl` + DirectWrite), not a `TextBox`/`ListView`. `TextCanvas` is a thin Win2D shell: it
 owns the `CanvasControl`, font metrics, focus, the clipboard, and the caret-blink/auto-scroll timers,
 maps pointer/keyboard input to the `TextLayoutEngine`, and paints its per-line render model. All scroll/caret/
-selection math lives in `FujiyNotepad.WinUI.Logic`, and the on-disk engine lives in
+selection math lives in `FujiyNotepad.Presentation`, and the on-disk engine lives in
 `FujiyNotepad.Core`; both are free of any Win2D/WinUI/WinRT dependency, so they're covered by xUnit
 tests that run on a normal .NET host. Windows App SDK UI can't be driven on headless CI, so
 interaction and visual details (selection feel, scrolling, rendering crispness) are best confirmed
