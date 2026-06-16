@@ -236,6 +236,83 @@ namespace FujiyNotepad.Core
         }
 
         /// <summary>
+        /// Synchronously appends up to <paramref name="maxResults"/> ascending offsets of
+        /// <paramref name="pattern"/> at or after <paramref name="startOffset"/> to <paramref name="results"/>,
+        /// reading the source in chunks. A bounded, synchronous counterpart of <see cref="Search(long, byte[],
+        /// SearchOptions, IProgress{int}?, CancellationToken)"/> (case-sensitive, only honouring
+        /// <see cref="SearchOptions.UnitAlignment"/>) used by the sparse line index to expand one checkpoint
+        /// block on the calling thread. It is safe to run concurrently with an in-progress <see cref="Search"/>
+        /// on the same instance: both only read the source positionally and allocate their own buffers.
+        /// </summary>
+        public void FindForward(long startOffset, byte[] pattern, SearchOptions options, int maxResults, List<long> results)
+        {
+            if (pattern.Length == 0 || maxResults <= 0)
+            {
+                return;
+            }
+
+            if (startOffset < 0)
+            {
+                startOffset = 0;
+            }
+
+            int overlap = pattern.Length - 1;
+            byte[] buffer = new byte[chunkSize + overlap];
+            long readPos = startOffset;
+            int carry = 0;
+            long bufferBase = startOffset;
+            long nextAllowedStart = startOffset;
+
+            while (results.Count < maxResults)
+            {
+                int read = source.ReadFull(readPos, buffer.AsSpan(carry, chunkSize));
+                int available = carry + read;
+                if (available == 0)
+                {
+                    break;
+                }
+
+                int from = 0;
+                while (from < available && results.Count < maxResults)
+                {
+                    int idx = buffer.AsSpan(from, available - from).IndexOf(pattern);
+                    if (idx < 0)
+                    {
+                        break;
+                    }
+                    int matchAt = from + idx;
+                    long matchOffset = bufferBase + matchAt;
+                    bool aligned = options.UnitAlignment <= 1 || matchOffset % options.UnitAlignment == 0;
+                    if (matchOffset >= nextAllowedStart && aligned)
+                    {
+                        results.Add(matchOffset);
+                        nextAllowedStart = matchOffset + pattern.Length;
+                        from = matchAt + pattern.Length;
+                    }
+                    else
+                    {
+                        from = matchAt + 1;
+                    }
+                }
+
+                readPos += read;
+                bool eof = read < chunkSize;
+                int newCarry = eof ? 0 : Math.Min(overlap, available);
+                if (newCarry > 0)
+                {
+                    buffer.AsSpan(available - newCarry, newCarry).CopyTo(buffer);
+                }
+                bufferBase = readPos - newCarry;
+                carry = newCarry;
+
+                if (eof)
+                {
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
         /// Yields the absolute offset of every occurrence of <paramref name="value"/> strictly before
         /// <paramref name="startOffset"/>, in descending order. For '\n' it additionally yields -1 at
         /// the end (the implicit start-of-file line boundary the viewport relies on).

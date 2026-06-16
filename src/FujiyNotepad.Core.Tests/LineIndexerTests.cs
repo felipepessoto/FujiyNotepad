@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FujiyNotepad.Core;
@@ -62,6 +64,84 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(1, indexer.GetLineNumberFromOffset(5));
             Assert.Equal(2, indexer.GetLineNumberFromOffset(6));
             Assert.Equal(2, indexer.GetLineNumberFromOffset(7));
+        }
+
+        // ----- Sparse index across multiple checkpoint blocks (CheckpointInterval = 1024) -----
+
+        [Fact]
+        public async Task SparseIndex_FixedWidthAcrossBlocks_ResolvesExactOffsets()
+        {
+            // 3000 fixed-width lines joined by '\n' (no trailing newline) span ~3 checkpoint blocks, so
+            // reconstruction must binary-search the checkpoints and scan within a block, not read a flat array.
+            // Each line is "lineNNNNNN" (10 bytes) + a '\n' separator => an 11-byte stride; line i starts at 11i.
+            const int count = 3000;
+            const int stride = 11;
+            var sb = new StringBuilder();
+            for (int i = 0; i < count; i++)
+            {
+                if (i > 0)
+                {
+                    sb.Append('\n');
+                }
+                sb.Append($"line{i:D6}");
+            }
+
+            var indexer = await BuildIndexAsync(sb.ToString());
+
+            Assert.Equal(count + 1, indexer.GetNumberOfLinesIndexed()); // dummy [0] + one start per line
+
+            foreach (int i in new[] { 0, 1, 1023, 1024, 1025, 2047, 2048, 2049, 2999 })
+            {
+                long start = (long)i * stride;
+                Assert.Equal(start, indexer.GetOffsetFromLineNumber(i + 1));  // exact start of line i
+                Assert.Equal(i, indexer.GetLineNumberFromOffset(start));      // offset at the start -> line i
+                Assert.Equal(i, indexer.GetLineNumberFromOffset(start + 3));  // mid-line stays on line i
+            }
+        }
+
+        [Fact]
+        public async Task SparseIndex_VariableWidthAcrossBlocks_RoundTrips()
+        {
+            // Variable-length lines so reconstruction depends on the actual newline scan, not arithmetic.
+            const int count = 2500;
+            var sb = new StringBuilder();
+            var starts = new List<long>(count);
+            long pos = 0;
+            var rnd = new Random(7);
+            for (int i = 0; i < count; i++)
+            {
+                starts.Add(pos);
+                int len = rnd.Next(1, 30);
+                sb.Append(new string((char)('a' + (i % 26)), len)).Append('\n');
+                pos += len + 1;
+            }
+
+            var indexer = await BuildIndexAsync(sb.ToString());
+
+            foreach (int i in new[] { 0, 1, 1023, 1024, 1025, 2048, 2499 })
+            {
+                long start = starts[i];
+                Assert.Equal(start, indexer.GetOffsetFromLineNumber(i + 1));
+                Assert.Equal(i, indexer.GetLineNumberFromOffset(start));
+                Assert.Equal(i, indexer.GetLineNumberFromOffset(start + 1)); // one byte into line i
+            }
+        }
+
+        [Fact]
+        public async Task SparseIndex_OutOfRangeAcrossBlocks_Throws()
+        {
+            // 2500 "x\n" lines (trailing newline) -> 2500 newlines + the seed = 2501 line starts, plus the
+            // dummy [0] = 2502 valid entries (0..2501); entry 2502 is one past the end and throws.
+            var sb = new StringBuilder();
+            for (int i = 0; i < 2500; i++)
+            {
+                sb.Append("x\n");
+            }
+            var indexer = await BuildIndexAsync(sb.ToString());
+
+            Assert.Equal(0L, indexer.GetOffsetFromLineNumber(1));            // line 0 starts at 0
+            Assert.Equal(2L * 2499, indexer.GetOffsetFromLineNumber(2500));  // line 2499 starts at 4998
+            Assert.Throws<InvalidOperationException>(() => indexer.GetOffsetFromLineNumber(2502));
         }
 
         private static LineIndexer NewIndexer() =>
