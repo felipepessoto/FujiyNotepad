@@ -1,0 +1,1 @@
+This file is a single line with no terminator - the line-ending indicator should be blank.

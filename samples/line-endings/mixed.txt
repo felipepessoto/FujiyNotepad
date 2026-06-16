@@ -1,0 +1,5 @@
+This file has MIXED line endings.
+Unix line (LF)
+Windows line (CRLF)
+Unix again (LF)
+Windows again (CRLF)
