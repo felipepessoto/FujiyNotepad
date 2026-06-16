@@ -45,7 +45,16 @@ jobs:
       # tests (FujiyNotepad.WinUI.Logic, including the render-model tests). Both are plain .NET test projects,
       # so they run on the hosted runner. The WinUI app itself is not unit-tested here: Windows App SDK test
       # hosts can't start on headless GitHub-hosted runners, so all testable logic lives in the device-free
-      # logic library.
+      # logic library. Coverage is collected with coverlet (already referenced by the test projects) and
+      # published as a build artifact for inspection.
       - name: Test
-        run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release --no-build --verbosity normal
+        run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ${{ github.workspace }}/TestResults
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage
+          path: ${{ github.workspace }}/TestResults/**/coverage.cobertura.xml
+          if-no-files-found: warn
 
