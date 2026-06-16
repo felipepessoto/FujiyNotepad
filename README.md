@@ -97,11 +97,11 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 
 ```powershell
 # From the repository root
-dotnet build src/FujiyNotepad.WinUI.slnx -c Release
+dotnet build src/FujiyNotepad.slnx -c Release
 dotnet run --project src/FujiyNotepad.WinUI -c Release
 ```
 
-Or open `src/FujiyNotepad.WinUI.slnx` in Visual Studio 2022 (17.13+, for the `.slnx` solution format) and press F5.
+Or open `src/FujiyNotepad.slnx` in Visual Studio 2022 (17.13+, for the `.slnx` solution format) and press F5.
 
 The app is **unpackaged** (`WindowsPackageType=None`), so the produced `.exe` runs directly. The
 release build additionally uses **Native AOT** (`PublishAot=true`); building AOT locally requires

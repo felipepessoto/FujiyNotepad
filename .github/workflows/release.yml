@@ -31,7 +31,7 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
 
       - name: Test
-        run: dotnet test src/FujiyNotepad.WinUI.slnx --configuration Release
+        run: dotnet test src/FujiyNotepad.slnx --configuration Release
 
   build:
     name: Publish ${{ matrix.rid }}
