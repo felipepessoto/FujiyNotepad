@@ -204,6 +204,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="LblStatus" Grid.Column="0" FontSize="12" VerticalAlignment="Center" />
             <HyperlinkButton x:Name="ReloadHint" Grid.Column="1" Visibility="Collapsed"
@@ -214,7 +215,9 @@
             <TextBlock x:Name="LblCharCount" Grid.Column="2" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
             <TextBlock x:Name="LblZoom" Grid.Column="3" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
             <TextBlock x:Name="LblEncoding" Grid.Column="4" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center" />
-            <TextBlock x:Name="LblCursor" Grid.Column="5" FontSize="12" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblLineEnding" Grid.Column="5" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center"
+                       ToolTipService.ToolTip="Line endings used by the file" />
+            <TextBlock x:Name="LblCursor" Grid.Column="6" FontSize="12" VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </Window>
