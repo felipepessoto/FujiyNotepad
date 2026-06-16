@@ -6,6 +6,7 @@
     xmlns:local="using:FujiyNotepad.WinUI"
     xmlns:controls="using:FujiyNotepad.WinUI.Controls"
     xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives"
+    xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
@@ -237,6 +238,11 @@
                                   Orientation="Vertical" Width="16"
                                   IndicatorMode="MouseIndicator" Visibility="Visible"
                                   Scroll="VScroll_Scroll" />
+
+            <!-- Marker margin: bookmark (and future find-match) ticks painted over the scrollbar track.
+                 Hit-test transparent so the scrollbar underneath still receives clicks/hover. -->
+            <canvas:CanvasControl x:Name="MarkerMargin" Grid.Row="0" Grid.Column="1"
+                                  Width="16" IsHitTestVisible="False" Draw="MarkerMargin_Draw" />
 
             <primitives:ScrollBar x:Name="HScroll" Grid.Row="1" Grid.Column="0"
                                   Orientation="Horizontal" Height="16"

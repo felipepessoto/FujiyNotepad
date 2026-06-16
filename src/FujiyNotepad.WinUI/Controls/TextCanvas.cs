@@ -289,6 +289,9 @@ namespace FujiyNotepad.WinUI.Controls
         /// <summary>Whether any line is bookmarked.</summary>
         public bool HasBookmarks => engine.HasBookmarks;
 
+        /// <summary>The bookmarked line indices, for the scrollbar marker margin.</summary>
+        public IReadOnlyCollection<int> BookmarkLines => engine.BookmarkLines;
+
         /// <summary>Whether the line-number gutter is shown.</summary>
         public bool ShowLineNumbers
         {

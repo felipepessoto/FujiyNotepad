@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 using FujiyNotepad.Core;
 using FujiyNotepad.WinUI.Controls;
 using FujiyNotepad.WinUI.Logic;
+using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -273,6 +275,7 @@ namespace FujiyNotepad.WinUI
             ResetFilter();
 
             View.SetProvider(provider);
+            RefreshMarkerMargin(); // clear any previous file's bookmark ticks
             // Restore the scroll position (Reload) or start at the top (a new file); the index tick keeps
             // nudging toward the saved line until the rebuilt index reaches it.
             pendingRestoreFirstLine = restoreFirstLine;
@@ -477,6 +480,7 @@ namespace FujiyNotepad.WinUI
             if (filteredSource is null)
             {
                 View.UpdateTotalLines(provider.LineCount);
+                RefreshMarkerMargin(); // bookmark tick positions shift as the total line count grows
 
                 // Keep nudging a reloaded view toward its saved scroll position as the rebuilt index grows; stop
                 // once the target line is reachable (or indexing finished) so it no longer fights the user.
@@ -748,6 +752,7 @@ namespace FujiyNotepad.WinUI
                 return;
             }
             View.ToggleBookmark();
+            RefreshMarkerMargin();
             View.FocusCanvas();
         }
 
@@ -778,8 +783,34 @@ namespace FujiyNotepad.WinUI
                 return;
             }
             View.ClearBookmarks();
+            RefreshMarkerMargin();
             View.FocusCanvas();
         }
+
+        // Paints the bookmark ticks over the vertical scrollbar track. (Find-match ticks are a planned follow-up.)
+        private void MarkerMargin_Draw(CanvasControl sender, CanvasDrawEventArgs args)
+        {
+            if (provider is null)
+            {
+                return;
+            }
+
+            IReadOnlyList<int> rows = ScrollbarMarkers.Rows(View.BookmarkLines, View.TotalLines, sender.Size.Height);
+            if (rows.Count == 0)
+            {
+                return;
+            }
+
+            CanvasDrawingSession ds = args.DrawingSession;
+            float width = (float)sender.Size.Width;
+            Windows.UI.Color color = Windows.UI.Color.FromArgb(255, 0x2E, 0x8B, 0xE6);
+            foreach (int row in rows)
+            {
+                ds.FillRectangle(2f, row, width - 4f, 2f, color);
+            }
+        }
+
+        private void RefreshMarkerMargin() => MarkerMargin.Invalidate();
 
         // ----- Filter / grep view (show only matching lines) -----
 
@@ -940,6 +971,7 @@ namespace FujiyNotepad.WinUI
             {
                 View.SetProvider(provider);
                 LblStatus.Text = $"{provider.LineCount:N0} lines";
+                RefreshMarkerMargin(); // the filter cleared bookmarks, so clear their ticks too
             }
         }
 

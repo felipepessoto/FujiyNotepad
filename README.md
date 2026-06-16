@@ -60,7 +60,8 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   and apply on top of the filter view. Distinct from Find (which highlights the current search term only).
 - **Bookmarks**: toggle a bookmark on the caret line (`Ctrl+F2`) and jump to the next / previous one
   (`F2` / `Shift+F2`, wrapping around), to flag points of interest in a large file. Bookmarked lines show a
-  dot in the line-number gutter (*View ▸ Line Numbers*); *Edit ▸ Clear All Bookmarks* removes them.
+  dot in the line-number gutter (*View ▸ Line Numbers*) and a **tick on the scrollbar** so you can see where
+  they are at a glance; *Edit ▸ Clear All Bookmarks* removes them.
 - **Character encoding**: auto-detects **UTF-8**, **UTF-16** (LE/BE) and **UTF-32** (LE/BE) from the
   byte-order mark or a heuristic, with **Windows-1252 (ANSI)** as a fallback, so Windows logs and
   exports don't render as mojibake. The *Encoding* menu shows the detection and lets you override it.
