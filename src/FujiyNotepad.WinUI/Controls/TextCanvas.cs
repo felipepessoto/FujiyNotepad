@@ -48,6 +48,9 @@ namespace FujiyNotepad.WinUI.Controls
         private Color gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
         private Color gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
         private Color bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
+        private Color whitespaceColor = Color.FromArgb(210, 0x5A, 0x5A, 0x5A);
+        private Color trailingWhitespaceColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
+        private Color controlCharColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
 
         // Right margin (px) between a line number and the gutter's edge; mirrors the engine's gutter padding.
         private const double GutterRightMargin = 6d;
@@ -297,6 +300,12 @@ namespace FujiyNotepad.WinUI.Controls
         {
             get => engine.ShowLineNumbers;
             set => engine.ShowLineNumbers = value;
+        }
+
+        public bool ShowWhitespace
+        {
+            get => engine.ShowWhitespace;
+            set => engine.ShowWhitespace = value;
         }
 
         public void FocusCanvas() => Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
@@ -565,6 +574,11 @@ namespace FujiyNotepad.WinUI.Controls
 
                 ds.DrawText(line.Display, new Vector2((float)line.TextX, (float)line.Y), textColor, textFormat);
 
+                if (line.Whitespace is { Count: > 0 })
+                {
+                    DrawWhitespaceMarkers(ds, line);
+                }
+
                 if (line.HasCaret)
                 {
                     ds.FillRectangle((float)line.CaretX, (float)line.Y, 1.0f, (float)lineHeight, caretColor);
@@ -572,6 +586,77 @@ namespace FujiyNotepad.WinUI.Controls
             }
 
             DrawGutter(ds, sender, lines);
+        }
+
+        // Overlays markers for spaces (dot), tabs (arrow) and other control chars (box) when "Show Whitespace"
+        // is on; trailing space/tab runs use a stronger (reddish) colour so they stand out.
+        private void DrawWhitespaceMarkers(CanvasDrawingSession ds, VisibleLine line)
+        {
+            float cw = (float)charWidth;
+            float h = (float)lineHeight;
+            float midY = (float)line.Y + h / 2f;
+
+            foreach (WhitespaceMarker m in line.Whitespace)
+            {
+                float x = (float)line.TextX + m.Column * cw;
+                Windows.UI.Color color = m.Trailing ? trailingWhitespaceColor : whitespaceColor;
+
+                switch (m.Kind)
+                {
+                    case WhitespaceKind.Space:
+                        float r = Math.Max(1.5f, cw * 0.14f);
+                        ds.FillEllipse(x + cw / 2f, midY, r, r, color);
+                        break;
+
+                    case WhitespaceKind.Tab:
+                        float w = m.Width * cw;
+                        float x0 = x + 2f;
+                        float x1 = x + w - 2f;
+                        if (x1 > x0)
+                        {
+                            ds.DrawLine(x0, midY, x1, midY, color, 1.5f);
+                            ds.DrawLine(x1 - 4f, midY - 4f, x1, midY, color, 1.5f); // arrowhead
+                            ds.DrawLine(x1 - 4f, midY + 4f, x1, midY, color, 1.5f);
+                        }
+                        break;
+
+                    case WhitespaceKind.Control:
+                        ds.DrawRectangle(x + 1f, (float)line.Y + 2f, cw - 2f, h - 4f, controlCharColor, 1.5f);
+                        break;
+
+                    case WhitespaceKind.Lf:
+                        DrawReturnMark(ds, x, (float)line.Y, cw, h, crlf: false);
+                        break;
+
+                    case WhitespaceKind.CrLf:
+                        DrawReturnMark(ds, x, (float)line.Y, cw, h, crlf: true);
+                        break;
+                }
+            }
+        }
+
+        // Draws a faint "return" mark at the end of a line for its terminator: a down-then-left arrow for LF,
+        // with a small leading CR tick for CRLF so the two endings are distinguishable (e.g. in a Mixed file).
+        private void DrawReturnMark(CanvasDrawingSession ds, float x, float yTop, float cw, float h, bool crlf)
+        {
+            Windows.UI.Color color = whitespaceColor;
+            float baseX = x;
+            if (crlf)
+            {
+                // CR tick: a short vertical bar just before the LF arrow.
+                ds.FillRectangle(baseX + 1f, yTop + h * 0.30f, 2f, h * 0.40f, color);
+                baseX += 4f;
+            }
+
+            float riserX = baseX + cw * 0.55f;
+            float topY = yTop + h * 0.28f;
+            float botY = yTop + h * 0.60f;
+            float leftX = baseX + cw * 0.18f;
+
+            ds.DrawLine(riserX, topY, riserX, botY, color, 1.5f);          // vertical riser
+            ds.DrawLine(riserX, botY, leftX, botY, color, 1.5f);           // base, leftward
+            ds.DrawLine(leftX, botY, leftX + 4f, botY - 4f, color, 1.5f);  // arrowhead
+            ds.DrawLine(leftX, botY, leftX + 4f, botY + 4f, color, 1.5f);
         }
 
         // Draws the line-number gutter on top of the text (its opaque background masks any text scrolled under
@@ -633,6 +718,9 @@ namespace FujiyNotepad.WinUI.Controls
                 gutterTextColor = Color.FromArgb(255, 0x85, 0x85, 0x85);
                 gutterSeparatorColor = Color.FromArgb(255, 0x33, 0x33, 0x33);
                 bookmarkColor = Color.FromArgb(255, 0x4F, 0xA3, 0xE3);
+                whitespaceColor = Color.FromArgb(205, 0xC8, 0xC8, 0xC8);
+                trailingWhitespaceColor = Color.FromArgb(235, 0xF0, 0x6A, 0x6A);
+                controlCharColor = Color.FromArgb(235, 0xF0, 0x6A, 0x6A);
             }
             else
             {
@@ -644,6 +732,9 @@ namespace FujiyNotepad.WinUI.Controls
                 gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
                 gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
                 bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
+                whitespaceColor = Color.FromArgb(210, 0x5A, 0x5A, 0x5A);
+                trailingWhitespaceColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
+                controlCharColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
             }
 
             canvas?.Invalidate();

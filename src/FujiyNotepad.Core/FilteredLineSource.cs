@@ -6,7 +6,7 @@ namespace FujiyNotepad.Core
     /// source line <c>sourceLines[i]</c>, so the existing view/engine renders only the matching lines with no
     /// other changes (it reads lines purely through <see cref="ILineSource"/>).
     /// </summary>
-    public sealed class FilteredLineSource : ILineSource
+    public sealed class FilteredLineSource : ILineSource, ILineEndingSource
     {
         private readonly ILineSource source;
         private readonly IReadOnlyList<int> sourceLines;
@@ -25,5 +25,9 @@ namespace FujiyNotepad.Core
 
         /// <summary>The 0-based source line that filtered row <paramref name="index"/> maps to.</summary>
         public int SourceLineAt(int index) => sourceLines[index];
+
+        /// <summary>The terminator of filtered row <paramref name="index"/> (forwarded from the real source line).</summary>
+        public LineEnding GetLineEnding(int index) =>
+            source is ILineEndingSource endings ? endings.GetLineEnding(sourceLines[index]) : LineEnding.None;
     }
 }

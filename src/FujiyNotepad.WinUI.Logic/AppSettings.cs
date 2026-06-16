@@ -18,6 +18,9 @@ namespace FujiyNotepad.WinUI.Logic
         /// <summary>Whether the line-number gutter is shown. Off by default.</summary>
         public bool ShowLineNumbers { get; set; }
 
+        /// <summary>Whether whitespace/control markers are overlaid on the text. Off by default.</summary>
+        public bool ShowWhitespace { get; set; }
+
         /// <summary>Last window width in physical pixels; 0 means "unset, use the default size".</summary>
         public int WindowWidth { get; set; }
 
