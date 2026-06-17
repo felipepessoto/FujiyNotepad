@@ -54,14 +54,16 @@ It needs the `winapp` CLI on `PATH` (`winget install Microsoft.winappcli`).
 ### Benchmarks
 
 `FujiyNotepad.Benchmarks` is a [BenchmarkDotNet](https://benchmarkdotnet.org/) harness over the engine's hot
-paths (indexing, search, line retrieval). It is a manual tool — not run by `dotnet test` or gated in CI — so
-run it on demand in Release:
+paths (indexing, search, line retrieval). Run it on demand in Release:
 
 ```powershell
 dotnet run -c Release --project src/FujiyNotepad.Benchmarks
 ```
 
-The same large-file paths are guarded for correctness in CI by `LargeFileIntegrationTests`.
+It never gates a PR. A separate **Benchmarks** workflow (`.github/workflows/benchmarks.yml`) also runs it —
+on demand, when the engine changes on `master`, and weekly — and saves the numbers as a downloadable artifact
+(plus a job summary) so a regression can be spotted over time. The same large-file paths are guarded for
+correctness in CI by `LargeFileIntegrationTests`.
 
 ## Architecture
 

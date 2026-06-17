@@ -4,8 +4,11 @@
 `FujiyNotepad.Core` — so a regression in the thing that makes the app special (opening and searching huge
 files quickly, with little memory) shows up as a number.
 
-This is a **manual** harness: it is not run by `dotnet test` or gated in CI (benchmark numbers are noisy on
-shared CI runners). It is part of the solution only so it keeps compiling.
+This is a **manual** harness: it is not run by `dotnet test` and never gates a pull request (benchmark
+numbers are noisy on shared CI runners). A separate, non-gating **Benchmarks** workflow
+([`.github/workflows/benchmarks.yml`](../../.github/workflows/benchmarks.yml)) runs it on demand, when the
+engine changes on `master`, and weekly — saving the numbers as a downloadable artifact (and a job summary)
+so a regression can be spotted and bisected over time.
 
 ## Run
 
