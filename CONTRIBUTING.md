@@ -67,8 +67,11 @@ wiring layer in `FujiyNotepad.WinUI`.
 
 ## Conventions
 
-- **Native AOT safety:** no reflection on hot/serialization paths — use `System.Text.Json` source generation
-  for settings and interpreted `Regex` (never `RegexOptions.Compiled` or source-generated regex).
+- **Native AOT safety:** avoid runtime code generation and reflection on hot/serialization paths — use
+  `System.Text.Json` source generation for settings, and the **interpreted** `Regex` engine (`new Regex(…)`)
+  for the Find and highlight-rule patterns, which are supplied by the user at runtime. (`RegexOptions.Compiled`
+  emits IL at runtime and is unavailable under AOT; the source-generated `[GeneratedRegex]` engine *is*
+  AOT-friendly, but only applies to patterns fixed at compile time — not the runtime-entered ones.)
 - **C# style:** block-scoped namespaces; non-underscore private field names in app/engine code (e.g.
   `provider`, `currentEncoding`); PascalCase types/methods/properties; `Async` suffix on async methods.
 - **Accessibility:** set `AutomationProperties.AutomationId`/`Name` on interactive controls.

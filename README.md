@@ -147,8 +147,7 @@ changes shutdown; the app still terminates as usual.)
 ## Contributing
 
 Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the build/test
-workflow and conventions, [CHANGELOG.md](CHANGELOG.md) for release history, and
-[SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+workflow and conventions, and [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
