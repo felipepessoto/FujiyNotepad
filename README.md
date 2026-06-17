@@ -137,6 +137,13 @@ tests that run on a normal .NET host. Windows App SDK UI can't be driven on head
 interaction and visual details (selection feel, scrolling, rendering crispness) are best confirmed
 hands-on on a real desktop.
 
+## Diagnostics
+
+If the app ever closes unexpectedly, it appends the exception (type, message, and stack trace) to
+`%LOCALAPPDATA%\FujiyNotepad\crash.log` — the same folder as `settings.json`. Attaching that file to a
+bug report makes a Native AOT crash much easier to diagnose. (Logging is best-effort and never blocks or
+changes shutdown; the app still terminates as usual.)
+
 ## License
 
 See [LICENSE](LICENSE).
