@@ -61,9 +61,9 @@ dotnet run -c Release --project src/FujiyNotepad.Benchmarks
 ```
 
 It never gates a PR. A separate **Benchmarks** workflow (`.github/workflows/benchmarks.yml`) also runs it —
-on demand, when the engine changes on `master`, and weekly — and saves the numbers as a downloadable artifact
-(plus a job summary) so a regression can be spotted over time. The same large-file paths are guarded for
-correctness in CI by `LargeFileIntegrationTests`.
+on demand, when `FujiyNotepad.Core` or the benchmarks themselves change on `master`, and weekly — and saves
+the numbers as a downloadable artifact (plus a job summary) so a regression can be spotted over time. The
+same large-file paths are guarded for correctness in CI by `LargeFileIntegrationTests`.
 
 ## Architecture
 
