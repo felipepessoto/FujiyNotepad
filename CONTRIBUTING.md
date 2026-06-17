@@ -60,10 +60,9 @@ paths (indexing, search, line retrieval). Run it on demand in Release:
 dotnet run -c Release --project src/FujiyNotepad.Benchmarks
 ```
 
-It never gates a PR. A separate **Benchmarks** workflow (`.github/workflows/benchmarks.yml`) also runs it —
-on demand, when `FujiyNotepad.Core` or the benchmarks themselves change on `master`, and weekly — and saves
-the numbers as a downloadable artifact (plus a job summary) so a regression can be spotted over time. The
-same large-file paths are guarded for correctness in CI by `LargeFileIntegrationTests`.
+It never gates a PR; a separate, non-gating workflow records the numbers over time for regression tracking —
+see [the project's README](src/FujiyNotepad.Benchmarks/README.md) for details. The same large-file paths are
+guarded for correctness in CI by `LargeFileIntegrationTests`.
 
 ## Architecture
 
