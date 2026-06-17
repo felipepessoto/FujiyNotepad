@@ -71,6 +71,34 @@ function Cleanup {
     Remove-Item $sample -Force -ErrorAction SilentlyContinue
 }
 
+$script:proc = $proc
+
+# --- winapp ui helpers (UIA-driven, so they need no mouse/DPI and run unattended in CI) ---
+function UiInvoke([string]$Selector, [int]$WaitMs = 600) {
+    winapp ui invoke $Selector -w $script:hwnd 2>$null | Out-Null
+    Start-Sleep -Milliseconds $WaitMs
+}
+function UiMenu([string]$Top, [string]$Item, [int]$WaitMs = 750) {
+    winapp ui invoke $Top -w $script:hwnd 2>$null | Out-Null
+    Start-Sleep -Milliseconds 450
+    winapp ui invoke $Item -w $script:hwnd 2>$null | Out-Null
+    Start-Sleep -Milliseconds $WaitMs
+}
+function UiSubMenu([string]$Top, [string]$Sub, [string]$Item, [int]$WaitMs = 750) {
+    winapp ui invoke $Top -w $script:hwnd 2>$null | Out-Null
+    Start-Sleep -Milliseconds 400
+    winapp ui invoke $Sub -w $script:hwnd 2>$null | Out-Null
+    Start-Sleep -Milliseconds 400
+    winapp ui invoke $Item -w $script:hwnd 2>$null | Out-Null
+    Start-Sleep -Milliseconds $WaitMs
+}
+function UiValue([string]$Selector) {
+    return ((winapp ui get-value $Selector -w $script:hwnd 2>$null | Out-String).Trim())
+}
+function UiHas([string]$Text) {
+    return ((winapp ui search $Text -w $script:hwnd 2>$null | Out-String) -match 'Found\s+[1-9]')
+}
+
 try {
     $id = $proc.Id
 
@@ -92,6 +120,7 @@ try {
     Assert ($null -ne $hwnd) "Main window is present" "No window titled '* Fujiy Notepad' appeared within 10s."
     if (-not $hwnd) { throw "No main window; aborting." }
     Assert ($title -like "*$sampleName*") "Title shows the opened file name" "Title was: '$title'"
+    $script:hwnd = $hwnd
 
     # 3) The menu bar rendered with its top-level menus.
     $menuText = (winapp ui inspect window -w $hwnd 2>$null | Out-String)
@@ -103,26 +132,85 @@ try {
     $status = (winapp ui get-value 'LblStatus' -w $hwnd 2>$null | Out-String)
     Assert ($status -match '5\s+lines') "Status bar shows the line count (5 lines)" "Status was: '$($status.Trim())'"
 
-    # 5) Menu wiring + accessibility: open Edit > Find and confirm the Find bar's option toggle exposes the
-    #    AutomationProperties.Name added in the best-practices pass (proves the menu handler ran).
-    winapp ui invoke 'Edit' -a $id 2>$null | Out-Null
-    Start-Sleep -Milliseconds 700
-    winapp ui invoke 'Find...' -a $id 2>$null | Out-Null
-    Start-Sleep -Milliseconds 900
+    # 5) Status bar populated from the opened file: the device-free formatters (StatusText, CharacterCounter,
+    #    LineEndingDetector, EncodingDetector) wired through to the real labels.
+    $charCount = UiValue 'LblCharCount'
+    Assert ($charCount -match '\d[\d,]*\s+character') "Status bar shows a character count" "LblCharCount: '$charCount'"
+    $lineEnding = UiValue 'LblLineEnding'
+    Assert ($lineEnding -eq 'CRLF') "Status bar shows the CRLF line ending" "LblLineEnding: '$lineEnding'"
+    $encoding = UiValue 'LblEncoding'
+    Assert ($encoding -match 'UTF-8') "Status bar shows the detected encoding (UTF-8)" "LblEncoding: '$encoding'"
+    $cursor = UiValue 'LblCursor'
+    Assert ($cursor -match 'Ln\s*1,\s*Col\s*1') "Status bar shows the caret position" "LblCursor: '$cursor'"
+    $zoom = UiValue 'LblZoom'
+    Assert ($zoom -eq '100%') "Status bar shows 100% zoom" "LblZoom: '$zoom'"
+
+    # 6) Encoding menu re-decodes the file; the status label follows the chosen / auto-detected encoding.
+    UiMenu 'Encoding' 'UTF-16 LE'
+    $enc16 = UiValue 'LblEncoding'
+    Assert ($enc16 -match 'UTF-16') "Encoding menu switches the active encoding to UTF-16 LE" "LblEncoding: '$enc16'"
+    UiMenu 'Encoding' 'Auto-detect'
+    $encAuto = UiValue 'LblEncoding'
+    Assert ($encAuto -match 'UTF-8') "Auto-detect restores the detected UTF-8 encoding" "LblEncoding: '$encAuto'"
+
+    # 7) View > Zoom adjusts the zoom level shown in the status bar.
+    UiMenu 'View' 'Zoom In'
+    $zoomIn = UiValue 'LblZoom'
+    $zoomInPct = 0; [void][int]::TryParse(($zoomIn -replace '%', ''), [ref]$zoomInPct)
+    Assert ($zoomInPct -gt 100) "Zoom In increases the zoom level" "LblZoom: '$zoomIn'"
+    UiMenu 'View' 'Reset Zoom'
+    Assert ((UiValue 'LblZoom') -eq '100%') "Reset Zoom returns to 100%" "LblZoom: '$(UiValue 'LblZoom')'"
+
+    # 8) View toggles (markers are Win2D-painted, so assert the handlers run without crashing).
+    UiMenu 'View' 'Line Numbers';   Assert (-not $proc.HasExited) "Line Numbers toggle did not crash the app"
+    UiMenu 'View' 'Show Whitespace'; Assert (-not $proc.HasExited) "Show Whitespace toggle did not crash the app"
+
+    # 9) Menu reachability for features whose effect is Win2D-painted or clipboard-bound: invoke and assert
+    #    the handler ran without crashing (a throwing handler would exit the AOT process).
+    UiMenu 'Edit' 'Toggle Bookmark';        Assert (-not $proc.HasExited) "Toggle Bookmark did not crash"
+    UiMenu 'Edit' 'Next Bookmark';          Assert (-not $proc.HasExited) "Next Bookmark did not crash"
+    UiMenu 'Edit' 'Clear All Bookmarks';    Assert (-not $proc.HasExited) "Clear All Bookmarks did not crash"
+    UiSubMenu 'Edit' 'Tab Width' '8';       Assert (-not $proc.HasExited) "Tab Width 8 did not crash"
+    UiSubMenu 'View' 'Theme' 'Dark';        Assert (-not $proc.HasExited) "Theme Dark did not crash"
+    UiSubMenu 'View' 'Theme' 'System';      Assert (-not $proc.HasExited) "Theme System did not crash"
+    UiSubMenu 'View' 'Font' 'Cascadia Mono'; Assert (-not $proc.HasExited) "Font change did not crash"
+
+    # 10) Dialogs open from their menu handlers and dismiss via the ContentDialog's CloseButton (its
+    #     AutomationId — using the literal text 'Close' would collide with the title-bar close button).
+    UiMenu 'Edit' 'Go To Line...' 900
+    Assert (UiHas 'Go To Line') "Go To Line dialog opened"
+    UiInvoke 'CloseButton'
+    UiMenu 'View' 'Highlight Rules...' 900
+    Assert (UiHas 'Colors') "Highlight Rules dialog opened"
+    UiInvoke 'CloseButton'
+    UiMenu 'Help' 'About FujiyNotepad...' 900
+    Assert (UiHas 'Version') "About dialog opened"
+    UiInvoke 'CloseButton'
+
+    # 11) Find: open the bar, confirm its accessibility name, type a term, run Find Next, read the live count.
+    UiMenu 'Edit' 'Find...'
     $nameJson = (winapp ui get-property 'MatchCaseToggle' -w $hwnd --property Name --json 2>$null | Out-String)
     $matchName = $null
     try { $matchName = ($nameJson | ConvertFrom-Json).properties.Name } catch { }
-    Assert ($matchName -eq 'Match case') "Find bar opened and the option toggle exposes its accessibility name" `
-        "MatchCaseToggle Name was: '$matchName'"
-
-    # 6) Typing into the find box works (proves the bar is live and focusable).
+    Assert ($matchName -eq 'Match case') "Find bar option toggle exposes its accessibility name" "Name: '$matchName'"
     winapp ui set-value 'FindBox' 'ERROR' -w $hwnd 2>$null | Out-Null
     Start-Sleep -Milliseconds 400
-    $findVal = (winapp ui get-value 'FindBox' -w $hwnd 2>$null | Out-String)
-    Assert ($findVal -match 'ERROR') "Find box accepts typed text" "FindBox value was: '$($findVal.Trim())'"
+    Assert ((UiValue 'FindBox') -match 'ERROR') "Find box accepts typed text"
+    UiInvoke 'Find Next' 1100
+    $findCount = UiValue 'FindCount'
+    Assert ($findCount -match '1 match') "Find reports the single ERROR match in the sample" "FindCount: '$findCount'"
+    Assert ((UiValue 'LblCursor') -match 'Ln\s*2') "Find Next moved the caret to the match line (line 2)" "LblCursor: '$(UiValue 'LblCursor')'"
 
-    # 7) Still alive after interaction.
-    Assert (-not $proc.HasExited) "Process is still running after interaction"
+    # 12) Filter / grep view: collapse the file to matching lines and read the filtered count.
+    UiMenu 'Edit' 'Filter...'
+    winapp ui set-value 'FilterBox' 'ERROR' -w $hwnd 2>$null | Out-Null
+    Start-Sleep -Milliseconds 300
+    UiInvoke 'Apply' 1200
+    $filtered = UiValue 'LblStatus'
+    Assert ($filtered -match 'Filtered:\s*1\s+of\s+5') "Filter shows 1 of 5 matching lines" "LblStatus: '$filtered'"
+
+    # 13) Still alive after the full interaction sweep.
+    Assert (-not $proc.HasExited) "Process is still running after the full interaction sweep"
 }
 catch {
     Write-Host "EXCEPTION: $_" -ForegroundColor Red
