@@ -490,6 +490,41 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.Equal(6000, stats.Lines);
         }
 
+        [Fact]
+        public async Task GetSelectionTimestampDelta_NoSelection_ReturnsNull()
+        {
+            TextLayoutEngine e = await NewEngineAsync("2024-01-02 15:04:05 a\nmid\n2024-01-02 15:06:35 b");
+
+            Assert.Null(e.GetSelectionTimestampDelta());
+        }
+
+        [Fact]
+        public async Task GetSelectionTimestampDelta_SingleLineSelection_ReturnsNull()
+        {
+            TextLayoutEngine e = await NewEngineAsync("2024-01-02 15:04:05 a\n2024-01-02 15:06:35 b");
+            e.SelectMatch(0, 0, 4); // select within line 0 only
+
+            Assert.Null(e.GetSelectionTimestampDelta());
+        }
+
+        [Fact]
+        public async Task GetSelectionTimestampDelta_MultiLineBothTimestamps_ReturnsDifference()
+        {
+            TextLayoutEngine e = await NewEngineAsync("2024-01-02 15:04:05 a\nmiddle\n2024-01-02 15:06:35 b");
+            e.HandleKey(NavKey.SelectAll, shift: false);
+
+            Assert.Equal(TimeSpan.FromSeconds(150), e.GetSelectionTimestampDelta());
+        }
+
+        [Fact]
+        public async Task GetSelectionTimestampDelta_EndpointNotTimestamp_ReturnsNull()
+        {
+            TextLayoutEngine e = await NewEngineAsync("2024-01-02 15:04:05 a\nmiddle\nno timestamp here");
+            e.HandleKey(NavKey.SelectAll, shift: false);
+
+            Assert.Null(e.GetSelectionTimestampDelta());
+        }
+
         // ----- Copy with line numbers -----
 
         [Fact]

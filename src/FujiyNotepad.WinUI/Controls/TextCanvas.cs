@@ -196,6 +196,9 @@ namespace FujiyNotepad.WinUI.Controls
         /// <summary>The size (characters and lines) of the current selection, for the status bar.</summary>
         public SelectionStats GetSelectionStats() => engine.GetSelectionStats();
 
+        /// <summary>The time delta between the first and last selected lines' leading timestamps, or null.</summary>
+        public TimeSpan? GetSelectionTimestampDelta() => engine.GetSelectionTimestampDelta();
+
         public int TabSize
         {
             get => engine.TabSize;
