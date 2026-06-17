@@ -159,7 +159,7 @@
         </MenuBar>
 
         <Grid x:Name="FindBar" Grid.Row="1" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"
-              Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+              Background="{ThemeResource LayerFillColorDefaultBrush}">
             <!-- The search box is the only flexible (*) column; every variable-width widget to its right
                  (status text, match count, and the search-progress area) has a fixed-width column. That
                  keeps the * column - and therefore the option toggles and Find Next button - from shifting
@@ -219,7 +219,7 @@
         </Grid>
 
         <Grid x:Name="FilterBar" Grid.Row="2" Visibility="Collapsed" Padding="8,4" ColumnSpacing="6"
-              Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+              Background="{ThemeResource LayerFillColorDefaultBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -273,10 +273,10 @@
                                   IndicatorMode="MouseIndicator" Visibility="Visible"
                                   Scroll="HScroll_Scroll" />
 
-            <Border Grid.Row="1" Grid.Column="1" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}" />
+            <Border Grid.Row="1" Grid.Column="1" Background="{ThemeResource LayerFillColorDefaultBrush}" />
         </Grid>
 
-        <Grid Grid.Row="4" Padding="8,3" Background="{ThemeResource SystemControlBackgroundBaseLowBrush}">
+        <Grid Grid.Row="4" Padding="8,3" Background="{ThemeResource LayerFillColorDefaultBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
