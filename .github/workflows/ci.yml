@@ -84,14 +84,14 @@ jobs:
         shell: pwsh
         run: ./scripts/check-coverage.ps1 -CoberturaFile "${{ github.workspace }}/coveragereport/Cobertura.xml" -Threshold 85
 
-  # App-layer UI smoke test. The build-and-test job above covers the engine and the device-free logic
+  # App-layer UI test. The build-and-test job above covers the engine and the device-free logic
   # libraries, but the WinUI app itself (XAML, menu wiring, canvas, pickers) has no unit tests because a
   # Windows App SDK host can't start headlessly. Instead we publish the real Native-AOT executable and drive
   # it through Windows UI Automation with the winapp CLI (installed by microsoft/setup-WinAppCli), asserting
-  # the window/menus/status render and Find works without crashing. AOT on purpose: this app's worst bugs
-  # (CsWinRT picker CCW, missing resources.pri) only reproduce in the published AOT build.
-  ui-smoke:
-    name: UI smoke
+  # the window/menus/status render and each feature's menu works without crashing. AOT on purpose: this app's
+  # worst bugs (CsWinRT picker CCW, missing resources.pri) only reproduce in the published AOT build.
+  ui-tests:
+    name: UI tests
     runs-on: windows-latest
     timeout-minutes: 25
 
@@ -112,7 +112,7 @@ jobs:
         uses: microsoft/setup-WinAppCli@v0.1
 
       # Mirrors the release publish (Properties/PublishProfiles/win-x64.pubxml): self-contained Native AOT,
-      # AOT linking via the runner's C++ toolchain. One arch (x64) is enough for a smoke test.
+      # AOT linking via the runner's C++ toolchain. One arch (x64) is enough for the UI tests.
       - name: Publish app (Native AOT, x64)
         run: >
           dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
@@ -121,15 +121,15 @@ jobs:
           -p:PublishProfile=win-x64
           -o publish/app
 
-      - name: UI smoke test
+      - name: UI tests
         shell: pwsh
-        run: ./scripts/ui-smoke.ps1 -Exe "${{ github.workspace }}/publish/app/FujiyNotepad.WinUI.exe" -ArtifactDir "${{ github.workspace }}"
+        run: ./scripts/ui-tests.ps1 -Exe "${{ github.workspace }}/publish/app/FujiyNotepad.WinUI.exe" -ArtifactDir "${{ github.workspace }}"
 
       - name: Upload failure screenshot
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-smoke-failure
-          path: ${{ github.workspace }}/ui-smoke-failure.png
+          name: ui-tests-failure
+          path: ${{ github.workspace }}/ui-tests-failure.png
           if-no-files-found: ignore
 
