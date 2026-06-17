@@ -123,6 +123,7 @@ workflow has a manual `workflow_dispatch` dry-run that produces the artifacts wi
 | `src/FujiyNotepad.Presentation` | Framework-independent text-view logic: scroll/caret/selection, hit-testing, word selection, copy, and the per-line render model. No Win2D/WinUI dependency, so it unit-tests on a normal test host. |
 | `src/FujiyNotepad.Presentation.Tests` | xUnit tests for the view logic and render model. |
 | `src/FujiyNotepad.WinUI` | The WinUI 3 app: `Controls/TextCanvas.cs` (Win2D surface that paints the engine's render model and forwards input) and `MainWindow` (menus, scrollbars, status bar, Go To Line, Find bar, Filter bar, highlight rules). |
+| `src/FujiyNotepad.Benchmarks` | BenchmarkDotNet micro-benchmarks for the engine's hot paths (manual; see the project's README). |
 
 ## Architecture
 
