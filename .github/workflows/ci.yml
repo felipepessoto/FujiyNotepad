@@ -41,29 +41,48 @@ jobs:
       - name: Build
         run: dotnet build src/FujiyNotepad.slnx --configuration Release --no-restore
 
-      # Runs the solution's tests: the shared engine (FujiyNotepad.Core) tests and the WinUI text-view logic
+      # Runs the solution's tests: the shared engine (FujiyNotepad.Core) tests and the device-free view-logic
       # tests (FujiyNotepad.Presentation, including the render-model tests). Both are plain .NET test projects,
       # so they run on the hosted runner. The WinUI app itself is not unit-tested here: Windows App SDK test
       # hosts can't start on headless GitHub-hosted runners, so all testable logic lives in the device-free
-      # logic library. Coverage is collected with coverlet (already referenced by the test projects) and
-      # published as a build artifact for inspection.
+      # logic library. Coverage is collected with coverlet (already referenced by the test projects).
       - name: Test
         run: dotnet test src/FujiyNotepad.slnx --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ${{ github.workspace }}/TestResults
 
-      - name: Upload coverage
+      # ReportGenerator (the de-facto .NET coverage tool) merges the per-project cobertura files, scopes them to
+      # the two production libraries, and emits a GitHub-flavoured markdown summary + a merged Cobertura. It runs
+      # on the Windows runner; the popular gate action (irongut/CodeCoverageSummary) is Docker/Linux-only, so the
+      # threshold gate stays a small inline script instead.
+      - name: Coverage report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.10
+        with:
+          reports: ${{ github.workspace }}/TestResults/**/coverage.cobertura.xml
+          targetdir: ${{ github.workspace }}/coveragereport
+          reporttypes: MarkdownSummaryGithub;Cobertura;HtmlInline
+          assemblyfilters: +FujiyNotepad.Core;+FujiyNotepad.Presentation
+          verbosity: Warning
+
+      # Make the percentage visible: append ReportGenerator's summary to the run summary page.
+      - name: Publish coverage to run summary
+        if: always()
+        shell: pwsh
+        run: |
+          $f = "${{ github.workspace }}/coveragereport/SummaryGithub.md"
+          if ((Test-Path $f) -and $env:GITHUB_STEP_SUMMARY) { Get-Content $f | Add-Content $env:GITHUB_STEP_SUMMARY }
+
+      - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: code-coverage
-          path: ${{ github.workspace }}/TestResults/**/coverage.cobertura.xml
+          name: coverage-report
+          path: ${{ github.workspace }}/coveragereport
           if-no-files-found: warn
 
-      # Surface the per-library coverage as a table in the run summary (so the percentage is visible without
-      # downloading the artifact) and fail the build if a production library's line coverage drops below the
-      # floor. Scoped to Core + Presentation; the WinUI app is covered by the UI smoke job, not unit coverage.
-      - name: Coverage summary & gate
+      # Gate: fail the build if a production library's line coverage drops below the floor (a safety net
+      # against silent erosion; the libraries currently sit ~92.5%).
+      - name: Coverage gate
         shell: pwsh
-        run: ./scripts/check-coverage.ps1 -ResultsDir "${{ github.workspace }}/TestResults" -Threshold 85
+        run: ./scripts/check-coverage.ps1 -CoberturaFile "${{ github.workspace }}/coveragereport/Cobertura.xml" -Threshold 85
 
   # App-layer UI smoke test. The build-and-test job above covers the engine and the device-free logic
   # libraries, but the WinUI app itself (XAML, menu wiring, canvas, pickers) has no unit tests because a
