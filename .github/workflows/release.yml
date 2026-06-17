@@ -142,7 +142,7 @@ jobs:
 
       # Always uploaded (including on the manual dry-run) so each AOT build can be inspected without a release.
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FujiyNotepad-${{ matrix.rid }}
           path: ${{ steps.package.outputs.zip }}
