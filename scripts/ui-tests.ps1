@@ -1,17 +1,18 @@
 #requires -Version 7.0
 <#
 .SYNOPSIS
-    App-layer UI smoke test for FujiyNotepad, driven by the Windows App Development CLI (winapp ui).
+    App-layer UI test for FujiyNotepad, driven by the Windows App Development CLI (winapp ui).
 
 .DESCRIPTION
     Launches the *published* WinUI app on a sample file and drives it through Windows UI Automation to
     assert the app-layer glue works end to end: the XAML loads, the window and menus render, the file opens
-    and the status bar populates, the Find bar wires up, and the process does not crash. This is the one
-    layer the FujiyNotepad.Core / FujiyNotepad.Presentation unit tests cannot cover (it needs a real desktop
-    session and a built app), so it runs as a dedicated CI job rather than via `dotnet test`.
+    and the status bar populates, and each feature's menu (encoding, zoom, find, filter, bookmarks, theme,
+    font, dialogs, ...) works without crashing. This is the one layer the FujiyNotepad.Core /
+    FujiyNotepad.Presentation unit tests cannot cover (it needs a real desktop session and a built app), so it
+    runs as a dedicated CI job rather than via `dotnet test`.
 
     It targets the published Native-AOT executable on purpose: this app's nastiest regressions (e.g. the
-    CsWinRT file-picker CCW failure, missing resources.pri) only reproduce in the AOT build, so a smoke test
+    CsWinRT file-picker CCW failure, missing resources.pri) only reproduce in the AOT build, so a UI test
     against the managed build would miss them.
 
 .PARAMETER Exe
@@ -57,7 +58,7 @@ $sampleLines = @(
     'delta fourth line',
     'epsilon fifth line'
 )
-$sample = Join-Path ([System.IO.Path]::GetTempPath()) ("fujiy-uismoke-{0}.txt" -f ([guid]::NewGuid().ToString('N')))
+$sample = Join-Path ([System.IO.Path]::GetTempPath()) ("fujiy-uitests-{0}.txt" -f ([guid]::NewGuid().ToString('N')))
 [System.IO.File]::WriteAllText($sample, ($sampleLines -join "`r`n"))
 $sampleName = Split-Path $sample -Leaf
 
@@ -106,7 +107,7 @@ try {
     Start-Sleep -Seconds 6
     Assert (-not $proc.HasExited) "Process is still running after launch" `
         "Process exited with code $($proc.ExitCode) — likely an activation/AOT crash."
-    if ($proc.HasExited) { throw "App exited on launch; aborting smoke test." }
+    if ($proc.HasExited) { throw "App exited on launch; aborting UI tests." }
 
     # 2) The main window appears and carries the expected title (proves XAML loaded + file opened).
     $hwnd = $null
@@ -220,7 +221,7 @@ finally {
     # On failure, capture a screenshot for the CI artifact before tearing down.
     if ($script:failures -gt 0 -and $hwnd) {
         try {
-            $shot = Join-Path $ArtifactDir 'ui-smoke-failure.png'
+            $shot = Join-Path $ArtifactDir 'ui-tests-failure.png'
             winapp ui screenshot window -w $hwnd --output $shot 2>$null | Out-Null
             Write-Host "Saved failure screenshot to $shot"
         } catch { }
@@ -230,9 +231,9 @@ finally {
 
 Write-Host ''
 if ($script:failures -eq 0) {
-    Write-Host "UI smoke test PASSED" -ForegroundColor Green
+    Write-Host "UI tests PASSED" -ForegroundColor Green
     exit 0
 } else {
-    Write-Host "UI smoke test FAILED ($script:failures assertion failure(s))" -ForegroundColor Red
+    Write-Host "UI tests FAILED ($script:failures assertion failure(s))" -ForegroundColor Red
     exit 1
 }
