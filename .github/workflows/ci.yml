@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # No actions/setup-dotnet: the windows runner image already ships a .NET 10 SDK, which global.json
       # (10.0.100, rollForward latestMinor) accepts. setup-dotnet always re-downloads the ~300 MB SDK, so
@@ -97,7 +97,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
