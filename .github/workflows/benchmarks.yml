@@ -55,8 +55,9 @@ jobs:
         shell: pwsh
         run: |
           $report = Get-ChildItem "${{ github.workspace }}/benchmark-results/results" -Filter *-report-github.md -ErrorAction SilentlyContinue | Select-Object -First 1
+          "## Benchmark results" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Commit: $env:GITHUB_SHA" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           if ($report) {
-            "## Benchmark results (\`${{ github.sha }}\`)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
             Get-Content $report.FullName | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           } else {
             "No benchmark report was produced." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
