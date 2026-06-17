@@ -1,0 +1,74 @@
+name: Benchmarks
+
+# Performance tracking, NOT a gate. Runs the BenchmarkDotNet harness and saves the numbers as artifacts (plus
+# a job summary) so a regression can be spotted and bisected over time. It never blocks a pull request: it is
+# a separate workflow that runs on demand, when FujiyNotepad.Core or the benchmarks change on master, and on
+# a weekly schedule.
+# Numbers from a shared GitHub runner are noisy in absolute terms, but a consistent series across commits is
+# enough to flag a real regression.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+    paths:
+      - 'src/FujiyNotepad.Core/**'
+      - 'src/FujiyNotepad.Benchmarks/**'
+      - '.github/workflows/benchmarks.yml'
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+
+# Don't pile up benchmark runs; a newer commit supersedes an in-flight run on the same ref.
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmarks:
+    name: Run benchmarks
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-bench-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-bench-
+            nuget-${{ runner.os }}-
+
+      # ShortRun keeps the run quick enough for routine CI while still producing usable numbers; the JSON
+      # exporter is the machine-readable record (the GitHub-markdown report is emitted by default).
+      - name: Run BenchmarkDotNet
+        run: >
+          dotnet run -c Release --project src/FujiyNotepad.Benchmarks --
+          --filter *
+          --job short
+          --exporters json
+          --artifacts ${{ github.workspace }}/benchmark-results
+
+      - name: Publish results to the job summary
+        if: always()
+        shell: pwsh
+        run: |
+          $report = Get-ChildItem "${{ github.workspace }}/benchmark-results/results" -Filter *-report-github.md -ErrorAction SilentlyContinue | Select-Object -First 1
+          "## Benchmark results" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Commit: $env:GITHUB_SHA" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($report) {
+            Get-Content $report.FullName | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          } else {
+            "No benchmark report was produced." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmark-results/**
+          if-no-files-found: warn
+          retention-days: 90

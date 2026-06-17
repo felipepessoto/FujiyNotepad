@@ -51,6 +51,19 @@ UI Automation:
 
 It needs the `winapp` CLI on `PATH` (`winget install Microsoft.winappcli`).
 
+### Benchmarks
+
+`FujiyNotepad.Benchmarks` is a [BenchmarkDotNet](https://benchmarkdotnet.org/) harness over the engine's hot
+paths (indexing, search, line retrieval). Run it on demand in Release:
+
+```powershell
+dotnet run -c Release --project src/FujiyNotepad.Benchmarks
+```
+
+It never gates a PR; a separate, non-gating workflow records the numbers over time for regression tracking —
+see [the project's README](src/FujiyNotepad.Benchmarks/README.md) for details. The same large-file paths are
+guarded for correctness in CI by `LargeFileIntegrationTests`.
+
 ## Architecture
 
 The code is layered so almost all logic is testable without a graphics device:
@@ -61,6 +74,7 @@ The code is layered so almost all logic is testable without a graphics device:
 | `src/FujiyNotepad.Presentation` | Framework-independent view logic: scroll/caret/selection, the per-line render model, find/filter/highlight/bookmarks, settings, status-bar formatting. No Win2D/WinUI dependency. |
 | `src/FujiyNotepad.WinUI` | The WinUI 3 app shell: the Win2D `TextCanvas` and `MainWindow` (menus, scrollbars, status bar, dialogs). |
 | `*.Tests` + `FujiyNotepad.TestSupport` | xUnit tests and shared fakes. |
+| `src/FujiyNotepad.Benchmarks` | BenchmarkDotNet harness over the engine's hot paths (manual; not run in CI). |
 
 When adding logic, prefer putting it in `Core` or `Presentation` (device-free, unit-testable) with a thin
 wiring layer in `FujiyNotepad.WinUI`.

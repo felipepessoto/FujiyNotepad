@@ -4,6 +4,7 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Project Path="FujiyNotepad.Benchmarks/FujiyNotepad.Benchmarks.csproj" />
   <Project Path="FujiyNotepad.Core/FujiyNotepad.Core.csproj" />
   <Project Path="FujiyNotepad.Core.Tests/FujiyNotepad.Core.Tests.csproj" />
   <Project Path="FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj">

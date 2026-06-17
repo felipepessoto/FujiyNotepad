@@ -7,6 +7,10 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Internal
+- A BenchmarkDotNet harness over the engine's hot paths plus a large-file integration test, guarding the
+  large-file performance and memory behaviour.
+
 ## [4.8.0] - 2026-06-17
 
 ### Added
