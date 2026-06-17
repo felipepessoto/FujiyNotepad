@@ -13,6 +13,7 @@ using Windows.Foundation;
 using Windows.System;
 using Windows.UI;
 using Windows.UI.Core;
+using Windows.UI.ViewManagement;
 
 namespace FujiyNotepad.WinUI.Controls
 {
@@ -51,6 +52,10 @@ namespace FujiyNotepad.WinUI.Controls
         private Color whitespaceColor = Color.FromArgb(210, 0x5A, 0x5A, 0x5A);
         private Color trailingWhitespaceColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
         private Color controlCharColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
+
+        // Detects Windows High Contrast so ApplyTheme can switch the surface to the system HC palette. Kept
+        // alive as a field so its HighContrastChanged event keeps firing.
+        private AccessibilitySettings? accessibility;
 
         // Right margin (px) between a line number and the gutter's edge; mirrors the engine's gutter padding.
         private const double GutterRightMargin = 6d;
@@ -115,6 +120,19 @@ namespace FujiyNotepad.WinUI.Controls
             ApplyTheme();
             ActualThemeChanged += (_, _) => ApplyTheme();
             Loaded += (_, _) => ApplyTheme();
+
+            // Re-theme when the user toggles Windows High Contrast or switches HC scheme (the event also
+            // covers scheme changes). It can fire off the UI thread, so marshal back before repainting.
+            // Construction can throw if the thread has no view, so guard it and fall back to the palette.
+            try
+            {
+                accessibility = new AccessibilitySettings();
+                accessibility.HighContrastChanged += (_, _) => DispatcherQueue?.TryEnqueue(ApplyTheme);
+            }
+            catch
+            {
+                // High Contrast detection unavailable; ApplyTheme falls back to the curated light/dark palette.
+            }
 
             BuildContextMenu();
         }
@@ -715,40 +733,59 @@ namespace FujiyNotepad.WinUI.Controls
         private static Color ToColor(uint argb) =>
             Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
 
-        // Light/dark palette for the Win2D surface, selected from the control's resolved ActualTheme.
+        // Resolves the surface palette from the control's resolved light/dark and the live High-Contrast
+        // state, then converts each packed colour to a Win2D Color. The curated palettes and the HC mapping
+        // live in the device-free CanvasPalette, which is unit-tested without a graphics device (issue #76).
         private void ApplyTheme()
         {
-            if (ActualTheme == Microsoft.UI.Xaml.ElementTheme.Dark)
-            {
-                backgroundColor = Color.FromArgb(255, 0x1E, 0x1E, 0x1E);
-                textColor = Color.FromArgb(255, 0xF1, 0xF1, 0xF1);
-                caretColor = Color.FromArgb(255, 0xF1, 0xF1, 0xF1);
-                selectionColor = Color.FromArgb(255, 0x26, 0x4F, 0x78);
-                matchHighlightColor = Color.FromArgb(255, 0x66, 0x51, 0x18);
-                gutterTextColor = Color.FromArgb(255, 0x85, 0x85, 0x85);
-                gutterSeparatorColor = Color.FromArgb(255, 0x33, 0x33, 0x33);
-                bookmarkColor = Color.FromArgb(255, 0x4F, 0xA3, 0xE3);
-                whitespaceColor = Color.FromArgb(205, 0xC8, 0xC8, 0xC8);
-                trailingWhitespaceColor = Color.FromArgb(235, 0xF0, 0x6A, 0x6A);
-                controlCharColor = Color.FromArgb(235, 0xF0, 0x6A, 0x6A);
-            }
-            else
-            {
-                backgroundColor = Colors.White;
-                textColor = Colors.Black;
-                caretColor = Colors.Black;
-                selectionColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
-                matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
-                gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
-                gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
-                bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
-                whitespaceColor = Color.FromArgb(210, 0x5A, 0x5A, 0x5A);
-                trailingWhitespaceColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
-                controlCharColor = Color.FromArgb(235, 0xD0, 0x30, 0x30);
-            }
+            bool isDark = ActualTheme == Microsoft.UI.Xaml.ElementTheme.Dark;
+
+            bool isHighContrast = false;
+            try { isHighContrast = accessibility?.HighContrast == true; } catch { /* fall back to non-HC */ }
+
+            HighContrastColors hc = isHighContrast ? ReadHighContrastColors() : default;
+            CanvasColors c = CanvasPalette.Resolve(isDark, isHighContrast, hc);
+
+            backgroundColor = ToColor(c.Background);
+            textColor = ToColor(c.Text);
+            caretColor = ToColor(c.Caret);
+            selectionColor = ToColor(c.Selection);
+            matchHighlightColor = ToColor(c.MatchHighlight);
+            gutterTextColor = ToColor(c.GutterText);
+            gutterSeparatorColor = ToColor(c.GutterSeparator);
+            bookmarkColor = ToColor(c.Bookmark);
+            whitespaceColor = ToColor(c.Whitespace);
+            trailingWhitespaceColor = ToColor(c.TrailingWhitespace);
+            controlCharColor = ToColor(c.ControlChar);
 
             canvas?.Invalidate();
         }
+
+        // Reads the live Windows High-Contrast system colours for CanvasPalette to map onto the surface.
+        private static HighContrastColors ReadHighContrastColors() => new(
+            Window: SysColor(COLOR_WINDOW),
+            WindowText: SysColor(COLOR_WINDOWTEXT),
+            Highlight: SysColor(COLOR_HIGHLIGHT),
+            GrayText: SysColor(COLOR_GRAYTEXT),
+            Hotlight: SysColor(COLOR_HOTLIGHT));
+
+        // Reads a Win32 system colour (which Windows swaps to the High-Contrast scheme when HC is on) and
+        // packs its 0x00BBGGRR COLORREF into an opaque 0xAARRGGBB value.
+        private static uint SysColor(int index)
+        {
+            uint colorRef = GetSysColor(index);
+            uint r = colorRef & 0xFF, g = (colorRef >> 8) & 0xFF, b = (colorRef >> 16) & 0xFF;
+            return 0xFF000000u | (r << 16) | (g << 8) | b;
+        }
+
+        private const int COLOR_WINDOW = 5;
+        private const int COLOR_WINDOWTEXT = 8;
+        private const int COLOR_HIGHLIGHT = 13;
+        private const int COLOR_GRAYTEXT = 17;
+        private const int COLOR_HOTLIGHT = 26;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetSysColor(int nIndex);
 
         #endregion
     }
