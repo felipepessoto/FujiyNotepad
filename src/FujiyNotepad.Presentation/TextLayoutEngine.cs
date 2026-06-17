@@ -390,6 +390,34 @@ namespace FujiyNotepad.Presentation
         }
 
         /// <summary>
+        /// The time difference between the leading timestamps of the first and last selected lines, or
+        /// <c>null</c> when there is no multi-line selection or either endpoint line does not begin with a
+        /// recognized timestamp. Drives the status bar's log-duration readout (issue #67). Reads only the two
+        /// endpoint lines, so it stays cheap even for a large selection.
+        /// </summary>
+        public TimeSpan? GetSelectionTimestampDelta()
+        {
+            if (provider == null || anchor == caret)
+            {
+                return null;
+            }
+
+            (TextPosition start, TextPosition end) = NormalizedSelection();
+            if (start.Line == end.Line)
+            {
+                return null;
+            }
+
+            if (TimestampParser.TryParseLeading(GetColumns(start.Line).Source, out DateTimeOffset first) &&
+                TimestampParser.TryParseLeading(GetColumns(end.Line).Source, out DateTimeOffset last))
+            {
+                return last - first;
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Sets (or clears, with <c>null</c>) the highlighter used to paint every Find match in the viewport,
         /// and requests a redraw. Each visible line's <see cref="VisibleLine.Matches"/> is then computed from
         /// this highlighter on the next <see cref="GetVisibleLines"/>.
@@ -844,6 +872,7 @@ namespace FujiyNotepad.Presentation
             caret = new TextPosition(last, LineLength(last));
             desiredColumn = -1;
             RaiseRedraw();
+            RaiseCaretChanged(); // refresh the status bar (selection stats + timestamp delta)
         }
 
         private void EnsureCaretVisibleVertically()

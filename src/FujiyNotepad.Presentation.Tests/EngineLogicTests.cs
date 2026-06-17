@@ -434,7 +434,7 @@ namespace FujiyNotepad.Presentation.Tests
         }
 
         [Fact]
-        public async Task Key_SelectAll_WithoutRaisingCaretChanged()
+        public async Task Key_SelectAll_RaisesCaretChanged()
         {
             TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 3));
             bool caretRaised = false;
@@ -445,7 +445,7 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.True(result.Handled);
             Assert.Equal(new TextPosition(0, 0), e.Anchor);
             Assert.Equal(new TextPosition(2, 5), e.CaretPosition);
-            Assert.False(caretRaised); // matches the original SelectAll (no status-bar update)
+            Assert.True(caretRaised); // SelectAll refreshes the status bar (selection stats + timestamp delta)
         }
 
         [Fact]

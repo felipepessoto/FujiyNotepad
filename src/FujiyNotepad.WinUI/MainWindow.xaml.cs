@@ -582,6 +582,13 @@ namespace FujiyNotepad.WinUI
                 text += selection.Characters >= 0
                     ? $"  ({selection.Characters:N0} selected, {selection.Lines:N0} lines)"
                     : $"  ({selection.Lines:N0} lines selected)";
+
+                // If the first and last selected lines both begin with a timestamp, show how long the span
+                // covers -- quick triage of how long something took in a log (issue #67).
+                if (View.GetSelectionTimestampDelta() is { } delta)
+                {
+                    text += $"  delta = {DurationFormatter.Format(delta)}";
+                }
             }
 
             LblCursor.Text = text;
