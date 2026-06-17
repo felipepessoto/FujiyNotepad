@@ -144,6 +144,11 @@ If the app ever closes unexpectedly, it appends the exception (type, message, an
 bug report makes a Native AOT crash much easier to diagnose. (Logging is best-effort and never blocks or
 changes shutdown; the app still terminates as usual.)
 
+## Contributing
+
+Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the build/test
+workflow and conventions, and [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## License
 
 See [LICENSE](LICENSE).

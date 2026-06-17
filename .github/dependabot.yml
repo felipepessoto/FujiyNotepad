@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # NuGet packages for the engine, presentation, app, and test projects.
+  - package-ecosystem: "nuget"
+    directory: "/src"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      # Roll routine minor/patch bumps into a single PR; majors (e.g. Windows App SDK) stay separate.
+      nuget-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions used by the CI and release workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci(deps)"
