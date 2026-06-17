@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -445,7 +444,7 @@ namespace FujiyNotepad.WinUI
             StopIndexingItem.IsEnabled = true;
             cancelIndexing = new CancellationTokenSource();
             CancellationToken token = cancelIndexing.Token;
-            var progress = new Progress<int>(p => LblStatus.Text = $"{p}% indexed");
+            var progress = new Progress<int>(p => LblStatus.Text = StatusText.IndexProgress(p));
             indexingTask = Task.Run(async () =>
             {
                 try
@@ -506,7 +505,7 @@ namespace FujiyNotepad.WinUI
                 StopIndexingItem.IsEnabled = false;
                 if (filteredSource is null)
                 {
-                    LblStatus.Text = $"{provider.LineCount:N0} lines";
+                    LblStatus.Text = StatusText.LineCount(provider.LineCount);
                 }
             }
         }
@@ -530,7 +529,7 @@ namespace FujiyNotepad.WinUI
             StopIndexingItem.IsEnabled = false;
             if (provider is not null)
             {
-                LblStatus.Text = $"{provider.LineCount:N0} lines (indexing stopped)";
+                LblStatus.Text = StatusText.LineCount(provider.LineCount) + " (indexing stopped)";
             }
         }
 
@@ -570,28 +569,9 @@ namespace FujiyNotepad.WinUI
             int displayLine = filteredSource is not null && pos.Line >= 0 && pos.Line < filteredSource.LineCount
                 ? filteredSource.SourceLineAt(pos.Line)
                 : pos.Line;
-            string text = $"Ln {displayLine + 1}, Col {pos.Column + 1}";
 
-            SelectionStats selection = View.GetSelectionStats();
-            if (selection.Lines == 1)
-            {
-                text += $"  ({selection.Characters:N0} selected)";
-            }
-            else if (selection.Lines > 1)
-            {
-                text += selection.Characters >= 0
-                    ? $"  ({selection.Characters:N0} selected, {selection.Lines:N0} lines)"
-                    : $"  ({selection.Lines:N0} lines selected)";
-
-                // If the first and last selected lines both begin with a timestamp, show how long the span
-                // covers -- quick triage of how long something took in a log (issue #67).
-                if (View.GetSelectionTimestampDelta() is { } delta)
-                {
-                    text += $"  delta = {DurationFormatter.Format(delta)}";
-                }
-            }
-
-            LblCursor.Text = text;
+            LblCursor.Text = StatusText.CursorStatus(
+                displayLine, pos.Column, View.GetSelectionStats(), View.GetSelectionTimestampDelta());
         }
 
         private void VScroll_Scroll(object sender, ScrollEventArgs e)
@@ -683,7 +663,7 @@ namespace FujiyNotepad.WinUI
             };
 
             ContentDialogResult result = await dialog.ShowAsync();
-            if (!(confirmedByEnter || result == ContentDialogResult.Primary) || !TryParseOffset(input.Text, out long offset))
+            if (!(confirmedByEnter || result == ContentDialogResult.Primary) || !OffsetParser.TryParse(input.Text, out long offset))
             {
                 return;
             }
@@ -709,25 +689,6 @@ namespace FujiyNotepad.WinUI
             int charColumn = provider.ByteColumnToCharColumn(line, offset - lineStart);
             View.GoToLineColumn(line, charColumn);
             View.FocusCanvas();
-        }
-
-        // Parses a byte offset entered as decimal, or hexadecimal with a leading "0x"/"0X". Returns false (and
-        // the caller does nothing) on blank or malformed input, mirroring Go To Line's lenient int.TryParse.
-        private static bool TryParseOffset(string? text, out long offset)
-        {
-            offset = 0;
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return false;
-            }
-
-            text = text.Trim();
-            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-            {
-                return long.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out offset);
-            }
-
-            return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out offset);
         }
 
         private async Task ShowMessageAsync(string title, string message)
@@ -1030,7 +991,7 @@ namespace FujiyNotepad.WinUI
             FilterStatus.Text = capped
                 ? $"{matches.Count:N0} matching lines (capped)"
                 : $"{matches.Count:N0} matching lines";
-            LblStatus.Text = $"Filtered: {matches.Count:N0} of {activeProvider.LineCount:N0} lines";
+            LblStatus.Text = StatusText.Filtered(matches.Count, activeProvider.LineCount);
             View.FocusCanvas();
         }
 
@@ -1054,7 +1015,7 @@ namespace FujiyNotepad.WinUI
             if (wasFiltering && provider is not null)
             {
                 View.SetProvider(provider);
-                LblStatus.Text = $"{provider.LineCount:N0} lines";
+                LblStatus.Text = StatusText.LineCount(provider.LineCount);
                 RefreshMarkerMargin(); // the filter cleared bookmarks, so clear their ticks too
             }
         }
@@ -1320,7 +1281,7 @@ namespace FujiyNotepad.WinUI
             {
                 try
                 {
-                    regex = BuildRegex(text, matchCase, wholeWord);
+                    regex = FindRegexBuilder.Build(text, matchCase, wholeWord);
                 }
                 catch (ArgumentException)
                 {
@@ -1602,19 +1563,6 @@ namespace FujiyNotepad.WinUI
                 FindStatus.Text = "No matches";
                 findCoordinator.RecordRegexNoMatch(FindDirection.Backward, View.CaretPosition);
             }
-        }
-
-        // Builds the per-line regex for the current options: whole-word wraps the term in \b...\b, and
-        // match-case off adds IgnoreCase. Throws ArgumentException for an invalid pattern.
-        private static Regex BuildRegex(string text, bool matchCase, bool wholeWord)
-        {
-            RegexOptions options = RegexOptions.CultureInvariant;
-            if (!matchCase)
-            {
-                options |= RegexOptions.IgnoreCase;
-            }
-            string pattern = wholeWord ? $@"\b(?:{text})\b" : text;
-            return new Regex(pattern, options);
         }
 
         // Recomputes the total match count in the background whenever the term/options change, updating the
@@ -2036,7 +1984,7 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
-            LblCharCount.Text = count < 0 ? string.Empty : count == 1 ? "1 character" : $"{count:N0} characters";
+            LblCharCount.Text = StatusText.CharacterCount(count);
         }
 
         // Apply persisted settings on startup: tab width, the saved window size/maximized state, and the
