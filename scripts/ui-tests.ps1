@@ -181,6 +181,9 @@ try {
     UiMenu 'Edit' 'Go To Line...' 900
     Assert (UiHas 'Go To Line') "Go To Line dialog opened"
     UiInvoke 'CloseButton'
+    UiMenu 'Edit' 'Go To Percentage...' 900
+    Assert (UiHas 'Go To Percentage') "Go To Percentage dialog opened"
+    UiInvoke 'CloseButton'
     UiMenu 'View' 'Highlight Rules...' 900
     Assert (UiHas 'Colors') "Highlight Rules dialog opened"
     UiInvoke 'CloseButton'
