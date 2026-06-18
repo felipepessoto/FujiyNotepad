@@ -37,6 +37,8 @@ namespace FujiyNotepad.WinUI.Controls
 
         private double charWidth;
         private double lineHeight;
+        private double lineHeightRaw;     // unsnapped line height straight from the font probe
+        private double lastMetricsDpi;    // DPI used for the last pixel-snap; re-snap when it changes
         private bool metricsValid;
 
         // Theme-dependent colors for the Win2D surface (which paints its own pixels instead of using XAML
@@ -529,38 +531,51 @@ namespace FujiyNotepad.WinUI.Controls
 
         private void EnsureMetrics()
         {
-            if (metricsValid)
+            double dpi = canvas.Dpi > 0 ? canvas.Dpi : 96.0;
+            if (metricsValid && dpi == lastMetricsDpi)
             {
                 return;
             }
 
-            try
+            if (!metricsValid)
             {
-                CanvasDevice device = CanvasDevice.GetSharedDevice();
-                using var probe = new CanvasTextLayout(device, new string('0', 10), textFormat, 0, 0);
-                charWidth = probe.LayoutBounds.Width / 10.0;
-                lineHeight = probe.LayoutBounds.Height;
-                // Only latch the metrics once a real probe succeeds, so a transient device failure on
-                // the first call falls back for this draw but is recomputed on the next.
-                if (charWidth > 0 && lineHeight > 0)
+                try
                 {
-                    metricsValid = true;
+                    CanvasDevice device = CanvasDevice.GetSharedDevice();
+                    using var probe = new CanvasTextLayout(device, new string('0', 10), textFormat, 0, 0);
+                    charWidth = probe.LayoutBounds.Width / 10.0;
+                    lineHeightRaw = probe.LayoutBounds.Height;
+                    // Only latch the metrics once a real probe succeeds, so a transient device failure on
+                    // the first call falls back for this draw but is recomputed on the next.
+                    if (charWidth > 0 && lineHeightRaw > 0)
+                    {
+                        metricsValid = true;
+                    }
+                }
+                catch (Exception)
+                {
+                    charWidth = 0;
+                    lineHeightRaw = 0;
+                }
+
+                if (charWidth <= 0)
+                {
+                    charWidth = 8.0;
+                }
+                if (lineHeightRaw <= 0)
+                {
+                    lineHeightRaw = 18.0;
                 }
             }
-            catch (Exception)
-            {
-                charWidth = 0;
-                lineHeight = 0;
-            }
 
-            if (charWidth <= 0)
-            {
-                charWidth = 8.0;
-            }
-            if (lineHeight <= 0)
-            {
-                lineHeight = 18.0;
-            }
+            // Snap the line height to a whole *device* pixel so every line's top lands on the physical pixel
+            // grid. With a fractional line height, line.Y falls on sub-pixels and Win2D re-rasterizes the text
+            // a pixel up or down between swap-chain buffers on each redraw — a subtle vertical jitter that is
+            // visible while the caret-blink timer repaints the canvas every 530 ms.
+            double dpiScale = dpi / 96.0;
+            double snapped = Math.Round(lineHeightRaw * dpiScale) / dpiScale;
+            lineHeight = snapped > 0 ? snapped : lineHeightRaw;
+            lastMetricsDpi = dpi;
 
             engine.SetMetrics(charWidth, lineHeight);
         }
