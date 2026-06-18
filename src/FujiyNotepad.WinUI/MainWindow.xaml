@@ -74,6 +74,7 @@
                 </MenuFlyoutItem>
                 <MenuFlyoutItem x:Name="CopyMatchingItem" Text="Copy Matching Lines" Click="CopyMatchingLines_Click" IsEnabled="False" />
                 <MenuFlyoutItem x:Name="SaveMatchingItem" Text="Save Matching Lines As..." Click="SaveMatchingLines_Click" IsEnabled="False" />
+                <MenuFlyoutItem Text="Clear Search History" Click="ClearSearchHistory_Click" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Toggle Bookmark" Click="ToggleBookmark_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>

@@ -23,6 +23,8 @@ namespace FujiyNotepad.Presentation.Tests
                     WindowHeight = 777,
                     WindowMaximized = true,
                     RecentFiles = { @"C:\a.txt", @"C:\b.log" },
+                    RecentSearches = { "ERROR", "Thread-33" },
+                    RecentFilters = { "WARN" },
                 };
 
                 store.Save(saved);
@@ -33,6 +35,8 @@ namespace FujiyNotepad.Presentation.Tests
                 Assert.Equal(777, loaded.WindowHeight);
                 Assert.True(loaded.WindowMaximized);
                 Assert.Equal(new[] { @"C:\a.txt", @"C:\b.log" }, loaded.RecentFiles);
+                Assert.Equal(new[] { "ERROR", "Thread-33" }, loaded.RecentSearches);
+                Assert.Equal(new[] { "WARN" }, loaded.RecentFilters);
             }
             finally
             {

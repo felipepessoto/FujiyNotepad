@@ -50,5 +50,11 @@ namespace FujiyNotepad.Presentation
 
         /// <summary>Most-recently-opened file paths, newest first.</summary>
         public List<string> RecentFiles { get; set; } = new();
+
+        /// <summary>Most-recently-used Find terms, newest first (see <c>SearchHistory</c>).</summary>
+        public List<string> RecentSearches { get; set; } = new();
+
+        /// <summary>Most-recently-used Filter terms, newest first (see <c>SearchHistory</c>).</summary>
+        public List<string> RecentFilters { get; set; } = new();
     }
 }

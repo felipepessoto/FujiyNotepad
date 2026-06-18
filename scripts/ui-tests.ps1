@@ -210,6 +210,9 @@ try {
     $filtered = UiValue 'LblStatus'
     Assert ($filtered -match 'Filtered:\s*1\s+of\s+5') "Filter shows 1 of 5 matching lines" "LblStatus: '$filtered'"
 
+    # 12b) Clear Search History runs without crashing (sections 11-12 above populated the Find/Filter history).
+    UiMenu 'Edit' 'Clear Search History'; Assert (-not $proc.HasExited) "Clear Search History did not crash"
+
     # 13) Still alive after the full interaction sweep.
     Assert (-not $proc.HasExited) "Process is still running after the full interaction sweep"
 }
