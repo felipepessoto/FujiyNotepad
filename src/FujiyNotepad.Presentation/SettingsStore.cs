@@ -41,6 +41,8 @@ namespace FujiyNotepad.Presentation
                     if (loaded is not null)
                     {
                         loaded.RecentFiles ??= new List<string>();
+                        loaded.RecentSearches ??= new List<string>();
+                        loaded.RecentFilters ??= new List<string>();
                         return loaded;
                     }
                 }

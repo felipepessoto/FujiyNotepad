@@ -7,6 +7,11 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Added
+- **Search history** — the Find and Filter boxes remember recently used terms; press **Up / Down** in either
+  box to recall them. The history persists across sessions and can be cleared from **Edit ▸ Clear Search
+  History**.
+
 ### Fixed
 - **Timestamp delta** now recognizes the `yyyy-MM-dd HH:mm:ss,SSS` log format — a comma before the
   milliseconds, as emitted by log4j and Python `logging` — and keeps sub-second precision, so two events

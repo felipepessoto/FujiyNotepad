@@ -52,6 +52,11 @@ namespace FujiyNotepad.WinUI
         private AppSettings settings = new();
         private SizeInt32 lastNormalSize;
 
+        // Up/Down search-history recall state for the Find and Filter boxes (SearchHistoryNavigator is pure and
+        // unit-tested). Each is rebuilt lazily and reset when its bar opens or a search is recorded.
+        private SearchHistoryNavigator? findNav;
+        private SearchHistoryNavigator? filterNav;
+
         // Find state: the coordinator decides where each "find next/previous" starts and how the wrap/caret
         // state evolves (FindCoordinator, headlessly tested); findCts cancels an in-progress search; isFinding
         // guards against starting a second search while one runs.
@@ -736,6 +741,7 @@ namespace FujiyNotepad.WinUI
             }
 
             ExitFilterToFullView();
+            findNav = null;
             FindBar.Visibility = Visibility.Visible;
             FindBox.Focus(FocusState.Programmatic);
             FindBox.SelectAll();
@@ -887,6 +893,7 @@ namespace FujiyNotepad.WinUI
                 return;
             }
 
+            filterNav = null;
             FilterBar.Visibility = Visibility.Visible;
             FilterBox.Focus(FocusState.Programmatic);
             FilterBox.SelectAll();
@@ -898,6 +905,16 @@ namespace FujiyNotepad.WinUI
             {
                 e.Handled = true;
                 await ApplyFilter();
+            }
+            else if (e.Key == Windows.System.VirtualKey.Up)
+            {
+                e.Handled = true;
+                RecallHistory(FilterBox, ref filterNav, settings.RecentFilters, up: true);
+            }
+            else if (e.Key == Windows.System.VirtualKey.Down)
+            {
+                e.Handled = true;
+                RecallHistory(FilterBox, ref filterNav, settings.RecentFilters, up: false);
             }
             else if (e.Key == Windows.System.VirtualKey.Escape)
             {
@@ -966,6 +983,16 @@ namespace FujiyNotepad.WinUI
                 FilterBar.Visibility = Visibility.Visible;
                 return;
             }
+
+            // Remember the applied filter term for Up/Down recall (skip a redundant write for a repeat).
+            string filterTerm = FilterBox.Text;
+            if (settings.RecentFilters.Count == 0 ||
+                !string.Equals(settings.RecentFilters[0], filterTerm, StringComparison.OrdinalIgnoreCase))
+            {
+                settings.RecentFilters = SearchHistory.Add(settings.RecentFilters, filterTerm);
+                settingsStore.Save(settings);
+            }
+            filterNav = null;
 
             filterCts?.Cancel();
             var cts = new CancellationTokenSource();
@@ -1138,6 +1165,16 @@ namespace FujiyNotepad.WinUI
                     await RunFindNext();
                 }
             }
+            else if (e.Key == Windows.System.VirtualKey.Up)
+            {
+                e.Handled = true;
+                RecallHistory(FindBox, ref findNav, settings.RecentSearches, up: true);
+            }
+            else if (e.Key == Windows.System.VirtualKey.Down)
+            {
+                e.Handled = true;
+                RecallHistory(FindBox, ref findNav, settings.RecentSearches, up: false);
+            }
             else if (e.Key == Windows.System.VirtualKey.Escape)
             {
                 e.Handled = true;
@@ -1156,6 +1193,30 @@ namespace FujiyNotepad.WinUI
             => Microsoft.UI.Input.InputKeyboardSource
                 .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+        // Up/Down recall for a search box: walk the MRU history (or back to the in-progress draft) and write the
+        // recalled text into the box, caret at the end. A null result means "nothing to recall, leave it as-is".
+        private static void RecallHistory(TextBox box, ref SearchHistoryNavigator? nav, List<string> history, bool up)
+        {
+            nav ??= new SearchHistoryNavigator(history);
+            string? recalled = up ? nav.MoveUp(box.Text) : nav.MoveDown(box.Text);
+            if (recalled is null)
+            {
+                return;
+            }
+
+            box.Text = recalled;
+            box.Select(recalled.Length, 0);
+        }
+
+        private void ClearSearchHistory_Click(object sender, RoutedEventArgs e)
+        {
+            settings.RecentSearches.Clear();
+            settings.RecentFilters.Clear();
+            findNav = null;
+            filterNav = null;
+            settingsStore.Save(settings);
+        }
 
         private async void FindNext_Click(object sender, RoutedEventArgs e) => await RunFindNext();
 
@@ -1338,6 +1399,16 @@ namespace FujiyNotepad.WinUI
             View.SetHighlighter(useRegex
                 ? new RegexLineHighlighter(regex!)
                 : new LiteralLineHighlighter(text, ignoreCase: !matchCase, wholeWord: wholeWord));
+
+            // Remember the executed term for Up/Down recall; skip a redundant write when it is already the most
+            // recent entry (e.g. repeated F3), then reset the recall walk so the next Up starts fresh.
+            if (settings.RecentSearches.Count == 0 ||
+                !string.Equals(settings.RecentSearches[0], text, StringComparison.OrdinalIgnoreCase))
+            {
+                settings.RecentSearches = SearchHistory.Add(settings.RecentSearches, text);
+                settingsStore.Save(settings);
+            }
+            findNav = null;
             return true;
         }
 
