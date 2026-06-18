@@ -517,6 +517,18 @@ namespace FujiyNotepad.Presentation.Tests
         }
 
         [Fact]
+        public async Task GetSelectionTimestampDelta_CommaMilliseconds_KeepsSubSecondPrecision()
+        {
+            // log4j / Python-logging timestamps (yyyy-MM-dd HH:mm:ss,SSS) in the same second: the delta must
+            // honour the comma-milliseconds end to end rather than reporting 0.
+            TextLayoutEngine e = await NewEngineAsync(
+                "2026-06-17 22:05:51,119 a\nmiddle\n2026-06-17 22:05:51,500 b");
+            e.HandleKey(NavKey.SelectAll, shift: false);
+
+            Assert.Equal(TimeSpan.FromMilliseconds(381), e.GetSelectionTimestampDelta());
+        }
+
+        [Fact]
         public async Task GetSelectionTimestampDelta_EndpointNotTimestamp_ReturnsNull()
         {
             TextLayoutEngine e = await NewEngineAsync("2024-01-02 15:04:05 a\nmiddle\nno timestamp here");

@@ -7,6 +7,11 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Fixed
+- **Timestamp delta** now recognizes the `yyyy-MM-dd HH:mm:ss,SSS` log format — a comma before the
+  milliseconds, as emitted by log4j and Python `logging` — and keeps sub-second precision, so two events
+  within the same second no longer report a `0` delta.
+
 ### Internal
 - A BenchmarkDotNet harness over the engine's hot paths plus a large-file integration test, guarding the
   large-file performance and memory behaviour.

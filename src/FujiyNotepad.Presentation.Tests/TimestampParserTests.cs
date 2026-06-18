@@ -33,6 +33,24 @@ namespace FujiyNotepad.Presentation.Tests
         }
 
         [Theory]
+        // log4j / Python logging emit the fractional seconds after a comma (yyyy-MM-dd HH:mm:ss,SSS).
+        [InlineData("2026-06-17 22:05:51,119 INFO SnapshotManager [Thread-33]: msg")]
+        [InlineData("[2026-06-17 22:05:51,119] INFO")]
+        [InlineData("2026-06-17T22:05:51,119 INFO")]
+        public void Parses_CommaFractionalSeconds(string line)
+        {
+            Assert.True(TimestampParser.TryParseLeading(line, out DateTimeOffset value));
+            Assert.Equal(new DateTimeOffset(2026, 6, 17, 22, 5, 51, 119, TimeSpan.Zero), value);
+        }
+
+        [Fact]
+        public void Parses_BareTime_WithCommaFraction()
+        {
+            Assert.True(TimestampParser.TryParseLeading("15:04:05,250 message", out DateTimeOffset value));
+            Assert.Equal(250, value.Millisecond);
+        }
+
+        [Theory]
         [InlineData("Jan 2 15:04:05 host app: msg")]
         [InlineData("Jan  2 15:04:05 host app: msg")] // syslog pads a single-digit day with two spaces
         public void Parses_Syslog_WithCurrentYearAssumed(string line)
@@ -77,6 +95,17 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.True(TimestampParser.TryParseLeading("2024-01-02 15:06:35 end", out DateTimeOffset b));
 
             Assert.Equal(TimeSpan.FromSeconds(150), b - a);
+        }
+
+        [Fact]
+        public void Delta_BetweenCommaMillisecondLines_KeepsSubSecondPrecision()
+        {
+            // Two events in the same second differing only by their comma-milliseconds: the delta must keep the
+            // sub-second precision instead of collapsing to 0 (the regression this fixes).
+            Assert.True(TimestampParser.TryParseLeading("2026-06-17 22:05:51,119 a", out DateTimeOffset a));
+            Assert.True(TimestampParser.TryParseLeading("2026-06-17 22:05:51,500 b", out DateTimeOffset b));
+
+            Assert.Equal(TimeSpan.FromMilliseconds(381), b - a);
         }
 
         [Fact]
