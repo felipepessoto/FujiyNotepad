@@ -20,6 +20,8 @@ tag per published build. Each release also has downloadable builds and notes on 
 ### Internal
 - A BenchmarkDotNet harness over the engine's hot paths plus a large-file integration test, guarding the
   large-file performance and memory behaviour.
+- `TimestampParser`'s fixed patterns now use the source-generated `[GeneratedRegex]` engine (the
+  Native-AOT-recommended path); behaviour is unchanged and the published-size impact is negligible (~15 KB).
 
 ## [4.8.0] - 2026-06-17
 

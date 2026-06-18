@@ -14,25 +14,25 @@ namespace FujiyNotepad.Presentation
     /// for year-less syslog, or across midnight for a bare time). Pure and unit-testable; uses interpreted Regex
     /// so it stays Native-AOT safe.
     /// </summary>
-    public static class TimestampParser
+    public static partial class TimestampParser
     {
         // 2024-01-02T15:04:05(.123|,123)?(Z|+02:00)?  — the 'T' may be a space, the fractional separator a '.'
-        // or ',' (log4j / Python logging use a comma), and the fraction and timezone are optional.
-        private static readonly Regex DateTimePattern = new(
-            @"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}([.,]\d+)?(Z|[+-]\d{2}:?\d{2})?",
-            RegexOptions.CultureInvariant);
+        // or ',' (log4j / Python logging use a comma), and the fraction and timezone are optional. These four
+        // patterns are fixed/compile-time, so they use the source-generated [GeneratedRegex] engine (issue #97);
+        // the Find/highlight regexes elsewhere stay interpreted because they are user-supplied at runtime.
+        [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}([.,]\d+)?(Z|[+-]\d{2}:?\d{2})?", RegexOptions.CultureInvariant)]
+        private static partial Regex DateTimePattern();
 
         // Syslog: "Jan  2 15:04:05" (one or two spaces before a 1- or 2-digit day; no year).
-        private static readonly Regex SyslogPattern = new(
-            @"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2} +\d{2}:\d{2}:\d{2}",
-            RegexOptions.CultureInvariant);
+        [GeneratedRegex(@"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2} +\d{2}:\d{2}:\d{2}", RegexOptions.CultureInvariant)]
+        private static partial Regex SyslogPattern();
 
         // A bare time: "15:04:05" with an optional '.'- or ','-separated fraction.
-        private static readonly Regex TimePattern = new(
-            @"^\d{2}:\d{2}:\d{2}([.,]\d+)?",
-            RegexOptions.CultureInvariant);
+        [GeneratedRegex(@"^\d{2}:\d{2}:\d{2}([.,]\d+)?", RegexOptions.CultureInvariant)]
+        private static partial Regex TimePattern();
 
-        private static readonly Regex Whitespace = new(@"\s+", RegexOptions.CultureInvariant);
+        [GeneratedRegex(@"\s+", RegexOptions.CultureInvariant)]
+        private static partial Regex Whitespace();
 
         // A fixed reference date for bare-time values; the date cancels out in a same-day delta.
         private static readonly DateTimeOffset TimeOnlyEpoch = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -63,7 +63,7 @@ namespace FujiyNotepad.Presentation
                 s = s.Substring(1, close - 1).Trim();
             }
 
-            Match m = DateTimePattern.Match(s);
+            Match m = DateTimePattern().Match(s);
             if (m.Success && DateTimeOffset.TryParse(
                     NormalizeFraction(m.Value), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal,
                     out value))
@@ -71,10 +71,10 @@ namespace FujiyNotepad.Presentation
                 return true;
             }
 
-            m = SyslogPattern.Match(s);
+            m = SyslogPattern().Match(s);
             if (m.Success)
             {
-                string normalized = Whitespace.Replace(m.Value, " ");
+                string normalized = Whitespace().Replace(m.Value, " ");
                 if (DateTime.TryParseExact(
                         normalized, "MMM d HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None,
                         out DateTime dt))
@@ -84,7 +84,7 @@ namespace FujiyNotepad.Presentation
                 }
             }
 
-            m = TimePattern.Match(s);
+            m = TimePattern().Match(s);
             if (m.Success && TimeSpan.TryParse(NormalizeFraction(m.Value), CultureInfo.InvariantCulture, out TimeSpan ts))
             {
                 value = TimeOnlyEpoch + ts;
