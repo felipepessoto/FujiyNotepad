@@ -62,6 +62,7 @@
                         <KeyboardAccelerator Modifiers="Control,Shift" Key="G" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Go To Percentage..." Click="GoToPercent_Click" />
                 <MenuFlyoutItem Text="Find..." Click="Find_Click">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Modifiers="Control" Key="F" />

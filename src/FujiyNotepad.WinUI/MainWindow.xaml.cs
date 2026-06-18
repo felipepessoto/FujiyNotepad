@@ -721,6 +721,65 @@ namespace FujiyNotepad.WinUI
             View.FocusCanvas();
         }
 
+        private async void GoToPercent_Click(object sender, RoutedEventArgs e)
+        {
+            if (provider is null || source is null)
+            {
+                return;
+            }
+
+            ExitFilterToFullView();
+            var input = new TextBox { PlaceholderText = "Percentage of the file (0-100)" };
+            var dialog = new ContentDialog
+            {
+                Title = "Go To Percentage",
+                Content = input,
+                PrimaryButtonText = "Go",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = Content.XamlRoot,
+            };
+
+            // Pressing Enter in the box confirms the dialog, the same as clicking "Go".
+            bool confirmedByEnter = false;
+            input.KeyDown += (_, args) =>
+            {
+                if (args.Key == Windows.System.VirtualKey.Enter)
+                {
+                    args.Handled = true;
+                    confirmedByEnter = true;
+                    dialog.Hide();
+                }
+            };
+
+            ContentDialogResult result = await dialog.ShowAsync();
+            if (!(confirmedByEnter || result == ContentDialogResult.Primary) || !PercentParser.TryParse(input.Text, out double percent))
+            {
+                return;
+            }
+
+            long length = source.Length;
+            if (length <= 0)
+            {
+                return;
+            }
+            long offset = PercentParser.ToOffset(percent, length);
+
+            // Same indexed-frontier guard as Go To Offset: the byte position's line is only known once indexing
+            // has reached it; resolving past the frontier would land on the wrong (last indexed) line.
+            if (!LineIndexer.CanResolveOffset(offset))
+            {
+                await ShowMessageAsync("Go To Percentage", "That position hasn't been indexed yet. Try again once indexing has progressed further.");
+                return;
+            }
+
+            int line = LineIndexer.GetLineNumberFromOffset(offset);
+            long lineStart = LineIndexer.GetOffsetFromLineNumber(line + 1);
+            int charColumn = provider.ByteColumnToCharColumn(line, offset - lineStart);
+            View.GoToLineColumn(line, charColumn);
+            View.FocusCanvas();
+        }
+
         private async Task ShowMessageAsync(string title, string message)
         {
             var dialog = new ContentDialog
