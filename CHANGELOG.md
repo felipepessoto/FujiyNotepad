@@ -15,6 +15,9 @@ tag per published build. Each release also has downloadable builds and notes on 
   alongside Go To Line and Go To Offset. Works on huge files and even before indexing finishes.
 
 ### Fixed
+- **No more text jitter** — the text no longer shifts up and down by a pixel as the caret blinks. The line
+  height is now snapped to a whole device pixel so every line lands on the physical pixel grid, instead of
+  being re-rasterized a pixel off between redraws.
 - **Timestamp delta** now recognizes the `yyyy-MM-dd HH:mm:ss,SSS` log format — a comma before the
   milliseconds, as emitted by log4j and Python `logging` — and keeps sub-second precision, so two events
   within the same second no longer report a `0` delta.
