@@ -14,8 +14,14 @@ tag per published build. Each release also has downloadable builds and notes on 
   explicitly with **File ▸ Close** (Ctrl+W) also clears it, so an intentionally-closed file isn't reopened —
   only closing the window resumes it next time.
 - **Screen reader support for file content** — the text surface now exposes the caret line's text to Narrator
-  and other assistive tech through UI Automation, announcing each line (with its position) as you navigate.
-  Previously the viewer could be focused but its content was opaque to screen readers.
+  and other assistive tech through UI Automation, reading each line aloud (via a UIA notification) as you move
+  through the file with the arrow keys, and announcing the line/column on focus. Previously the viewer could be
+  focused but its content was opaque to screen readers.
+
+### Fixed
+- **Text stays rock-steady** — hardened the fix that stops the text shifting up/down by a pixel as the caret
+  blinks: line heights and line tops are snapped to whole physical pixels through a now unit-tested helper, so
+  the text no longer shimmers (e.g. it stayed visibly stable against the Narrator focus outline).
 
 ### Changed
 - **Faster open for very large files** — the exact character count is no longer computed with a full-file

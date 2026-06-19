@@ -49,13 +49,22 @@ namespace FujiyNotepad.WinUI.Controls
         public void SetValue(string value) =>
             throw new System.InvalidOperationException("The text viewer is read-only.");
 
-        // Raises a UIA value-changed event so a screen reader reads the new caret line when the caret moves to
-        // a different line. Called by the canvas only while a peer exists (an automation client is attached).
+        // Announces the new caret line to screen readers when the caret moves to a different line. A UIA
+        // value-changed event alone is only spoken by Narrator on a focus change (e.g. Tab), not while the
+        // viewer stays focused and the user arrows through lines — so we also raise a Notification event, which
+        // tells the screen reader to speak the line text immediately. MostRecent coalesces fast key-repeat so a
+        // held arrow key doesn't queue a backlog of lines. Called by the canvas only while a peer exists.
         internal void NotifyCaretLineChanged()
         {
             string newValue = owner.GetAccessibleText();
             RaisePropertyChangedEvent(ValuePatternIdentifiers.ValueProperty, lastValue, newValue);
             lastValue = newValue;
+
+            RaiseNotificationEvent(
+                AutomationNotificationKind.Other,
+                AutomationNotificationProcessing.MostRecent,
+                newValue,
+                "FujiyNotepadCaretLine");
         }
     }
 }

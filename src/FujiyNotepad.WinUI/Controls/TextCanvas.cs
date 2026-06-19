@@ -613,10 +613,10 @@ namespace FujiyNotepad.WinUI.Controls
             // Snap the line height to a whole *device* pixel so every line's top lands on the physical pixel
             // grid. With a fractional line height, line.Y falls on sub-pixels and Win2D re-rasterizes the text
             // a pixel up or down between swap-chain buffers on each redraw — a subtle vertical jitter that is
-            // visible while the caret-blink timer repaints the canvas every 530 ms.
+            // visible while the caret-blink timer repaints the canvas every 530 ms. The snapping math is the
+            // pure, unit-tested PixelSnap so this stability guarantee is covered by automated tests.
             double dpiScale = dpi / 96.0;
-            double snapped = Math.Round(lineHeightRaw * dpiScale) / dpiScale;
-            lineHeight = snapped > 0 ? snapped : lineHeightRaw;
+            lineHeight = PixelSnap.SnapToDevicePixels(lineHeightRaw, dpiScale);
             lastMetricsDpi = dpi;
 
             engine.SetMetrics(charWidth, lineHeight);
@@ -632,16 +632,23 @@ namespace FujiyNotepad.WinUI.Controls
 
             // The selection keeps its colour even when the canvas isn't focused (e.g. the menu has focus), so
             // it stays clearly visible; only the caret is hidden while unfocused.
+            double dpiScale = (canvas.Dpi > 0 ? canvas.Dpi : 96.0) / 96.0;
             IReadOnlyList<VisibleLine> lines = engine.GetVisibleLines(hasFocusInternal, caretBlinkOn);
             foreach (VisibleLine line in lines)
             {
+                // Snap this line's top to a whole device pixel so the text never lands on a sub-pixel (and so
+                // every decoration on the line shares one stable top), guarding against any float drift even
+                // though the device-snapped line height already keeps tops aligned. Keeps the text from
+                // jittering vertically as the canvas repaints (see PixelSnap / EnsureMetrics).
+                float ty = (float)PixelSnap.SnapToDevicePixels(line.Y, dpiScale);
+
                 // Persistent highlight-rule backgrounds (under everything), each in its own colour. Painted
                 // before the Find highlight so an active search still stands out over a coloured line.
                 if (line.RuleHighlights is { Count: > 0 })
                 {
                     foreach (RuleHighlightRect r in line.RuleHighlights)
                     {
-                        ds.FillRectangle((float)r.X, (float)line.Y, (float)r.Width, (float)lineHeight, ToColor(r.Argb));
+                        ds.FillRectangle((float)r.X, ty, (float)r.Width, (float)lineHeight, ToColor(r.Argb));
                     }
                 }
 
@@ -651,25 +658,25 @@ namespace FujiyNotepad.WinUI.Controls
                 {
                     foreach (HighlightRect h in line.Matches)
                     {
-                        ds.FillRectangle((float)h.X, (float)line.Y, (float)h.Width, (float)lineHeight, matchHighlightColor);
+                        ds.FillRectangle((float)h.X, ty, (float)h.Width, (float)lineHeight, matchHighlightColor);
                     }
                 }
 
                 if (line.HasSelection)
                 {
-                    ds.FillRectangle((float)line.SelectionX, (float)line.Y, (float)line.SelectionWidth, (float)lineHeight, selectionColor);
+                    ds.FillRectangle((float)line.SelectionX, ty, (float)line.SelectionWidth, (float)lineHeight, selectionColor);
                 }
 
-                ds.DrawText(line.Display, new Vector2((float)line.TextX, (float)line.Y), textColor, textFormat);
+                ds.DrawText(line.Display, new Vector2((float)line.TextX, ty), textColor, textFormat);
 
                 if (line.Whitespace is { Count: > 0 })
                 {
-                    DrawWhitespaceMarkers(ds, line);
+                    DrawWhitespaceMarkers(ds, line, ty);
                 }
 
                 if (line.HasCaret)
                 {
-                    ds.FillRectangle((float)line.CaretX, (float)line.Y, 1.0f, (float)lineHeight, caretColor);
+                    ds.FillRectangle((float)line.CaretX, ty, 1.0f, (float)lineHeight, caretColor);
                 }
             }
 
@@ -677,12 +684,13 @@ namespace FujiyNotepad.WinUI.Controls
         }
 
         // Overlays markers for spaces (dot), tabs (arrow) and other control chars (box) when "Show Whitespace"
-        // is on; trailing space/tab runs use a stronger (reddish) colour so they stand out.
-        private void DrawWhitespaceMarkers(CanvasDrawingSession ds, VisibleLine line)
+        // is on; trailing space/tab runs use a stronger (reddish) colour so they stand out. <paramref name="top"/>
+        // is the line's pixel-snapped top (so markers align with the snapped text).
+        private void DrawWhitespaceMarkers(CanvasDrawingSession ds, VisibleLine line, float top)
         {
             float cw = (float)charWidth;
             float h = (float)lineHeight;
-            float midY = (float)line.Y + h / 2f;
+            float midY = top + h / 2f;
 
             foreach (WhitespaceMarker m in line.Whitespace)
             {
@@ -709,15 +717,15 @@ namespace FujiyNotepad.WinUI.Controls
                         break;
 
                     case WhitespaceKind.Control:
-                        ds.DrawRectangle(x + 1f, (float)line.Y + 2f, cw - 2f, h - 4f, controlCharColor, 1.5f);
+                        ds.DrawRectangle(x + 1f, top + 2f, cw - 2f, h - 4f, controlCharColor, 1.5f);
                         break;
 
                     case WhitespaceKind.Lf:
-                        DrawReturnMark(ds, x, (float)line.Y, cw, h, crlf: false);
+                        DrawReturnMark(ds, x, top, cw, h, crlf: false);
                         break;
 
                     case WhitespaceKind.CrLf:
-                        DrawReturnMark(ds, x, (float)line.Y, cw, h, crlf: true);
+                        DrawReturnMark(ds, x, top, cw, h, crlf: true);
                         break;
                 }
             }
