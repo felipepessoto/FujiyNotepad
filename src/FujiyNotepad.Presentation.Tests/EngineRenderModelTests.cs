@@ -556,5 +556,66 @@ namespace FujiyNotepad.Presentation.Tests
 
             Assert.Equal("1: alpha\r\n2: beta", e.BuildCopyTextWithLineNumbers());
         }
+
+        // ----- Text stability: the render model must not shift the lines between redraws (the caret-blink
+        //       jitter the user must never see again, #113 / #75). -----
+
+        [Fact]
+        public async Task GetVisibleLines_LineTopsAreExactMultiplesOfLineHeight()
+        {
+            // With a device-pixel-snapped line height (whole pixels) this guarantees every line top is also on
+            // the pixel grid, so the text cannot land on a sub-pixel and shimmer.
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 100), lh: 20, vh: 200);
+
+            IReadOnlyList<VisibleLine> lines = e.GetVisibleLines(hasFocus: true, caretVisible: true);
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                Assert.Equal(i * 20.0, lines[i].Y);
+            }
+        }
+
+        [Fact]
+        public async Task GetVisibleLines_YPositionsAreStableAcrossCaretBlink()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 100), lh: 20, vh: 200);
+
+            double[] caretOn = Ys(e.GetVisibleLines(hasFocus: true, caretVisible: true));
+            double[] caretOff = Ys(e.GetVisibleLines(hasFocus: true, caretVisible: false));
+
+            Assert.Equal(caretOn, caretOff); // the blink must not move any line
+        }
+
+        [Fact]
+        public async Task GetVisibleLines_YPositionsAreStableAcrossFocus()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 100), lh: 20, vh: 200);
+
+            double[] focused = Ys(e.GetVisibleLines(hasFocus: true, caretVisible: true));
+            double[] unfocused = Ys(e.GetVisibleLines(hasFocus: false, caretVisible: false));
+
+            Assert.Equal(focused, unfocused); // gaining/losing focus must not move any line
+        }
+
+        [Fact]
+        public async Task GetVisibleLines_YPositionsAreStableAcrossRepeatedRedraws()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 100), lh: 20, vh: 200);
+
+            double[] first = Ys(e.GetVisibleLines(hasFocus: true, caretVisible: true));
+            double[] second = Ys(e.GetVisibleLines(hasFocus: true, caretVisible: true));
+
+            Assert.Equal(first, second); // identical input → identical layout, every frame
+        }
+
+        private static double[] Ys(IReadOnlyList<VisibleLine> lines)
+        {
+            var ys = new double[lines.Count];
+            for (int i = 0; i < lines.Count; i++)
+            {
+                ys[i] = lines[i].Y;
+            }
+            return ys;
+        }
     }
 }

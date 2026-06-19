@@ -259,6 +259,22 @@ namespace FujiyNotepad.Presentation
         public TextPosition CaretPosition => caret;
 
         /// <summary>
+        /// The raw source text of the line the caret is on, for screen readers (issue #75). Bounded to a single
+        /// line so even a multi-gigabyte file stays cheap — assistive tech reads each line as the caret moves
+        /// through the file. Returns an empty string when no file is open.
+        /// </summary>
+        public string GetCaretLineText()
+        {
+            if (provider == null || totalLines == 0)
+            {
+                return string.Empty;
+            }
+
+            int line = Math.Clamp(caret.Line, 0, totalLines - 1);
+            return GetColumns(line).Source;
+        }
+
+        /// <summary>
         /// Whether the line-number gutter is drawn. The gutter is a fixed-width column on the left (it does not
         /// scroll horizontally); turning it on/off shifts the text area and re-syncs the view.
         /// </summary>

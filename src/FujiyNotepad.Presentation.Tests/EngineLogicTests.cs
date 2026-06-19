@@ -616,5 +616,44 @@ namespace FujiyNotepad.Presentation.Tests
 
             Assert.Equal(1, e.TabSize);
         }
+
+        // ----- Accessibility: caret-line text for screen readers (issue #75) -----
+
+        [Fact]
+        public void GetCaretLineText_NoProvider_IsEmpty()
+        {
+            var e = new TextLayoutEngine();
+
+            Assert.Equal(string.Empty, e.GetCaretLineText());
+        }
+
+        [Fact]
+        public async Task GetCaretLineText_ReturnsCaretLineSource()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.ManyLines(100));
+
+            e.GoToLineColumn(3, 4);
+
+            Assert.Equal("Line 3 : the quick brown fox", e.GetCaretLineText());
+        }
+
+        [Fact]
+        public async Task GetCaretLineText_FollowsCaretMovement()
+        {
+            TextLayoutEngine e = await NewEngineAsync(TestData.ManyLines(100));
+
+            Press(e, NavKey.Down);
+            Press(e, NavKey.Down);
+
+            Assert.Equal("Line 2 : the quick brown fox", e.GetCaretLineText());
+        }
+
+        [Fact]
+        public async Task GetCaretLineText_PreservesTabsFromSource()
+        {
+            TextLayoutEngine e = await NewEngineAsync("\tindented\n");
+
+            Assert.Equal("\tindented", e.GetCaretLineText()); // raw source, not the tab-expanded display
+        }
     }
 }

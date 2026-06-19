@@ -265,7 +265,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <controls:TextCanvas x:Name="View" Grid.Row="0" Grid.Column="0" />
+            <controls:TextCanvas x:Name="View" AutomationProperties.AutomationId="TextCanvas" Grid.Row="0" Grid.Column="0" />
 
             <primitives:ScrollBar x:Name="VScroll" Grid.Row="0" Grid.Column="1"
                                   Orientation="Vertical" Width="16"
