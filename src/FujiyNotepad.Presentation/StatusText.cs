@@ -55,5 +55,28 @@ namespace FujiyNotepad.Presentation
         /// </summary>
         public static string CharacterCount(long count) =>
             count < 0 ? string.Empty : count == 1 ? "1 character" : $"{count:N0} characters";
+
+        /// <summary>
+        /// A human-readable byte size, e.g. <c>"512 bytes"</c>, <c>"2.5 KB"</c>, <c>"340.0 MB"</c>,
+        /// <c>"2.50 GB"</c> (1024-based units). Shown in place of the character count for very large files,
+        /// whose exact count is deferred to an on-demand action (issue #39).
+        /// </summary>
+        public static string FileSize(long bytes)
+        {
+            if (bytes < 0)
+            {
+                return string.Empty;
+            }
+
+            const long Kb = 1024, Mb = Kb * 1024, Gb = Mb * 1024;
+            return bytes switch
+            {
+                1 => "1 byte",
+                < Kb => $"{bytes:N0} bytes",
+                < Mb => $"{bytes / (double)Kb:N1} KB",
+                < Gb => $"{bytes / (double)Mb:N1} MB",
+                _ => $"{bytes / (double)Gb:N2} GB",
+            };
+        }
     }
 }

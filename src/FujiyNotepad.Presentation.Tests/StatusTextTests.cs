@@ -91,5 +91,21 @@ namespace FujiyNotepad.Presentation.Tests
         {
             Assert.Equal(expected, StatusText.CharacterCount(count));
         }
+
+        [Theory]
+        [InlineData(-1, "")]
+        [InlineData(0, "0 bytes")]
+        [InlineData(1, "1 byte")]
+        [InlineData(512, "512 bytes")]
+        [InlineData(1024, "1.0 KB")]
+        [InlineData(1536, "1.5 KB")]
+        [InlineData(1048576, "1.0 MB")]
+        [InlineData(357564416, "341.0 MB")]
+        [InlineData(1073741824, "1.00 GB")]
+        [InlineData(2684354560, "2.50 GB")]
+        public void FileSize_FormatsByMagnitude(long bytes, string expected)
+        {
+            Assert.Equal(expected, StatusText.FileSize(bytes));
+        }
     }
 }
