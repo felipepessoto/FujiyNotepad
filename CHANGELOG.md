@@ -7,6 +7,8 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+## [4.9.0] - 2026-06-19
+
 ### Added
 - **Search history** — the Find and Filter boxes remember recently used terms; press **Up / Down** in either
   box to recall them. The history persists across sessions and can be cleared from **Edit ▸ Clear Search
