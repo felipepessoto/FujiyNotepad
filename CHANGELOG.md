@@ -7,6 +7,12 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Changed
+- **Faster open for very large files** — the exact character count is no longer computed with a full-file
+  decode every time you open a multi-gigabyte file. Above ~256 MB the status bar shows the file size with a
+  **Count characters** action you can click when you actually want the exact total. Single-byte encodings
+  (Windows-1252) still show the count instantly, since it equals the byte count.
+
 ## [4.9.0] - 2026-06-19
 
 ### Added

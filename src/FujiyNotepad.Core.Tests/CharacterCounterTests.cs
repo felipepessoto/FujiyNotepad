@@ -68,6 +68,17 @@ namespace FujiyNotepad.Core.Tests
         }
 
         [Fact]
+        public void IsSingleByte_IsTrueOnlyForWindows1252()
+        {
+            // The viewer shows a huge file's character count instantly (== byte count) only for a single-byte
+            // encoding (issue #39); the multi-byte codecs must decode, so they must report false here.
+            Assert.True(TextEncoding.Windows1252.Encoding.IsSingleByte);
+            Assert.False(TextEncoding.Utf8.Encoding.IsSingleByte);
+            Assert.False(TextEncoding.Utf16Le.Encoding.IsSingleByte);
+            Assert.False(TextEncoding.Utf32Le.Encoding.IsSingleByte);
+        }
+
+        [Fact]
         public async Task Cancelled_ReturnsEarly()
         {
             using var cts = new CancellationTokenSource();

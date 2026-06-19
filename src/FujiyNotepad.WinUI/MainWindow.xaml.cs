@@ -93,6 +93,11 @@ namespace FujiyNotepad.WinUI
         // Cancels an in-flight background character count (re-run on file open / encoding change).
         private CancellationTokenSource? charCountCts;
 
+        // Above this size, skip the automatic full-file character count (a multi-GB decode pass on every open)
+        // and instead show the byte size with an on-demand "Count characters" action (issue #39). Single-byte
+        // encodings are exempt: their character count equals the byte count, so it is shown without a decode.
+        private const long AutoCharCountByteLimit = 256L * 1024 * 1024;
+
         // Filter / grep view: while active (filteredSource is not null), the engine renders only the matching
         // lines (a FilteredLineSource wrapping the real provider) and filterCts cancels an in-flight scan.
         private FilteredLineSource? filteredSource;
@@ -2482,7 +2487,46 @@ namespace FujiyNotepad.WinUI
 
         // Counts the file's total characters in the background (constant memory) and shows it in the status
         // bar. Each call cancels the previous one; a result for a superseded file/encoding is dropped.
+        // Decides how to show the character count when a file opens or its encoding changes (issue #39):
+        //  - no file -> blank;
+        //  - single-byte encoding -> the count equals the byte size, shown instantly with no decode;
+        //  - very large file -> defer: show the byte size and offer an on-demand "Count characters" action;
+        //  - otherwise -> count automatically in the background as before.
         private async Task RefreshCharacterCountAsync()
+        {
+            CountCharsLink.Visibility = Visibility.Collapsed;
+
+            if (source is null)
+            {
+                charCountCts?.Cancel();
+                LblCharCount.Text = string.Empty;
+                return;
+            }
+
+            long length = source.Length;
+
+            if (currentEncoding.Encoding.IsSingleByte)
+            {
+                charCountCts?.Cancel(); // supersede any in-flight count from a previous encoding
+                LblCharCount.Text = StatusText.CharacterCount(length);
+                return;
+            }
+
+            if (length > AutoCharCountByteLimit)
+            {
+                charCountCts?.Cancel();
+                LblCharCount.Text = StatusText.FileSize(length);
+                CountCharsLink.Visibility = Visibility.Visible;
+                return;
+            }
+
+            await CountCharactersAsync();
+        }
+
+        // Runs the actual full-file character count in the background (constant memory, cancellable), updating
+        // the status bar. Used by the automatic path for normal-sized files and by the on-demand link for large
+        // ones. A stale result (the source or encoding changed meanwhile) is discarded.
+        private async Task CountCharactersAsync()
         {
             if (source is null)
             {
@@ -2531,6 +2575,13 @@ namespace FujiyNotepad.WinUI
             }
 
             LblCharCount.Text = StatusText.CharacterCount(count);
+        }
+
+        // On-demand character count for a large file whose automatic count was deferred (issue #39).
+        private async void CountChars_Click(object sender, RoutedEventArgs e)
+        {
+            CountCharsLink.Visibility = Visibility.Collapsed;
+            await CountCharactersAsync();
         }
 
         // Apply persisted settings on startup: tab width, the saved window size/maximized state, and the

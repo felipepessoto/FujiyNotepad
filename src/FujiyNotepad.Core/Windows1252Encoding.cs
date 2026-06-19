@@ -70,5 +70,9 @@ namespace FujiyNotepad.Core
         public override int GetMaxByteCount(int charCount) => charCount;
 
         public override int GetMaxCharCount(int byteCount) => byteCount;
+
+        // Every byte maps to exactly one character (and vice versa), so character count == byte count. The
+        // viewer uses this to show a huge file's character count instantly, without a full decode pass (#39).
+        public override bool IsSingleByte => true;
     }
 }

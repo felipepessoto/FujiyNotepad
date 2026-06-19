@@ -288,6 +288,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="LblStatus" Grid.Column="0" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
             <HyperlinkButton x:Name="ReloadHint" Grid.Column="1" Visibility="Collapsed"
@@ -296,11 +297,17 @@
                              ToolTipService.ToolTip="The file changed on disk. Click or press F5 to reload."
                              Click="Reload_Click" />
             <TextBlock x:Name="LblCharCount" Grid.Column="2" Style="{StaticResource CaptionTextBlockStyle}" Margin="0,0,16,0" VerticalAlignment="Center" />
-            <TextBlock x:Name="LblZoom" Grid.Column="3" Style="{StaticResource CaptionTextBlockStyle}" Margin="0,0,16,0" VerticalAlignment="Center" />
-            <TextBlock x:Name="LblEncoding" Grid.Column="4" Style="{StaticResource CaptionTextBlockStyle}" Margin="0,0,16,0" VerticalAlignment="Center" />
-            <TextBlock x:Name="LblLineEnding" Grid.Column="5" Style="{StaticResource CaptionTextBlockStyle}" Margin="0,0,16,0" VerticalAlignment="Center"
+            <HyperlinkButton x:Name="CountCharsLink" Grid.Column="3" Visibility="Collapsed"
+                             Content="Count characters" FontSize="12"
+                             Padding="6,0" MinHeight="0" Margin="0,0,16,0" VerticalAlignment="Center"
+                             AutomationProperties.AutomationId="CountCharsLink"
+                             ToolTipService.ToolTip="Count the exact number of characters (one full pass over a large file)."
+                             Click="CountChars_Click" />
+            <TextBlock x:Name="LblZoom" Grid.Column="4" Style="{StaticResource CaptionTextBlockStyle}" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblEncoding" Grid.Column="5" Style="{StaticResource CaptionTextBlockStyle}" Margin="0,0,16,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblLineEnding" Grid.Column="6" Style="{StaticResource CaptionTextBlockStyle}" Margin="0,0,16,0" VerticalAlignment="Center"
                        ToolTipService.ToolTip="Line endings used by the file" />
-            <TextBlock x:Name="LblCursor" Grid.Column="6" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+            <TextBlock x:Name="LblCursor" Grid.Column="7" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </Window>
