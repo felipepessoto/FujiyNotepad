@@ -10,22 +10,28 @@ namespace FujiyNotepad.Presentation
     /// real colon in a name — is never mistaken for a line separator. Pure and unit-testable; the host supplies
     /// the file-existence check.
     /// </summary>
-    public sealed record CliArguments(string? Path, int? Line, int? Column)
+    public sealed record CliArguments(string? Path, bool Stdin, int? Line, int? Column)
     {
         /// <summary>
         /// Parses <paramref name="args"/> (the arguments after the executable). The first non-option token is the
-        /// path; <paramref name="fileExists"/> disambiguates a trailing <c>:line[:col]</c> from a drive colon.
+        /// path; a lone <c>-</c> means "read standard input"; <paramref name="fileExists"/> disambiguates a
+        /// trailing <c>:line[:col]</c> from a drive colon.
         /// </summary>
         public static CliArguments Parse(IReadOnlyList<string> args, Func<string, bool> fileExists)
         {
             string? path = null;
+            bool stdin = false;
             int? line = null;
             int? column = null;
 
             for (int i = 0; i < args.Count; i++)
             {
                 string a = args[i];
-                if ((a == "--line" || a == "-l") && i + 1 < args.Count && TryParsePositive(args[i + 1], out int l))
+                if (a == "-")
+                {
+                    stdin = true;
+                }
+                else if ((a == "--line" || a == "-l") && i + 1 < args.Count && TryParsePositive(args[i + 1], out int l))
                 {
                     line = l;
                     i++;
@@ -44,18 +50,18 @@ namespace FujiyNotepad.Presentation
             // A trailing path:line[:col] only when --line wasn't given explicitly.
             if (path is not null && line is null)
             {
-                return SplitTrailingLocation(path, column, fileExists);
+                return SplitTrailingLocation(path, stdin, column, fileExists);
             }
 
-            return new CliArguments(path, line, column);
+            return new CliArguments(path, stdin, line, column);
         }
 
         // Peels a trailing ":line" or ":line:col" off the path, but only when the remaining path exists on disk.
-        private static CliArguments SplitTrailingLocation(string path, int? column, Func<string, bool> exists)
+        private static CliArguments SplitTrailingLocation(string path, bool stdin, int? column, Func<string, bool> exists)
         {
             if (exists(path))
             {
-                return new CliArguments(path, null, column);
+                return new CliArguments(path, stdin, null, column);
             }
 
             // path:line  (the last ':' must be past a drive colon at index 1, and be a positive integer)
@@ -65,18 +71,18 @@ namespace FujiyNotepad.Presentation
                 string before = path.Substring(0, c1);
                 if (exists(before))
                 {
-                    return new CliArguments(before, n1, column);
+                    return new CliArguments(before, stdin, n1, column);
                 }
 
                 // path:line:col
                 int c2 = before.LastIndexOf(':');
                 if (c2 > 1 && TryParsePositive(before.AsSpan(c2 + 1), out int n2) && exists(before.Substring(0, c2)))
                 {
-                    return new CliArguments(before.Substring(0, c2), n2, n1);
+                    return new CliArguments(before.Substring(0, c2), stdin, n2, n1);
                 }
             }
 
-            return new CliArguments(path, null, column);
+            return new CliArguments(path, stdin, null, column);
         }
 
         private static bool TryParsePositive(ReadOnlySpan<char> s, out int value) =>

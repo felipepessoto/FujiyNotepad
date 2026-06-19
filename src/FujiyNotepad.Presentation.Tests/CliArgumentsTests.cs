@@ -106,5 +106,21 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.Null(r.Path);
             Assert.Null(r.Line);
         }
+
+        [Fact]
+        public void Parse_Dash_MeansStdin()
+        {
+            var r = CliArguments.Parse(new[] { "-" }, Existing());
+            Assert.True(r.Stdin);
+            Assert.Null(r.Path);
+        }
+
+        [Fact]
+        public void Parse_PlainPath_IsNotStdin()
+        {
+            var r = CliArguments.Parse(new[] { "file.txt" }, Existing("file.txt"));
+            Assert.False(r.Stdin);
+            Assert.Equal("file.txt", r.Path);
+        }
     }
 }
