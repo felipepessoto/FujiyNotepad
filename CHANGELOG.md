@@ -13,6 +13,9 @@ tag per published build. Each release also has downloadable builds and notes on 
   with **File ▸ Reopen Last File on Startup** (which also forgets the remembered file). Closing a file
   explicitly with **File ▸ Close** (Ctrl+W) also clears it, so an intentionally-closed file isn't reopened —
   only closing the window resumes it next time.
+- **Screen reader support for file content** — the text surface now exposes the caret line's text to Narrator
+  and other assistive tech through UI Automation, announcing each line (with its position) as you navigate.
+  Previously the viewer could be focused but its content was opaque to screen readers.
 
 ### Changed
 - **Faster open for very large files** — the exact character count is no longer computed with a full-file

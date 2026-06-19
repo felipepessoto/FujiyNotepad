@@ -6,6 +6,7 @@ using Microsoft.Graphics.Canvas.Text;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI;
 using Microsoft.UI.Input;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
@@ -97,7 +98,11 @@ namespace FujiyNotepad.WinUI.Controls
             autoScrollTimer.Tick += AutoScrollTick;
 
             engine.ViewChanged += () => ViewChanged?.Invoke();
-            engine.CaretChanged += pos => CaretChanged?.Invoke(pos);
+            engine.CaretChanged += pos =>
+            {
+                CaretChanged?.Invoke(pos);
+                NotifyAccessibilityCaretLineChanged(pos);
+            };
             engine.RedrawRequested += () => canvas.Invalidate();
             engine.CaretBlinkResetRequested += RestartCaretBlink;
 
@@ -193,6 +198,42 @@ namespace FujiyNotepad.WinUI.Controls
         public double HorizontalExtentPx { get { Ready(); return engine.HorizontalExtentPx; } }
         public TextPosition CaretPosition => engine.CaretPosition;
 
+        // ----- Accessibility: expose file content to screen readers via a UIA peer (issue #75) -----
+
+        // The caret line last announced to assistive tech; -1 = none yet. Used to re-announce only on a real
+        // line change (not when the caret moves left/right within the same line).
+        private int lastAccessibilityLine = -1;
+
+        // A custom AutomationPeer (instead of the default UserControl peer) so Narrator / NVDA can read the
+        // file's text — the Win2D surface paints text directly and otherwise exposes none.
+        protected override AutomationPeer OnCreateAutomationPeer() => new TextCanvasAutomationPeer(this);
+
+        /// <summary>The text a screen reader should read: the raw source of the caret line (bounded; issue #75).</summary>
+        internal string GetAccessibleText() => engine.GetCaretLineText();
+
+        /// <summary>The 1-based caret line and column, for the peer's position announcement.</summary>
+        internal (int Line, int Column) GetAccessibleCaretPosition()
+        {
+            TextPosition c = engine.CaretPosition;
+            return (c.Line + 1, c.Column + 1);
+        }
+
+        // Raises a UIA value-changed event when the caret moves to a different line, so a screen reader reads
+        // the new line as the user navigates. No-op unless an automation client (the peer) is attached.
+        private void NotifyAccessibilityCaretLineChanged(TextPosition pos)
+        {
+            if (pos.Line == lastAccessibilityLine)
+            {
+                return;
+            }
+            lastAccessibilityLine = pos.Line;
+
+            if (FrameworkElementAutomationPeer.FromElement(this) is TextCanvasAutomationPeer peer)
+            {
+                peer.NotifyCaretLineChanged();
+            }
+        }
+
         public TextPosition SelectionStart => engine.SelectionStart;
 
         /// <summary>The size (characters and lines) of the current selection, for the status bar.</summary>
@@ -267,6 +308,7 @@ namespace FujiyNotepad.WinUI.Controls
         public void SetProvider(ILineSource? newProvider)
         {
             Ready();
+            lastAccessibilityLine = -1; // a new file: re-announce the caret line even if it lands on line 0 again
             engine.SetProvider(newProvider);
         }
 
