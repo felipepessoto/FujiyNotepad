@@ -56,5 +56,23 @@ namespace FujiyNotepad.Presentation
 
         /// <summary>Most-recently-used Filter terms, newest first (see <c>SearchHistory</c>).</summary>
         public List<string> RecentFilters { get; set; } = new();
+
+        /// <summary>Whether to reopen the last file (at its last scroll/caret position) on startup. On by default.</summary>
+        public bool RestoreLastSession { get; set; } = true;
+
+        /// <summary>
+        /// The file that was open when the app last closed, reopened on startup when <see cref="RestoreLastSession"/>
+        /// is on. Empty means "nothing to restore".
+        /// </summary>
+        public string LastSessionFilePath { get; set; } = "";
+
+        /// <summary>The first visible line (0-based scroll position) of the last file when it was closed.</summary>
+        public int LastSessionFirstVisibleLine { get; set; }
+
+        /// <summary>The caret line (0-based) of the last file when it was closed.</summary>
+        public int LastSessionCaretLine { get; set; }
+
+        /// <summary>The caret column (0-based) of the last file when it was closed.</summary>
+        public int LastSessionCaretColumn { get; set; }
     }
 }

@@ -39,10 +39,16 @@
                 </MenuFlyoutItem>
                 <MenuFlyoutItem Text="Open Sample" Click="OpenSample_Click" />
                 <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent" />
+                <ToggleMenuFlyoutItem x:Name="ReopenLastToggle" Text="Reopen Last File on Startup" Click="ReopenLast_Click" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem x:Name="ReloadItem" Text="Reload" Click="Reload_Click" IsEnabled="False">
                     <MenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="F5" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem x:Name="CloseItem" Text="Close" Click="CloseFile_Click" IsEnabled="False">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="W" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator />

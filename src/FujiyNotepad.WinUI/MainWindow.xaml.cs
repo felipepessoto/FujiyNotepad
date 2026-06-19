@@ -45,6 +45,13 @@ namespace FujiyNotepad.WinUI
         private int pendingGoToColumn;
         private double pendingRestoreHorizontalOffset;
 
+        // Session restore (issue #51): on launch, reopen the last file at its saved scroll + caret position. Like
+        // the other pending-restore mechanisms, the target is re-applied on each index tick until the index
+        // reaches it (a large file only indexes up to its frontier at open). -1 = nothing pending.
+        private int pendingSessionFirstLine = -1;
+        private int pendingSessionCaretLine;
+        private int pendingSessionCaretColumn;
+
         private readonly DispatcherQueueTimer indexRefreshTimer;
         private readonly DispatcherQueueTimer findPreviewTimer;
         private readonly DispatcherQueueTimer followTailTimer;
@@ -156,9 +163,25 @@ namespace FujiyNotepad.WinUI
                 int? cliLine = cli.Line, cliColumn = cli.Column;
                 DispatcherQueue.TryEnqueue(() => { _ = OpenFileAt(cliPath, cliLine, cliColumn); });
             }
-            else if (cli.Stdin || (cli.Path is null && IsStdinRedirected()))
+            else
             {
-                DispatcherQueue.TryEnqueue(() => { _ = OpenFromStdinAsync(); });
+                // A real redirected stdin (pipe/file) means "read piped input" (#103). Console.IsInputRedirected
+                // alone is unreliable for a windows-subsystem process — a null stdin handle reports redirected —
+                // so require a usable stream; otherwise fall through to reopening the last file (#51).
+                Stream? stdinStream = cli.Path is null ? TryOpenRedirectedStdin() : null;
+                if (cli.Stdin || stdinStream is not null)
+                {
+                    DispatcherQueue.TryEnqueue(() => { _ = OpenFromStdinAsync(stdinStream); });
+                }
+                else if (settings.RestoreLastSession
+                         && settings.LastSessionFilePath is { Length: > 0 } lastPath
+                         && File.Exists(lastPath))
+                {
+                    int first = Math.Max(0, settings.LastSessionFirstVisibleLine);
+                    int caretLine = Math.Max(0, settings.LastSessionCaretLine);
+                    int caretColumn = Math.Max(0, settings.LastSessionCaretColumn);
+                    DispatcherQueue.TryEnqueue(() => { _ = RestoreSessionAsync(lastPath, first, caretLine, caretColumn); });
+                }
             }
         }
 
@@ -370,6 +393,7 @@ namespace FujiyNotepad.WinUI
             pendingRestoreFirstLine = restoreFirstLine;
             pendingRestoreHorizontalOffset = restoreHorizontal;
             pendingGoToLine = -1; // a plain open cancels any pending command-line jump
+            pendingSessionFirstLine = -1; // ...and any pending session restore
             if (restoreFirstLine >= 0)
             {
                 View.FirstVisibleLine = restoreFirstLine;
@@ -379,6 +403,7 @@ namespace FujiyNotepad.WinUI
             EditMenu.IsEnabled = true;
             EncodingMenu.IsEnabled = true;
             ReloadItem.IsEnabled = true;
+            CloseItem.IsEnabled = true;
             CopyPathItem.IsEnabled = true;
             RevealItem.IsEnabled = true;
             UpdateEncodingUi();
@@ -411,6 +436,76 @@ namespace FujiyNotepad.WinUI
 
             TextEncoding? forced = encodingAutoDetect ? null : currentEncoding;
             await OpenFile(path, addToRecent: false, forcedEncoding: forced, preserveView: true);
+        }
+
+        // Closes the current file and returns to the empty viewer (issue #51). An explicit close (Ctrl+W /
+        // File > Close) is a deliberate "I'm done with this file" signal, so unlike closing the window — which
+        // saves the session to resume next launch — it forgets the saved session, matching the well-known
+        // browser / editor pattern (a tab you explicitly close is not reopened).
+        private async void CloseFile_Click(object sender, RoutedEventArgs e) => await CloseCurrentFileAsync();
+
+        private async Task CloseCurrentFileAsync()
+        {
+            if (currentFilePath is null && stdinTempPath is null)
+            {
+                return; // nothing open
+            }
+
+            await StopIndexingAsync();
+            indexRefreshTimer.Stop();
+
+            // Stop following / watching / spooling and leave any filter view.
+            followTail = false;
+            tailSnapToBottom = false;
+            followTailTimer.Stop();
+            FollowTailToggle.IsChecked = false;
+            StopWatchingFile();
+            CleanupStdin();
+            ResetFilter();
+
+            // Drop find / count / highlight state tied to the file.
+            findCoordinator.Reset();
+            countCts?.Cancel();
+            countedKey = null;
+            charCountCts?.Cancel();
+            FindCount.Text = string.Empty;
+            View.SetHighlighter(null);
+            matchMarks = null;
+
+            // Tear down the engine + byte source and clear pending navigation.
+            View.SetProvider(null);
+            RefreshMarkerMargin();
+            source?.Dispose();
+            source = null;
+            provider = null;
+            currentFilePath = null;
+            encodingAutoDetect = true;
+            pendingRestoreFirstLine = -1;
+            pendingGoToLine = -1;
+            pendingSessionFirstLine = -1;
+
+            // Back to the empty-state UI (mirrors the XAML defaults before any file is opened).
+            Title = "Fujiy Notepad";
+            EditMenu.IsEnabled = false;
+            EncodingMenu.IsEnabled = false;
+            ReloadItem.IsEnabled = false;
+            CloseItem.IsEnabled = false;
+            CopyPathItem.IsEnabled = false;
+            RevealItem.IsEnabled = false;
+            CountCharsLink.Visibility = Visibility.Collapsed;
+            ReloadHint.Visibility = Visibility.Collapsed;
+            LblStatus.Text = string.Empty;
+            LblCharCount.Text = string.Empty;
+            LblEncoding.Text = string.Empty;
+            LblLineEnding.Text = string.Empty;
+            LblCursor.Text = string.Empty;
+
+            // Explicit close forgets the saved session so this file isn't reopened next launch (the
+            // RestoreLastSession preference itself stays on).
+            ClearSavedSession();
+            settingsStore.Save(settings);
+
+            View.FocusCanvas();
         }
 
         // (Re)starts watching the open file's folder for external changes and clears any pending hint. Watching
@@ -713,6 +808,7 @@ namespace FujiyNotepad.WinUI
                 }
 
                 ApplyPendingGoTo();
+                ApplyPendingSession();
             }
 
             if (LineIndexer.IsCompleted)
@@ -875,40 +971,101 @@ namespace FujiyNotepad.WinUI
             }
         }
 
+        // ----- Session restore (issue #51): reopen the last file where it was left -----
+
+        // Reopens the last file (called at launch when no file/pipe was given and the setting is on) and queues
+        // its saved scroll + caret position for restore as the index catches up.
+        private async Task RestoreSessionAsync(string path, int firstVisibleLine, int caretLine, int caretColumn)
+        {
+            await OpenFile(path); // OpenFile resets the pending-session state, so set it afterwards
+            pendingSessionFirstLine = firstVisibleLine;
+            pendingSessionCaretLine = caretLine;
+            pendingSessionCaretColumn = caretColumn;
+            ApplyPendingSession();
+        }
+
+        private void ApplyPendingSession()
+        {
+            if (pendingSessionFirstLine < 0 || provider is null || filteredSource is not null)
+            {
+                return;
+            }
+
+            // Restore the caret first (this scrolls its line to the top), then force the saved scroll position so
+            // the view shows exactly what the user last saw -- which need not be the caret's line.
+            View.GoToLineColumn(pendingSessionCaretLine, pendingSessionCaretColumn);
+            View.FirstVisibleLine = pendingSessionFirstLine;
+
+            if ((provider.LineCount > pendingSessionCaretLine && View.MaxFirstLine >= pendingSessionFirstLine)
+                || LineIndexer.IsCompleted)
+            {
+                pendingSessionFirstLine = -1; // both targets are now indexed; stop nudging
+            }
+        }
+
+        // Toggles whether the last file is reopened on startup (issue #51). Turning it off forgets the remembered
+        // file immediately (a privacy-friendly, well-known opt-out).
+        private void ReopenLast_Click(object sender, RoutedEventArgs e)
+        {
+            settings.RestoreLastSession = ReopenLastToggle.IsChecked;
+            if (!settings.RestoreLastSession)
+            {
+                ClearSavedSession();
+            }
+            settingsStore.Save(settings);
+        }
+
+        private void ClearSavedSession()
+        {
+            settings.LastSessionFilePath = "";
+            settings.LastSessionFirstVisibleLine = 0;
+            settings.LastSessionCaretLine = 0;
+            settings.LastSessionCaretColumn = 0;
+        }
+
         // ----- Stdin piping (issue #103): `tool | FujiyNotepad -` -----
 
-        // A GUI (windows-subsystem) process can still inherit a redirected stdin handle when launched from a pipe.
-        // Probing can throw when there is no console/stdin at all, so guard it.
-        private static bool IsStdinRedirected()
+        // A windows-subsystem process can still inherit a redirected stdin handle when launched from a pipe.
+        // Returns an open standard-input stream only when it is *genuinely* redirected to a pipe/file; a normal
+        // launch (no pipe) has a null handle for which OpenStandardInput returns Stream.Null, so we return null
+        // there and let the caller fall back to session restore (#51). Probing can throw with no console at all.
+        private static Stream? TryOpenRedirectedStdin()
         {
             try
             {
-                return Console.IsInputRedirected;
+                if (!Console.IsInputRedirected)
+                {
+                    return null;
+                }
+                Stream input = Console.OpenStandardInput();
+                return ReferenceEquals(input, Stream.Null) ? null : input;
             }
             catch
             {
-                return false;
+                return null;
             }
         }
 
         // Reads piped standard input. A pipe is not seekable and the engine needs random access, so stdin is
         // spooled on a background thread into a temp file that is opened and followed live; the temp file is
-        // deleted on close or when another file is opened.
-        private async Task OpenFromStdinAsync()
+        // deleted on close or when another file is opened. <paramref name="input"/> is an already-opened stdin
+        // stream (from the auto-detect path); when null (an explicit `-`) it is opened here.
+        private async Task OpenFromStdinAsync(Stream? input)
         {
-            Stream input;
-            try
+            if (input is null)
             {
-                input = Console.OpenStandardInput();
-            }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException)
-            {
-                return; // no usable stdin (e.g. launched without a pipe)
+                try
+                {
+                    input = Console.OpenStandardInput();
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException)
+                {
+                    return; // no usable stdin (e.g. `-` given but launched without a pipe)
+                }
             }
 
-            // A windows-subsystem process double-clicked from Explorer has a null stdin handle, for which
-            // Console.IsInputRedirected still reports true but OpenStandardInput returns Stream.Null. Bail so a
-            // normal launch does not open an empty "<stdin>" window; only a real pipe/redirect yields a stream.
+            // A null stdin handle yields Stream.Null; bail so an explicit `-` without a pipe doesn't open an
+            // empty "<stdin>" window.
             if (ReferenceEquals(input, Stream.Null))
             {
                 return;
@@ -2601,6 +2758,8 @@ namespace FujiyNotepad.WinUI
             LineNumbersToggle.IsChecked = settings.ShowLineNumbers;
             View.ShowLineNumbers = settings.ShowLineNumbers;
 
+            ReopenLastToggle.IsChecked = settings.RestoreLastSession;
+
             WhitespaceToggle.IsChecked = settings.ShowWhitespace;
             View.ShowWhitespace = settings.ShowWhitespace;
 
@@ -2656,7 +2815,37 @@ namespace FujiyNotepad.WinUI
                 settings.WindowHeight = size.Height;
             }
 
+            SaveSessionState();
             settingsStore.Save(settings);
+        }
+
+        // Remembers the open file and its scroll/caret position for next launch (issue #51), or clears it when
+        // session restore is off or there is nothing real to restore (a piped stdin temp file is deleted on
+        // close, and a filter view's line numbers don't map to the real file, so those keep position 0).
+        private void SaveSessionState()
+        {
+            bool hasRealFile = currentFilePath is { } path
+                && (stdinTempPath is null || !string.Equals(path, stdinTempPath, StringComparison.OrdinalIgnoreCase));
+
+            if (!settings.RestoreLastSession || !hasRealFile)
+            {
+                ClearSavedSession();
+                return;
+            }
+
+            settings.LastSessionFilePath = currentFilePath!;
+            if (filteredSource is null && provider is not null)
+            {
+                settings.LastSessionFirstVisibleLine = View.FirstVisibleLine;
+                settings.LastSessionCaretLine = View.CaretPosition.Line;
+                settings.LastSessionCaretColumn = View.CaretPosition.Column;
+            }
+            else
+            {
+                settings.LastSessionFirstVisibleLine = 0;
+                settings.LastSessionCaretLine = 0;
+                settings.LastSessionCaretColumn = 0;
+            }
         }
 
         // Rebuild the File > Open Recent submenu from the saved list, dropping entries that no longer exist.
