@@ -13,6 +13,8 @@ tag per published build. Each release also has downloadable builds and notes on 
   History**.
 - **Go To Percentage** — **Edit ▸ Go To Percentage…** jumps to a byte position by percentage (e.g. 50%),
   alongside Go To Line and Go To Offset. Works on huge files and even before indexing finishes.
+- **Highlight presets** — the Highlight Rules dialog has an **Insert preset** menu with ready-made rule sets
+  (Log levels, Web access log, JSON, Timestamps & IDs) you can drop in and then tweak.
 
 ### Fixed
 - **No more text jitter** — the text no longer shifts up and down by a pixel as the caret blinks. The line

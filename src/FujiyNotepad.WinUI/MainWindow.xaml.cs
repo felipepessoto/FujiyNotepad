@@ -2037,8 +2037,31 @@ namespace FujiyNotepad.WinUI
                 Margin = new Thickness(0, 0, 0, 8),
             };
 
+            var presetMenu = new MenuFlyout();
+            foreach (HighlightPreset preset in HighlightPresets.All)
+            {
+                var item = new MenuFlyoutItem { Text = preset.Name };
+                item.Click += (_, _) =>
+                {
+                    // Append the preset's rules (non-destructive and composable); the user then edits and applies.
+                    string current = editor.Text.Replace("\r\n", "\n").Replace('\r', '\n');
+                    string sep = current.Length > 0 && !current.EndsWith('\n') ? "\n" : "";
+                    editor.Text = current + sep + preset.RulesText;
+                };
+                presetMenu.Items.Add(item);
+            }
+            var presetButton = new DropDownButton
+            {
+                Content = "Insert preset",
+                Flyout = presetMenu,
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(presetButton, "InsertPresetButton");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(presetButton, "Insert highlight preset");
+
             var panel = new StackPanel();
             panel.Children.Add(help);
+            panel.Children.Add(presetButton);
             panel.Children.Add(editor);
 
             var dialog = new ContentDialog
