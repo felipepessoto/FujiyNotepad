@@ -19,8 +19,8 @@ namespace FujiyNotepad.Core
         private readonly IByteSource source;
         private readonly LineIndexer indexer;
         private readonly TextEncoding encoding;
-        private readonly long fileSize;
-        private readonly bool endsWithNewline;
+        private long fileSize;
+        private bool endsWithNewline;
         private readonly Dictionary<int, string> cache = new();
         // The cache is the only mutable shared state: viewport rendering (UI thread) and the filter scan /
         // matching-line export (background threads) all call GetLine concurrently, and the underlying
@@ -49,6 +49,29 @@ namespace FujiyNotepad.Core
                 return false;
             }
             return tail.AsSpan().SequenceEqual(newline);
+        }
+
+        /// <summary>
+        /// Re-reads the source length (after a writer has appended to or truncated the file) and updates the
+        /// cached size and trailing-newline flag, dropping every cached line so the previously-final line —
+        /// whose text may now be longer or newly terminated — and any new lines are re-read on the next render.
+        /// Returns true if the size changed. Call after the indexer has been resumed over the new region.
+        /// </summary>
+        public bool RefreshLength()
+        {
+            long newSize = source.Length;
+            if (newSize == fileSize)
+            {
+                return false;
+            }
+
+            fileSize = newSize;
+            endsWithNewline = FileEndsWithNewline();
+            lock (cacheLock)
+            {
+                cache.Clear();
+            }
+            return true;
         }
 
         /// <summary>

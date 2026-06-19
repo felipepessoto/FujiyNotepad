@@ -45,7 +45,14 @@ namespace FujiyNotepad.WinUI
 
         private readonly DispatcherQueueTimer indexRefreshTimer;
         private readonly DispatcherQueueTimer findPreviewTimer;
+        private readonly DispatcherQueueTimer followTailTimer;
         private CancellationTokenSource? cancelIndexing;
+
+        // Tail / follow mode (issue #28): poll the file size, resume indexing over appended bytes, and (while the
+        // user is at the bottom) stick to the new end. `tail` tracks the last observed length.
+        private bool followTail;
+        private bool tailSnapToBottom;
+        private TailController? tail;
         private Task indexingTask = Task.CompletedTask;
         private bool syncingScroll;
 
@@ -111,10 +118,16 @@ namespace FujiyNotepad.WinUI
             findPreviewTimer.IsRepeating = false;
             findPreviewTimer.Tick += (_, _) => PreviewFind();
 
+            // Tail/follow poll: when "Follow Tail" is on, check the file size ~1/s and pull in appended lines.
+            followTailTimer = DispatcherQueue.CreateTimer();
+            followTailTimer.Interval = TimeSpan.FromMilliseconds(1000);
+            followTailTimer.Tick += FollowTailTimer_Tick;
+
             Closed += (_, _) =>
             {
                 SaveWindowState();
                 StopWatchingFile();
+                followTailTimer.Stop();
                 cancelIndexing?.Cancel();
                 findCts?.Cancel();
                 source?.Dispose();
@@ -299,6 +312,14 @@ namespace FujiyNotepad.WinUI
 
             source?.Dispose();
             source = newSource;
+
+            // A fresh open starts with follow off; baseline the tail length for when it is enabled.
+            followTail = false;
+            tailSnapToBottom = false;
+            followTailTimer.Stop();
+            FollowTailToggle.IsChecked = false;
+            tail = new TailController(newSource.Length);
+
             // Auto-detect the encoding (BOM + heuristic) unless the user forced one from the Encoding menu.
             currentEncoding = forcedEncoding ?? EncodingDetector.Detect(source);
             encodingAutoDetect = forcedEncoding is null;
@@ -422,6 +443,114 @@ namespace FujiyNotepad.WinUI
             }
         }
 
+        // ----- Tail / follow mode (issue #28): live auto-reload of a growing file -----
+
+        private void FollowTail_Click(object sender, RoutedEventArgs e)
+        {
+            if (FollowTailToggle.IsChecked)
+            {
+                EnableFollowTail();
+            }
+            else
+            {
+                DisableFollowTail();
+            }
+        }
+
+        // Starts following: jump to the end now, baseline the size, and poll for growth. The follow is sticky —
+        // it keeps the view pinned to the end only while the user stays at the bottom.
+        private void EnableFollowTail()
+        {
+            if (provider is null || source is null)
+            {
+                FollowTailToggle.IsChecked = false;
+                return;
+            }
+
+            followTail = true;
+            FollowTailToggle.IsChecked = true;
+            tail = new TailController(source.RefreshLength());
+            tailSnapToBottom = true;
+            View.FirstVisibleLine = View.MaxFirstLine; // jump to the end immediately
+            View.FocusCanvas();
+            SetLineCountStatus();
+            followTailTimer.Start();
+        }
+
+        private void DisableFollowTail()
+        {
+            followTail = false;
+            tailSnapToBottom = false;
+            followTailTimer.Stop();
+            FollowTailToggle.IsChecked = false;
+            SetLineCountStatus();
+        }
+
+        // Poll tick: pull in appended lines and (when sticky) follow the end; a shrink means truncation/rotation.
+        private async void FollowTailTimer_Tick(DispatcherQueueTimer sender, object args)
+        {
+            if (!followTail || provider is null || source is null || currentFilePath is null)
+            {
+                followTailTimer.Stop();
+                return;
+            }
+            // Don't fight the filter view or an in-progress (initial or prior-grow) index; retry next tick.
+            if (filteredSource is not null || !LineIndexer.IsCompleted || tail is null)
+            {
+                return;
+            }
+
+            long current;
+            try
+            {
+                current = source.RefreshLength();
+            }
+            catch
+            {
+                return; // a transient read failure mid-rotation; retry next tick
+            }
+
+            switch (tail.Observe(current))
+            {
+                case TailChange.Grew:
+                    // Snap to the new end afterwards only if the user is currently at the bottom.
+                    tailSnapToBottom = TailController.ShouldStickToBottom(View.FirstVisibleLine, View.MaxFirstLine);
+                    LineIndexer.IsCompleted = false; // hide the open line until its newline is found
+                    provider.RefreshLength();         // new size + endsWithNewline, drop the stale last line
+                    indexRefreshTimer.Start();        // push the growing line count and (sticky) follow the end
+                    StartIndexing();                  // resume the index over the appended region
+                    break;
+
+                case TailChange.Shrunk:
+                    await ReloadForTailAsync();        // truncation / rotation: reset and re-index
+                    break;
+            }
+        }
+
+        // Reloads the file after a truncation/rotation, re-enabling follow so the view keeps tailing the end.
+        private async Task ReloadForTailAsync()
+        {
+            string path = currentFilePath!;
+            bool wasFollowing = followTail;
+            followTailTimer.Stop();
+            await OpenFile(path, addToRecent: false); // resets the index and follow state
+            if (wasFollowing && currentFilePath == path)
+            {
+                EnableFollowTail();
+            }
+        }
+
+        // Status-bar line count, with a "Following" suffix while tail mode is on.
+        private void SetLineCountStatus()
+        {
+            if (provider is null || filteredSource is not null)
+            {
+                return;
+            }
+            string text = StatusText.LineCount(provider.LineCount);
+            LblStatus.Text = followTail ? $"{text}  \u00B7  Following" : text;
+        }
+
         private async Task ShowOpenErrorAsync(string path, Exception ex)
         {
             string reason = ex switch
@@ -524,6 +653,12 @@ namespace FujiyNotepad.WinUI
                 View.UpdateTotalLines(provider.LineCount);
                 RefreshMarkerMargin(); // bookmark tick positions shift as the total line count grows
 
+                // Sticky-bottom follow: keep the view pinned to the new end as appended lines arrive.
+                if (followTail && tailSnapToBottom)
+                {
+                    View.FirstVisibleLine = View.MaxFirstLine;
+                }
+
                 // Keep nudging a reloaded view toward its saved scroll position as the rebuilt index grows; stop
                 // once the target line is reachable (or indexing finished) so it no longer fights the user.
                 if (pendingRestoreFirstLine >= 0)
@@ -543,7 +678,7 @@ namespace FujiyNotepad.WinUI
                 StopIndexingItem.IsEnabled = false;
                 if (filteredSource is null)
                 {
-                    LblStatus.Text = StatusText.LineCount(provider.LineCount);
+                    SetLineCountStatus();
                 }
             }
         }

@@ -219,6 +219,20 @@ try {
     # 12b) Clear Search History runs without crashing (sections 11-12 above populated the Find/Filter history).
     UiMenu 'Edit' 'Clear Search History'; Assert (-not $proc.HasExited) "Clear Search History did not crash"
 
+    # 12c) Follow Tail (issue #28): enabling it tails appended lines live — the count grows and the status bar
+    #      shows "Following", without pressing reload. The app shares the file ReadWrite so we can append to it.
+    UiInvoke 'Clear filter and close'   # leave the filter view first; Follow Tail tails the full file
+    Start-Sleep -Milliseconds 300
+    UiMenu 'View' 'Follow Tail'
+    Assert (-not $proc.HasExited) "Follow Tail toggle did not crash"
+    [System.IO.File]::AppendAllText($sample, "`r`nzeta sixth line`r`neta seventh line")
+    Start-Sleep -Milliseconds 2200   # > the ~1s poll + the resume-index + a status refresh tick
+    $tailStatus = UiValue 'LblStatus'
+    Assert ($tailStatus -match '7 lines') "Follow Tail picked up the 2 appended lines (7 lines total)" "LblStatus: '$tailStatus'"
+    Assert ($tailStatus -match 'Following') "Follow Tail shows the 'Following' indicator" "LblStatus: '$tailStatus'"
+    UiMenu 'View' 'Follow Tail'  # toggle off
+    Assert (-not $proc.HasExited) "Follow Tail toggle off did not crash"
+
     # 13) Still alive after the full interaction sweep.
     Assert (-not $proc.HasExited) "Process is still running after the full interaction sweep"
 }

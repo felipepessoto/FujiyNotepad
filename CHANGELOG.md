@@ -17,6 +17,9 @@ tag per published build. Each release also has downloadable builds and notes on 
   (Log levels, Web access log, JSON, Timestamps & IDs) you can drop in and then tweak.
 - **Incremental find** — the Find bar highlights matches and shows the match count **as you type** (debounced),
   honouring the match-case / whole-word / regex toggles; Enter and F3 still jump between matches.
+- **Follow Tail** — **View ▸ Follow Tail** live-tails a growing file (logs): appended lines are pulled in
+  automatically and the view sticks to the end while you're at the bottom (scroll up to read history without
+  being yanked). The status bar shows **Following**.
 
 ### Fixed
 - **No more text jitter** — the text no longer shifts up and down by a pixel as the caret blinks. The line

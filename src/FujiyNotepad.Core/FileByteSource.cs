@@ -11,7 +11,7 @@ namespace FujiyNotepad.Core
     {
         private readonly SafeFileHandle handle;
 
-        public long Length { get; }
+        public long Length { get; private set; }
 
         public FileByteSource(string path)
         {
@@ -20,6 +20,9 @@ namespace FujiyNotepad.Core
             handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, FileOptions.RandomAccess);
             Length = RandomAccess.GetLength(handle);
         }
+
+        /// <summary>Re-reads the file length from the handle (observing appends or truncation) and returns it.</summary>
+        public long RefreshLength() => Length = RandomAccess.GetLength(handle);
 
         public int Read(long offset, Span<byte> buffer) => RandomAccess.Read(handle, buffer, offset);
 

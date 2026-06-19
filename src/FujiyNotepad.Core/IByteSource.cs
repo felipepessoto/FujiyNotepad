@@ -10,6 +10,13 @@ namespace FujiyNotepad.Core
         long Length { get; }
 
         /// <summary>
+        /// Re-reads and returns the current byte length, observing growth (or a shrink) since the source was
+        /// opened — used to tail a file another process is appending to. A fixed in-memory source returns its
+        /// constant length.
+        /// </summary>
+        long RefreshLength();
+
+        /// <summary>
         /// Reads up to <paramref name="buffer"/>.Length bytes starting at <paramref name="offset"/>.
         /// Returns the number of bytes read, which is 0 at end of stream and may be fewer than requested.
         /// </summary>
