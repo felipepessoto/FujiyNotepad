@@ -41,6 +41,8 @@ namespace FujiyNotepad.WinUI
         // When a Reload preserves the scroll position, the target first-visible line is re-applied on each index
         // tick (until reachable) because a just-reloaded large file is only indexed up to its frontier. -1 = none.
         private int pendingRestoreFirstLine = -1;
+        private int pendingGoToLine = -1;
+        private int pendingGoToColumn;
         private double pendingRestoreHorizontalOffset;
 
         private readonly DispatcherQueueTimer indexRefreshTimer;
@@ -53,6 +55,12 @@ namespace FujiyNotepad.WinUI
         private bool followTail;
         private bool tailSnapToBottom;
         private TailController? tail;
+
+        // Stdin piping (issue #103): when launched with `-` (or a redirected stdin and no path), incoming bytes
+        // are spooled to a temp file that is opened and followed like a live log. These track that temp file so
+        // the spool can be cancelled and the file deleted on close or when another file is opened.
+        private string? stdinTempPath;
+        private CancellationTokenSource? stdinCts;
         private Task indexingTask = Task.CompletedTask;
         private bool syncingScroll;
 
@@ -131,13 +139,21 @@ namespace FujiyNotepad.WinUI
                 cancelIndexing?.Cancel();
                 findCts?.Cancel();
                 source?.Dispose();
+                CleanupStdin();
             };
 
-            // Open a file passed on the command line (file association / "open with" / drag-onto-exe).
-            string? fileArg = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(File.Exists);
-            if (fileArg != null)
+            // Open a file passed on the command line (file association / "open with" / drag-onto-exe), with an
+            // optional --line / --column or trailing :line[:col] location to jump to (issue #102). A lone `-`
+            // (or a redirected stdin with no path) instead reads piped standard input (issue #103).
+            CliArguments cli = CliArguments.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray(), File.Exists);
+            if (cli.Path is { } cliPath && File.Exists(cliPath))
             {
-                DispatcherQueue.TryEnqueue(() => { _ = OpenFile(fileArg); });
+                int? cliLine = cli.Line, cliColumn = cli.Column;
+                DispatcherQueue.TryEnqueue(() => { _ = OpenFileAt(cliPath, cliLine, cliColumn); });
+            }
+            else if (cli.Stdin || (cli.Path is null && IsStdinRedirected()))
+            {
+                DispatcherQueue.TryEnqueue(() => { _ = OpenFromStdinAsync(); });
             }
         }
 
@@ -310,6 +326,13 @@ namespace FujiyNotepad.WinUI
 
             await StopIndexingAsync();
 
+            // If a previous stdin pipe was open, stop spooling and delete its temp file — unless we are (re)opening
+            // that very temp file, which happens when stdin first opens or is reloaded by Follow Tail.
+            if (stdinTempPath is not null && !string.Equals(path, stdinTempPath, StringComparison.OrdinalIgnoreCase))
+            {
+                CleanupStdin();
+            }
+
             source?.Dispose();
             source = newSource;
 
@@ -341,6 +364,7 @@ namespace FujiyNotepad.WinUI
             // nudging toward the saved line until the rebuilt index reaches it.
             pendingRestoreFirstLine = restoreFirstLine;
             pendingRestoreHorizontalOffset = restoreHorizontal;
+            pendingGoToLine = -1; // a plain open cancels any pending command-line jump
             if (restoreFirstLine >= 0)
             {
                 View.FirstVisibleLine = restoreFirstLine;
@@ -437,6 +461,13 @@ namespace FujiyNotepad.WinUI
         // reveal the non-blocking "file changed" hint. The user decides whether to reload — nothing is forced.
         private void OnWatchedFileChanged(object sender, FileSystemEventArgs e)
         {
+            // While following the tail (issue #28) the appended bytes — including stdin spooling, #103 — are
+            // already pulled in live, so the "file changed, reload" hint would be misleading noise.
+            if (followTail)
+            {
+                return;
+            }
+
             if (Interlocked.Exchange(ref fileChangeSignaled, 1) == 0)
             {
                 DispatcherQueue.TryEnqueue(() => ReloadHint.Visibility = Visibility.Visible);
@@ -458,8 +489,10 @@ namespace FujiyNotepad.WinUI
         }
 
         // Starts following: jump to the end now, baseline the size, and poll for growth. The follow is sticky —
-        // it keeps the view pinned to the end only while the user stays at the bottom.
-        private void EnableFollowTail()
+        // it keeps the view pinned to the end only while the user stays at the bottom. With <paramref name="rebaseline"/>
+        // false (stdin, #103) the open-time baseline is kept so the poll still indexes bytes spooled in after the
+        // initial open — otherwise a fast producer that finishes between open and here would be missed.
+        private void EnableFollowTail(bool rebaseline = true)
         {
             if (provider is null || source is null)
             {
@@ -469,7 +502,10 @@ namespace FujiyNotepad.WinUI
 
             followTail = true;
             FollowTailToggle.IsChecked = true;
-            tail = new TailController(source.RefreshLength());
+            if (rebaseline || tail is null)
+            {
+                tail = new TailController(source.RefreshLength());
+            }
             tailSnapToBottom = true;
             View.FirstVisibleLine = View.MaxFirstLine; // jump to the end immediately
             View.FocusCanvas();
@@ -670,6 +706,8 @@ namespace FujiyNotepad.WinUI
                         pendingRestoreFirstLine = -1;
                     }
                 }
+
+                ApplyPendingGoTo();
             }
 
             if (LineIndexer.IsCompleted)
@@ -802,6 +840,138 @@ namespace FujiyNotepad.WinUI
                 View.GoToLine(line - 1);
                 View.FocusCanvas();
             }
+        }
+
+        // Opens a file and, when a 1-based line/column was given on the command line, jumps there once indexing
+        // reaches it. GoToLineColumn clamps to the indexed frontier, so the IndexRefreshTimer nudges toward the
+        // target as the index grows, exactly like a reloaded scroll position is restored (issue #102).
+        private async Task OpenFileAt(string path, int? line, int? column)
+        {
+            await OpenFile(path);
+            if (line is { } ln)
+            {
+                pendingGoToLine = Math.Max(0, ln - 1);
+                pendingGoToColumn = column is { } col ? Math.Max(0, col - 1) : 0;
+                ApplyPendingGoTo();
+            }
+        }
+
+        private void ApplyPendingGoTo()
+        {
+            if (pendingGoToLine < 0 || provider is null || filteredSource is not null)
+            {
+                return;
+            }
+
+            View.GoToLineColumn(pendingGoToLine, pendingGoToColumn);
+            if (provider.LineCount > pendingGoToLine || LineIndexer.IsCompleted)
+            {
+                pendingGoToLine = -1; // the target line is now indexed; stop nudging
+            }
+        }
+
+        // ----- Stdin piping (issue #103): `tool | FujiyNotepad -` -----
+
+        // A GUI (windows-subsystem) process can still inherit a redirected stdin handle when launched from a pipe.
+        // Probing can throw when there is no console/stdin at all, so guard it.
+        private static bool IsStdinRedirected()
+        {
+            try
+            {
+                return Console.IsInputRedirected;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // Reads piped standard input. A pipe is not seekable and the engine needs random access, so stdin is
+        // spooled on a background thread into a temp file that is opened and followed live; the temp file is
+        // deleted on close or when another file is opened.
+        private async Task OpenFromStdinAsync()
+        {
+            Stream input;
+            try
+            {
+                input = Console.OpenStandardInput();
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException)
+            {
+                return; // no usable stdin (e.g. launched without a pipe)
+            }
+
+            // A windows-subsystem process double-clicked from Explorer has a null stdin handle, for which
+            // Console.IsInputRedirected still reports true but OpenStandardInput returns Stream.Null. Bail so a
+            // normal launch does not open an empty "<stdin>" window; only a real pipe/redirect yields a stream.
+            if (ReferenceEquals(input, Stream.Null))
+            {
+                return;
+            }
+
+            string temp = Path.Combine(Path.GetTempPath(), "FujiyNotepad-stdin-" + Guid.NewGuid().ToString("N") + ".log");
+            FileStream output;
+            try
+            {
+                // Share Read|Delete so the viewer can open/tail it and it can be deleted while still being written.
+                output = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.Read | FileShare.Delete);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                input.Dispose();
+                return;
+            }
+
+            var cts = new CancellationTokenSource();
+            stdinTempPath = temp;
+            stdinCts = cts;
+
+            // Spool in the background; the viewer opens immediately and Follow Tail pulls bytes in as they arrive.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await StdinSpooler.SpoolAsync(input, output, cts.Token);
+                }
+                catch
+                {
+                    // best-effort: cancelled on close/replace, or the producer errored — nothing to recover
+                }
+                finally
+                {
+                    await output.DisposeAsync();
+                    input.Dispose();
+                }
+            });
+
+            await OpenFile(temp, addToRecent: false); // temp == stdinTempPath, so this does not clean itself up
+            Title = "<stdin> - Fujiy Notepad";
+            EnableFollowTail(rebaseline: false); // keep the open-time baseline so spooled-in bytes get indexed
+        }
+
+        // Cancels stdin spooling and deletes the temp file. Safe to call repeatedly. The file is opened with
+        // FileShare.Delete everywhere, so the delete succeeds even while the spool/viewer handles are still open.
+        private void CleanupStdin()
+        {
+            if (stdinTempPath is null)
+            {
+                return;
+            }
+
+            stdinCts?.Cancel();
+            stdinCts?.Dispose();
+            stdinCts = null;
+
+            try
+            {
+                File.Delete(stdinTempPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // best-effort temp cleanup; the OS reclaims %TEMP% eventually
+            }
+
+            stdinTempPath = null;
         }
 
         private async void GoToOffset_Click(object sender, RoutedEventArgs e)
