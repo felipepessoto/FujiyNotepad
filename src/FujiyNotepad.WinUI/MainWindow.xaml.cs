@@ -41,6 +41,8 @@ namespace FujiyNotepad.WinUI
         // When a Reload preserves the scroll position, the target first-visible line is re-applied on each index
         // tick (until reachable) because a just-reloaded large file is only indexed up to its frontier. -1 = none.
         private int pendingRestoreFirstLine = -1;
+        private int pendingGoToLine = -1;
+        private int pendingGoToColumn;
         private double pendingRestoreHorizontalOffset;
 
         private readonly DispatcherQueueTimer indexRefreshTimer;
@@ -133,11 +135,13 @@ namespace FujiyNotepad.WinUI
                 source?.Dispose();
             };
 
-            // Open a file passed on the command line (file association / "open with" / drag-onto-exe).
-            string? fileArg = Environment.GetCommandLineArgs().Skip(1).FirstOrDefault(File.Exists);
-            if (fileArg != null)
+            // Open a file passed on the command line (file association / "open with" / drag-onto-exe), with an
+            // optional --line / --column or trailing :line[:col] location to jump to (issue #102).
+            CliArguments cli = CliArguments.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray(), File.Exists);
+            if (cli.Path is { } cliPath && File.Exists(cliPath))
             {
-                DispatcherQueue.TryEnqueue(() => { _ = OpenFile(fileArg); });
+                int? cliLine = cli.Line, cliColumn = cli.Column;
+                DispatcherQueue.TryEnqueue(() => { _ = OpenFileAt(cliPath, cliLine, cliColumn); });
             }
         }
 
@@ -341,6 +345,7 @@ namespace FujiyNotepad.WinUI
             // nudging toward the saved line until the rebuilt index reaches it.
             pendingRestoreFirstLine = restoreFirstLine;
             pendingRestoreHorizontalOffset = restoreHorizontal;
+            pendingGoToLine = -1; // a plain open cancels any pending command-line jump
             if (restoreFirstLine >= 0)
             {
                 View.FirstVisibleLine = restoreFirstLine;
@@ -670,6 +675,8 @@ namespace FujiyNotepad.WinUI
                         pendingRestoreFirstLine = -1;
                     }
                 }
+
+                ApplyPendingGoTo();
             }
 
             if (LineIndexer.IsCompleted)
@@ -801,6 +808,34 @@ namespace FujiyNotepad.WinUI
             {
                 View.GoToLine(line - 1);
                 View.FocusCanvas();
+            }
+        }
+
+        // Opens a file and, when a 1-based line/column was given on the command line, jumps there once indexing
+        // reaches it. GoToLineColumn clamps to the indexed frontier, so the IndexRefreshTimer nudges toward the
+        // target as the index grows, exactly like a reloaded scroll position is restored (issue #102).
+        private async Task OpenFileAt(string path, int? line, int? column)
+        {
+            await OpenFile(path);
+            if (line is { } ln)
+            {
+                pendingGoToLine = Math.Max(0, ln - 1);
+                pendingGoToColumn = column is { } col ? Math.Max(0, col - 1) : 0;
+                ApplyPendingGoTo();
+            }
+        }
+
+        private void ApplyPendingGoTo()
+        {
+            if (pendingGoToLine < 0 || provider is null || filteredSource is not null)
+            {
+                return;
+            }
+
+            View.GoToLineColumn(pendingGoToLine, pendingGoToColumn);
+            if (provider.LineCount > pendingGoToLine || LineIndexer.IsCompleted)
+            {
+                pendingGoToLine = -1; // the target line is now indexed; stop nudging
             }
         }
 

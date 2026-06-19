@@ -20,6 +20,9 @@ tag per published build. Each release also has downloadable builds and notes on 
 - **Follow Tail** — **View ▸ Follow Tail** live-tails a growing file (logs): appended lines are pulled in
   automatically and the view sticks to the end while you're at the bottom (scroll up to read history without
   being yanked). The status bar shows **Following**.
+- **Open at a line from the command line** — `FujiyNotepad app.log --line 1234 --column 7` (or a trailing
+  `app.log:1234:7`) opens the file and jumps to that location, so build output / grep / stack traces can link
+  straight in. The drive colon in a Windows path is not mistaken for a line separator.
 
 ### Fixed
 - **No more text jitter** — the text no longer shifts up and down by a pixel as the caret blinks. The line
