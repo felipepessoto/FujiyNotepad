@@ -10,7 +10,9 @@ tag per published build. Each release also has downloadable builds and notes on 
 ### Added
 - **Reopen last file on startup** — launching with no file now reopens the file you had open, scrolled back to
   where you left it (first visible line and caret), so resuming a big log is instant. Toggle it off any time
-  with **File ▸ Reopen Last File on Startup** (which also forgets the remembered file).
+  with **File ▸ Reopen Last File on Startup** (which also forgets the remembered file). Closing a file
+  explicitly with **File ▸ Close** (Ctrl+W) also clears it, so an intentionally-closed file isn't reopened —
+  only closing the window resumes it next time.
 
 ### Changed
 - **Faster open for very large files** — the exact character count is no longer computed with a full-file

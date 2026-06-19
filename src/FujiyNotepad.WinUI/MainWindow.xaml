@@ -46,6 +46,11 @@
                         <KeyboardAccelerator Key="F5" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
+                <MenuFlyoutItem x:Name="CloseItem" Text="Close" Click="CloseFile_Click" IsEnabled="False">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control" Key="W" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem x:Name="CopyPathItem" Text="Copy File Path" Click="CopyFilePath_Click" IsEnabled="False" />
                 <MenuFlyoutItem x:Name="RevealItem" Text="Reveal in Explorer" Click="RevealInExplorer_Click" IsEnabled="False" />

@@ -403,6 +403,7 @@ namespace FujiyNotepad.WinUI
             EditMenu.IsEnabled = true;
             EncodingMenu.IsEnabled = true;
             ReloadItem.IsEnabled = true;
+            CloseItem.IsEnabled = true;
             CopyPathItem.IsEnabled = true;
             RevealItem.IsEnabled = true;
             UpdateEncodingUi();
@@ -435,6 +436,76 @@ namespace FujiyNotepad.WinUI
 
             TextEncoding? forced = encodingAutoDetect ? null : currentEncoding;
             await OpenFile(path, addToRecent: false, forcedEncoding: forced, preserveView: true);
+        }
+
+        // Closes the current file and returns to the empty viewer (issue #51). An explicit close (Ctrl+W /
+        // File > Close) is a deliberate "I'm done with this file" signal, so unlike closing the window — which
+        // saves the session to resume next launch — it forgets the saved session, matching the well-known
+        // browser / editor pattern (a tab you explicitly close is not reopened).
+        private async void CloseFile_Click(object sender, RoutedEventArgs e) => await CloseCurrentFileAsync();
+
+        private async Task CloseCurrentFileAsync()
+        {
+            if (currentFilePath is null && stdinTempPath is null)
+            {
+                return; // nothing open
+            }
+
+            await StopIndexingAsync();
+            indexRefreshTimer.Stop();
+
+            // Stop following / watching / spooling and leave any filter view.
+            followTail = false;
+            tailSnapToBottom = false;
+            followTailTimer.Stop();
+            FollowTailToggle.IsChecked = false;
+            StopWatchingFile();
+            CleanupStdin();
+            ResetFilter();
+
+            // Drop find / count / highlight state tied to the file.
+            findCoordinator.Reset();
+            countCts?.Cancel();
+            countedKey = null;
+            charCountCts?.Cancel();
+            FindCount.Text = string.Empty;
+            View.SetHighlighter(null);
+            matchMarks = null;
+
+            // Tear down the engine + byte source and clear pending navigation.
+            View.SetProvider(null);
+            RefreshMarkerMargin();
+            source?.Dispose();
+            source = null;
+            provider = null;
+            currentFilePath = null;
+            encodingAutoDetect = true;
+            pendingRestoreFirstLine = -1;
+            pendingGoToLine = -1;
+            pendingSessionFirstLine = -1;
+
+            // Back to the empty-state UI (mirrors the XAML defaults before any file is opened).
+            Title = "Fujiy Notepad";
+            EditMenu.IsEnabled = false;
+            EncodingMenu.IsEnabled = false;
+            ReloadItem.IsEnabled = false;
+            CloseItem.IsEnabled = false;
+            CopyPathItem.IsEnabled = false;
+            RevealItem.IsEnabled = false;
+            CountCharsLink.Visibility = Visibility.Collapsed;
+            ReloadHint.Visibility = Visibility.Collapsed;
+            LblStatus.Text = string.Empty;
+            LblCharCount.Text = string.Empty;
+            LblEncoding.Text = string.Empty;
+            LblLineEnding.Text = string.Empty;
+            LblCursor.Text = string.Empty;
+
+            // Explicit close forgets the saved session so this file isn't reopened next launch (the
+            // RestoreLastSession preference itself stays on).
+            ClearSavedSession();
+            settingsStore.Save(settings);
+
+            View.FocusCanvas();
         }
 
         // (Re)starts watching the open file's folder for external changes and clears any pending hint. Watching
