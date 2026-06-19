@@ -39,6 +39,7 @@
                 </MenuFlyoutItem>
                 <MenuFlyoutItem Text="Open Sample" Click="OpenSample_Click" />
                 <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent" />
+                <ToggleMenuFlyoutItem x:Name="ReopenLastToggle" Text="Reopen Last File on Startup" Click="ReopenLast_Click" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem x:Name="ReloadItem" Text="Reload" Click="Reload_Click" IsEnabled="False">
                     <MenuFlyoutItem.KeyboardAccelerators>

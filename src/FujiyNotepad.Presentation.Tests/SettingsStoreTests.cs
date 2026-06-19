@@ -25,6 +25,11 @@ namespace FujiyNotepad.Presentation.Tests
                     RecentFiles = { @"C:\a.txt", @"C:\b.log" },
                     RecentSearches = { "ERROR", "Thread-33" },
                     RecentFilters = { "WARN" },
+                    RestoreLastSession = false,
+                    LastSessionFilePath = @"C:\logs\app.log",
+                    LastSessionFirstVisibleLine = 4200,
+                    LastSessionCaretLine = 4321,
+                    LastSessionCaretColumn = 7,
                 };
 
                 store.Save(saved);
@@ -37,6 +42,11 @@ namespace FujiyNotepad.Presentation.Tests
                 Assert.Equal(new[] { @"C:\a.txt", @"C:\b.log" }, loaded.RecentFiles);
                 Assert.Equal(new[] { "ERROR", "Thread-33" }, loaded.RecentSearches);
                 Assert.Equal(new[] { "WARN" }, loaded.RecentFilters);
+                Assert.False(loaded.RestoreLastSession);
+                Assert.Equal(@"C:\logs\app.log", loaded.LastSessionFilePath);
+                Assert.Equal(4200, loaded.LastSessionFirstVisibleLine);
+                Assert.Equal(4321, loaded.LastSessionCaretLine);
+                Assert.Equal(7, loaded.LastSessionCaretColumn);
             }
             finally
             {
@@ -53,6 +63,8 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.Equal(0, s.WindowWidth);
             Assert.False(s.WindowMaximized);
             Assert.Empty(s.RecentFiles);
+            Assert.True(s.RestoreLastSession); // session restore is on by default
+            Assert.Equal("", s.LastSessionFilePath);
         }
 
         [Fact]
