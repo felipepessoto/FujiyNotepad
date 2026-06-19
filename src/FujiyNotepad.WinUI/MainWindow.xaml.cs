@@ -44,6 +44,7 @@ namespace FujiyNotepad.WinUI
         private double pendingRestoreHorizontalOffset;
 
         private readonly DispatcherQueueTimer indexRefreshTimer;
+        private readonly DispatcherQueueTimer findPreviewTimer;
         private CancellationTokenSource? cancelIndexing;
         private Task indexingTask = Task.CompletedTask;
         private bool syncingScroll;
@@ -102,6 +103,13 @@ namespace FujiyNotepad.WinUI
             indexRefreshTimer = DispatcherQueue.CreateTimer();
             indexRefreshTimer.Interval = TimeSpan.FromMilliseconds(150);
             indexRefreshTimer.Tick += IndexRefreshTimer_Tick;
+
+            // Incremental find: a short debounce so the live highlight/count runs after a pause in typing, not
+            // on every keystroke. Single-shot, restarted on each change to the term.
+            findPreviewTimer = DispatcherQueue.CreateTimer();
+            findPreviewTimer.Interval = TimeSpan.FromMilliseconds(200);
+            findPreviewTimer.IsRepeating = false;
+            findPreviewTimer.Tick += (_, _) => PreviewFind();
 
             Closed += (_, _) =>
             {
@@ -804,6 +812,7 @@ namespace FujiyNotepad.WinUI
             FindBar.Visibility = Visibility.Visible;
             FindBox.Focus(FocusState.Programmatic);
             FindBox.SelectAll();
+            PreviewFind();
         }
 
         // ----- Bookmarks (toggle on the caret line; jump next/previous, both wrap around) -----
@@ -1339,6 +1348,7 @@ namespace FujiyNotepad.WinUI
 
         private void CloseFindBar()
         {
+            findPreviewTimer.Stop();
             findCts?.Cancel();
             FindBar.Visibility = Visibility.Collapsed;
             View.SetHighlighter(null);
@@ -1422,6 +1432,33 @@ namespace FujiyNotepad.WinUI
             // coordinator owns that state machine (headlessly tested in FindCoordinatorTests).
             findCoordinator.Begin(key, View.CaretPosition);
 
+            if (!ApplyFindMatch(text, matchCase, wholeWord, useRegex, key, out pattern, out options, out regex))
+            {
+                return false;
+            }
+
+            // Remember the executed term for Up/Down recall; skip a redundant write when it is already the most
+            // recent entry (e.g. repeated F3), then reset the recall walk so the next Up starts fresh.
+            if (settings.RecentSearches.Count == 0 ||
+                !string.Equals(settings.RecentSearches[0], text, StringComparison.OrdinalIgnoreCase))
+            {
+                settings.RecentSearches = SearchHistory.Add(settings.RecentSearches, text);
+                settingsStore.Save(settings);
+            }
+            findNav = null;
+            return true;
+        }
+
+        // Builds the matcher for the term + options, sets the live viewport highlight, and kicks off the
+        // background match count + marker margin. Shows the "Invalid regex" state and returns false for a bad
+        // regex; otherwise outputs the matcher and returns true. Shared by the incremental preview and Enter/F3.
+        private bool ApplyFindMatch(string text, bool matchCase, bool wholeWord, bool useRegex, string key,
+            out byte[]? pattern, out SearchOptions options, out Regex? regex)
+        {
+            pattern = null;
+            options = default;
+            regex = null;
+
             if (useRegex)
             {
                 try
@@ -1454,21 +1491,49 @@ namespace FujiyNotepad.WinUI
 
             _ = RefreshMatchCountAsync(key, useRegex, pattern, options, regex);
 
-            // Highlight every match of the executed search in the viewport (the selected match stays distinct).
+            // Highlight every match of the term in the viewport (the selected match stays distinct).
             View.SetHighlighter(useRegex
                 ? new RegexLineHighlighter(regex!)
                 : new LiteralLineHighlighter(text, ignoreCase: !matchCase, wholeWord: wholeWord));
-
-            // Remember the executed term for Up/Down recall; skip a redundant write when it is already the most
-            // recent entry (e.g. repeated F3), then reset the recall walk so the next Up starts fresh.
-            if (settings.RecentSearches.Count == 0 ||
-                !string.Equals(settings.RecentSearches[0], text, StringComparison.OrdinalIgnoreCase))
-            {
-                settings.RecentSearches = SearchHistory.Add(settings.RecentSearches, text);
-                settingsStore.Save(settings);
-            }
-            findNav = null;
             return true;
+        }
+
+        // Debounced incremental find (issue #63): each change to the term restarts a short timer that then
+        // highlights and counts the term live. Enter / F3 still drive the actual navigation.
+        private void FindBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            findPreviewTimer.Stop();
+            findPreviewTimer.Start();
+        }
+
+        // Live-highlights and counts the current term without moving the caret. Honours the option toggles and
+        // shows the usual "Invalid regex" state; an empty term clears the highlight, count and marks.
+        private void PreviewFind()
+        {
+            if (provider is null || isFinding)
+            {
+                return;
+            }
+
+            string text = FindBox.Text;
+            if (string.IsNullOrEmpty(text))
+            {
+                countCts?.Cancel();
+                countedKey = null;
+                FindStatus.Text = string.Empty;
+                FindCount.Text = string.Empty;
+                View.SetHighlighter(null);
+                ClearMatchMarks();
+                return;
+            }
+
+            bool matchCase = MatchCaseToggle.IsChecked == true;
+            bool wholeWord = WholeWordToggle.IsChecked == true;
+            bool useRegex = RegexToggle.IsChecked == true;
+            string key = $"{useRegex}|{matchCase}|{wholeWord}|{text}";
+
+            FindStatus.Text = string.Empty; // clear any prior "Invalid regex" before (re)building
+            ApplyFindMatch(text, matchCase, wholeWord, useRegex, key, out _, out _, out _);
         }
 
         // Forward literal byte search off the UI thread, honouring the case/whole-word options, progress and
@@ -1806,12 +1871,10 @@ namespace FujiyNotepad.WinUI
             settings.FindUseRegex = RegexToggle.IsChecked == true;
             settingsStore.Save(settings);
 
+            // Re-run the incremental preview so the live highlight and count reflect the new option at once
+            // (an empty term just clears them). Enter / F3 still navigate with the new option.
             findCoordinator.Reset();
-            countCts?.Cancel();
-            countedKey = null;
-            FindCount.Text = string.Empty;
-            View.SetHighlighter(null);
-            ClearMatchMarks();
+            PreviewFind();
         }
 
         private void SetFindBusy(bool busy, bool indeterminate = false)

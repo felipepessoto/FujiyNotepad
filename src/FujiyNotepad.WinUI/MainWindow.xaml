@@ -177,7 +177,7 @@
             </Grid.ColumnDefinitions>
 
             <TextBox x:Name="FindBox" Grid.Column="0" PlaceholderText="Find" VerticalAlignment="Center"
-                     KeyDown="FindBox_KeyDown" />
+                     TextChanged="FindBox_TextChanged" KeyDown="FindBox_KeyDown" />
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                 <ToggleButton x:Name="MatchCaseToggle" Content="Aa" MinWidth="36" Padding="6,2"

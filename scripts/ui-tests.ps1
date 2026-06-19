@@ -198,8 +198,11 @@ try {
     try { $matchName = ($nameJson | ConvertFrom-Json).properties.Name } catch { }
     Assert ($matchName -eq 'Match case') "Find bar option toggle exposes its accessibility name" "Name: '$matchName'"
     winapp ui set-value 'FindBox' 'ERROR' -w $hwnd 2>$null | Out-Null
-    Start-Sleep -Milliseconds 400
+    Start-Sleep -Milliseconds 700
     Assert ((UiValue 'FindBox') -match 'ERROR') "Find box accepts typed text"
+    # Incremental find (issue #63): the match count appears as you type, before pressing Enter.
+    $incCount = UiValue 'FindCount'
+    Assert ($incCount -match '1 match') "Find counts the ERROR match incrementally, before Enter" "FindCount: '$incCount'"
     UiInvoke 'Find Next' 1100
     $findCount = UiValue 'FindCount'
     Assert ($findCount -match '1 match') "Find reports the single ERROR match in the sample" "FindCount: '$findCount'"
