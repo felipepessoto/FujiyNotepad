@@ -17,6 +17,9 @@ namespace FujiyNotepad.TestSupport
 
         public long Length => data.Length;
 
+        /// <summary>The content is fixed, so this just returns the constant length.</summary>
+        public long RefreshLength() => data.Length;
+
         public int Read(long offset, Span<byte> buffer)
         {
             if (offset < 0 || offset >= data.Length)
