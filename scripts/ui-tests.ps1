@@ -146,6 +146,12 @@ try {
     $zoom = UiValue 'LblZoom'
     Assert ($zoom -eq '100%') "Status bar shows 100% zoom" "LblZoom: '$zoom'"
 
+    # 5b) Accessibility (#75): the custom TextCanvas AutomationPeer exposes the caret line's text to screen
+    #     readers via the UIA Value pattern (the Win2D surface otherwise exposes no text content).
+    $canvasText = UiValue 'TextCanvas'
+    Assert ($canvasText -match 'alpha first line') `
+        "TextCanvas exposes the caret line text to screen readers" "TextCanvas value: '$canvasText'"
+
     # 6) Encoding menu re-decodes the file; the status label follows the chosen / auto-detected encoding.
     UiMenu 'Encoding' 'UTF-16 LE'
     $enc16 = UiValue 'LblEncoding'
