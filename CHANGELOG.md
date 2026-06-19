@@ -29,6 +29,13 @@ tag per published build. Each release also has downloadable builds and notes on 
   **Count characters** action you can click when you actually want the exact total. Single-byte encodings
   (Windows-1252) still show the count instantly, since it equals the byte count.
 
+### Internal
+- **Localization scaffolding** — user-facing strings now resolve from a `Strings/en-US/Resources.resw` resource
+  table instead of being hardcoded: the menu bar and status-bar links bind via `x:Uid`, and code-behind strings
+  go through a new AOT-safe `LocalizedStrings` (Windows App SDK `ResourceLoader`) helper. English is the default;
+  translating is now a matter of adding a `Strings/<lang>/Resources.resw` (see `Strings/README.md`). No visible
+  change for English users.
+
 ## [4.9.0] - 2026-06-19
 
 ### Added

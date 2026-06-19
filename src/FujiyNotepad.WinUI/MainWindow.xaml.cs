@@ -399,7 +399,7 @@ namespace FujiyNotepad.WinUI
                 View.FirstVisibleLine = restoreFirstLine;
                 View.HorizontalOffset = restoreHorizontal;
             }
-            Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
+            Title = LocalizedStrings.Format("WindowTitleWithFile", Path.GetFileName(path));
             EditMenu.IsEnabled = true;
             EncodingMenu.IsEnabled = true;
             ReloadItem.IsEnabled = true;
@@ -485,7 +485,7 @@ namespace FujiyNotepad.WinUI
             pendingSessionFirstLine = -1;
 
             // Back to the empty-state UI (mirrors the XAML defaults before any file is opened).
-            Title = "Fujiy Notepad";
+            Title = LocalizedStrings.Get("AppDisplayName");
             EditMenu.IsEnabled = false;
             EncodingMenu.IsEnabled = false;
             ReloadItem.IsEnabled = false;
@@ -684,7 +684,7 @@ namespace FujiyNotepad.WinUI
                 return;
             }
             string text = StatusText.LineCount(provider.LineCount);
-            LblStatus.Text = followTail ? $"{text}  \u00B7  Following" : text;
+            LblStatus.Text = followTail ? $"{text}  \u00B7  {LocalizedStrings.Get("StatusFollowingSuffix")}" : text;
         }
 
         private async Task ShowOpenErrorAsync(string path, Exception ex)
@@ -1107,7 +1107,7 @@ namespace FujiyNotepad.WinUI
             });
 
             await OpenFile(temp, addToRecent: false); // temp == stdinTempPath, so this does not clean itself up
-            Title = "<stdin> - Fujiy Notepad";
+            Title = LocalizedStrings.Get("StdinWindowTitle");
             EnableFollowTail(rebaseline: false); // keep the open-time baseline so spooled-in bytes get indexed
         }
 
@@ -2267,7 +2267,7 @@ namespace FujiyNotepad.WinUI
             CancellationToken token = cts.Token;
             LineProvider activeProvider = provider!;
             var marks = new MatchMarks(activeProvider.LineCount);
-            FindCount.Text = "counting\u2026";
+            FindCount.Text = LocalizedStrings.Get("StatusCounting");
 
             int count;
             try
@@ -2697,7 +2697,7 @@ namespace FujiyNotepad.WinUI
             CancellationToken token = cts.Token;
             IByteSource activeSource = source;
             TextEncoding encoding = currentEncoding;
-            LblCharCount.Text = "counting\u2026";
+            LblCharCount.Text = LocalizedStrings.Get("StatusCounting");
 
             long count;
             try
