@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # No actions/setup-dotnet: the windows runner image already provides a .NET 10 SDK that global.json
       # (10.0.100, rollForward latestMinor) accepts, so we skip the ~35s SDK re-download.
@@ -57,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # No actions/setup-dotnet: the windows runner images (x64 and arm64) already provide a .NET 10 SDK
       # that global.json (10.0.100, rollForward latestMinor) accepts, so we skip the ~35s SDK re-download.
