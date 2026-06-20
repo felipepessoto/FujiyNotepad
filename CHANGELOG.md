@@ -13,6 +13,10 @@ tag per published build. Each release also has downloadable builds and notes on 
   each call. That buffer was a Large Object Heap allocation, so reusing it removes the per-operation LOH
   allocations and the Gen 2 garbage collections they triggered (measured ~1 MB/op → a few hundred bytes/op on
   the engine benchmarks), with no change in throughput or behaviour.
+- **Less allocation while scrolling** — building a line's on-screen layout now takes an allocation-free fast
+  path for the common line that has no tabs and no double-width characters (its display text is the source and
+  its column maps are the identity). This removes the two integer maps and the string copy (~1.4 KB for a
+  100-char line) that were allocated per newly-revealed line, so fast scrolling churns the GC less.
 
 ## [4.10.0] - 2026-06-19
 

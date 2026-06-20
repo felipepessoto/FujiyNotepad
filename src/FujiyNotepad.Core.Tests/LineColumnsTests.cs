@@ -93,5 +93,53 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(3, lc.TotalColumns);
             Assert.Equal(2, lc.ColumnOfCharIndex(1)); // 'b' starts after the 2-wide fullwidth 'Ａ'
         }
+
+        [Fact]
+        public void PlainLine_DisplayReusesSourceWithoutCopying()
+        {
+            // The no-tab / no-wide fast path must not allocate a separate display string.
+            string source = "the quick brown fox";
+            var lc = LineColumns.Build(source, 4);
+
+            Assert.Same(source, lc.Display);
+        }
+
+        [Fact]
+        public void PlainLine_DisplaySliceMatchesSourceRange()
+        {
+            var lc = LineColumns.Build("hello world", 4);
+
+            Assert.Equal("hello", lc.DisplaySlice(0, 5));
+            Assert.Equal("world", lc.DisplaySlice(6, 11));
+            Assert.Equal("hello world", lc.DisplaySlice(0, 100)); // end clamps
+            Assert.Equal("", lc.DisplaySlice(3, 3));
+        }
+
+        [Fact]
+        public void PlainLine_MatchesFullPathForColumnsAndHitTest()
+        {
+            // The identity fast path must be indistinguishable from the general path on a tab-free line.
+            string s = "abcdefghij";
+            var lc = LineColumns.Build(s, 4);
+
+            Assert.Equal(s.Length, lc.TotalColumns);
+            for (int i = 0; i <= s.Length; i++)
+            {
+                Assert.Equal(i, lc.ColumnOfCharIndex(i));
+            }
+            Assert.Equal(0, lc.CharIndexOfColumn(0.2));
+            Assert.Equal(4, lc.CharIndexOfColumn(3.8));
+            Assert.Equal(s.Length, lc.CharIndexOfColumn(1000));
+        }
+
+        [Fact]
+        public void CharIndexOfColumn_NaN_ReturnsZero_OnBothPaths()
+        {
+            // A NaN column (e.g. a degenerate hit-test) must clamp to 0, matching the general path, so the
+            // identity fast path can't return an out-of-range caret index.
+            Assert.Equal(0, LineColumns.Build("plain ascii", 4).CharIndexOfColumn(double.NaN)); // identity path
+            Assert.Equal(0, LineColumns.Build("a\tb", 4).CharIndexOfColumn(double.NaN));        // general path
+            Assert.Equal(0, LineColumns.Build("", 4).CharIndexOfColumn(double.NaN));            // empty line
+        }
     }
 }
