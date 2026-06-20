@@ -263,7 +263,33 @@ namespace FujiyNotepad.Core
         /// </summary>
         public void FindForward(long startOffset, byte[] pattern, SearchOptions options, int maxResults, List<long> results)
         {
-            if (pattern.Length == 0 || maxResults <= 0)
+            if (maxResults <= 0)
+            {
+                return;
+            }
+            var sink = new ListSink(results, maxResults);
+            FindForwardCore(startOffset, pattern, options, ref sink);
+        }
+
+        /// <summary>
+        /// As <see cref="FindForward(long, byte[], SearchOptions, int, List{long})"/>, but writes the ascending
+        /// match offsets directly into <paramref name="destination"/> (up to its length) and returns the count
+        /// written — so a caller that knows the result count can fill a pre-sized buffer with no intermediate
+        /// list (the line index expands a checkpoint block straight into its cached line-start array).
+        /// </summary>
+        public int FindForward(long startOffset, byte[] pattern, SearchOptions options, Span<long> destination)
+        {
+            var sink = new SpanSink(destination);
+            FindForwardCore(startOffset, pattern, options, ref sink);
+            return sink.Count;
+        }
+
+        // The chunked forward scan behind both FindForward overloads, writing each accepted offset to the sink.
+        // TSink is a value type (a List appender or a span writer), so there is no allocation or virtual dispatch.
+        private void FindForwardCore<TSink>(long startOffset, byte[] pattern, SearchOptions options, ref TSink sink)
+            where TSink : struct, IOffsetSink, allows ref struct
+        {
+            if (pattern.Length == 0 || sink.IsFull)
             {
                 return;
             }
@@ -282,7 +308,7 @@ namespace FujiyNotepad.Core
             long bufferBase = startOffset;
             long nextAllowedStart = startOffset;
 
-            while (results.Count < maxResults)
+            while (!sink.IsFull)
             {
                 int read = source.ReadFull(readPos, buffer.AsSpan(carry, chunkSize));
                 int available = carry + read;
@@ -292,7 +318,7 @@ namespace FujiyNotepad.Core
                 }
 
                 int from = 0;
-                while (from < available && results.Count < maxResults)
+                while (from < available && !sink.IsFull)
                 {
                     int idx = buffer.AsSpan(from, available - from).IndexOf(pattern);
                     if (idx < 0)
@@ -304,7 +330,7 @@ namespace FujiyNotepad.Core
                     bool aligned = options.UnitAlignment <= 1 || matchOffset % options.UnitAlignment == 0;
                     if (matchOffset >= nextAllowedStart && aligned)
                     {
-                        results.Add(matchOffset);
+                        sink.Add(matchOffset);
                         nextAllowedStart = matchOffset + pattern.Length;
                         from = matchAt + pattern.Length;
                     }
@@ -334,6 +360,43 @@ namespace FujiyNotepad.Core
             {
                 ArrayPool<byte>.Shared.Return(buffer);
             }
+        }
+
+        // A destination for forward-scan match offsets, implemented by value-type sinks so FindForwardCore stays
+        // allocation-free and the calls are devirtualized by the generic specialization.
+        private interface IOffsetSink
+        {
+            bool IsFull { get; }
+            void Add(long offset);
+        }
+
+        // Appends to a list up to a total count — the classic FindForward contract.
+        private struct ListSink : IOffsetSink
+        {
+            private readonly List<long> list;
+            private readonly int max;
+            public ListSink(List<long> list, int max)
+            {
+                this.list = list;
+                this.max = max;
+            }
+            public readonly bool IsFull => list.Count >= max;
+            public readonly void Add(long offset) => list.Add(offset);
+        }
+
+        // Writes into a caller-provided span; full once the span is filled. A ref struct (it holds a Span), so
+        // FindForwardCore's type parameter carries the `allows ref struct` anti-constraint.
+        private ref struct SpanSink : IOffsetSink
+        {
+            private readonly Span<long> destination;
+            public int Count;
+            public SpanSink(Span<long> destination)
+            {
+                this.destination = destination;
+                Count = 0;
+            }
+            public readonly bool IsFull => Count >= destination.Length;
+            public void Add(long offset) => destination[Count++] = offset;
         }
 
         /// <summary>
