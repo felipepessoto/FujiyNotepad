@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    Localizable user-facing strings (issue #78). XAML elements bind via x:Uid (e.g. an element with
+    x:Uid="OpenSampleItem" reads "OpenSampleItem.Text" here); code-behind reads named keys through the
+    LocalizedStrings helper. To translate, copy this file to Strings/<lang>/Resources.resw and translate
+    the values. en-US is the default/fallback.
+  -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!--
+    User-facing strings (issue #78). XAML elements bind via x:Uid: an element with x:Uid="OpenItem" reads
+    "OpenItem.Text" (or ".Title"/".Content"/".PlaceholderText") from here. Code-behind reads named keys via
+    LocalizedStrings.Get/Format. Keep values in sync with the design-time text in MainWindow.xaml. To translate,
+    copy this file to Strings/<lang>/Resources.resw and translate the <value>s; en-US is the default fallback.
+  -->
+
+  <!-- ===== File menu ===== -->
+  <data name="FileMenu.Title" xml:space="preserve"><value>File</value></data>
+  <data name="OpenItem.Text" xml:space="preserve"><value>Open...</value></data>
+  <data name="OpenSampleItem.Text" xml:space="preserve"><value>Open Sample</value></data>
+  <data name="RecentMenu.Text" xml:space="preserve"><value>Open Recent</value></data>
+  <data name="ReopenLastToggle.Text" xml:space="preserve"><value>Reopen Last File on Startup</value></data>
+  <data name="ReloadItem.Text" xml:space="preserve"><value>Reload</value></data>
+  <data name="CloseItem.Text" xml:space="preserve"><value>Close</value></data>
+  <data name="CopyPathItem.Text" xml:space="preserve"><value>Copy File Path</value></data>
+  <data name="RevealItem.Text" xml:space="preserve"><value>Reveal in Explorer</value></data>
+  <data name="ExitItem.Text" xml:space="preserve"><value>Exit</value></data>
+
+  <!-- ===== Edit menu ===== -->
+  <data name="EditMenu.Title" xml:space="preserve"><value>Edit</value></data>
+  <data name="GoToLineItem.Text" xml:space="preserve"><value>Go To Line...</value></data>
+  <data name="GoToOffsetItem.Text" xml:space="preserve"><value>Go To Offset...</value></data>
+  <data name="GoToPercentItem.Text" xml:space="preserve"><value>Go To Percentage...</value></data>
+  <data name="FindItem.Text" xml:space="preserve"><value>Find...</value></data>
+  <data name="FilterItem.Text" xml:space="preserve"><value>Filter...</value></data>
+  <data name="CopyMatchingItem.Text" xml:space="preserve"><value>Copy Matching Lines</value></data>
+  <data name="SaveMatchingItem.Text" xml:space="preserve"><value>Save Matching Lines As...</value></data>
+  <data name="ClearSearchHistoryItem.Text" xml:space="preserve"><value>Clear Search History</value></data>
+  <data name="ToggleBookmarkItem.Text" xml:space="preserve"><value>Toggle Bookmark</value></data>
+  <data name="NextBookmarkItem.Text" xml:space="preserve"><value>Next Bookmark</value></data>
+  <data name="PreviousBookmarkItem.Text" xml:space="preserve"><value>Previous Bookmark</value></data>
+  <data name="ClearBookmarksItem.Text" xml:space="preserve"><value>Clear All Bookmarks</value></data>
+  <data name="CopyWithLineNumbersItem.Text" xml:space="preserve"><value>Copy with Line Numbers</value></data>
+  <data name="StartIndexingItem.Text" xml:space="preserve"><value>Start indexing</value></data>
+  <data name="StopIndexingItem.Text" xml:space="preserve"><value>Stop indexing</value></data>
+  <data name="TabWidthSubMenu.Text" xml:space="preserve"><value>Tab Width</value></data>
+
+  <!-- ===== View menu ===== -->
+  <data name="ViewMenu.Title" xml:space="preserve"><value>View</value></data>
+  <data name="LineNumbersToggle.Text" xml:space="preserve"><value>Line Numbers</value></data>
+  <data name="WhitespaceToggle.Text" xml:space="preserve"><value>Show Whitespace</value></data>
+  <data name="FollowTailToggle.Text" xml:space="preserve"><value>Follow Tail</value></data>
+  <data name="ZoomInItem.Text" xml:space="preserve"><value>Zoom In</value></data>
+  <data name="ZoomOutItem.Text" xml:space="preserve"><value>Zoom Out</value></data>
+  <data name="ResetZoomItem.Text" xml:space="preserve"><value>Reset Zoom</value></data>
+  <data name="FontSubMenu.Text" xml:space="preserve"><value>Font</value></data>
+  <data name="ThemeSubMenu.Text" xml:space="preserve"><value>Theme</value></data>
+  <data name="ThemeSystem.Text" xml:space="preserve"><value>System</value></data>
+  <data name="ThemeLight.Text" xml:space="preserve"><value>Light</value></data>
+  <data name="ThemeDark.Text" xml:space="preserve"><value>Dark</value></data>
+  <data name="HighlightRulesItem.Text" xml:space="preserve"><value>Highlight Rules...</value></data>
+
+  <!-- ===== Encoding menu ===== -->
+  <data name="EncodingMenu.Title" xml:space="preserve"><value>Encoding</value></data>
+  <data name="EncAuto.Text" xml:space="preserve"><value>Auto-detect</value></data>
+
+  <!-- ===== Help menu ===== -->
+  <data name="HelpMenu.Title" xml:space="preserve"><value>Help</value></data>
+  <data name="AboutItem.Text" xml:space="preserve"><value>About FujiyNotepad...</value></data>
+
+  <!-- ===== Status bar (interactive labels) ===== -->
+  <data name="ReloadHint.Content" xml:space="preserve"><value>↻ File changed on disk — Reload</value></data>
+  <data name="CountCharsLink.Content" xml:space="preserve"><value>Count characters</value></data>
+
+  <!-- ===== Code-behind strings (read via LocalizedStrings) =====
+       {0} placeholders are filled with string.Format using the current culture. -->
+  <data name="AppDisplayName" xml:space="preserve"><value>Fujiy Notepad</value></data>
+  <data name="WindowTitleWithFile" xml:space="preserve"><value>{0} - Fujiy Notepad</value></data>
+  <data name="StdinWindowTitle" xml:space="preserve"><value>&lt;stdin&gt; - Fujiy Notepad</value></data>
+  <data name="StatusFollowingSuffix" xml:space="preserve"><value>Following</value></data>
+  <data name="StatusCounting" xml:space="preserve"><value>counting…</value></data>
+
+  <!-- ===== Find bar ===== -->
+  <data name="FindBox.PlaceholderText" xml:space="preserve"><value>Find</value></data>
+  <data name="MatchCaseToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match case</value></data>
+  <data name="MatchCaseToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match case</value></data>
+  <data name="WholeWordToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match whole word</value></data>
+  <data name="WholeWordToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match whole word</value></data>
+  <data name="RegexToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="RegexToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="FindPrevButton.Content" xml:space="preserve"><value>Find Previous</value></data>
+  <data name="FindPrevButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Find previous (Shift+F3)</value></data>
+  <data name="FindNextButton.Content" xml:space="preserve"><value>Find Next</value></data>
+  <data name="FindNextButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Find next (F3)</value></data>
+  <data name="FindCancelButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="FindCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Close find bar</value></data>
+  <data name="FindCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Close</value></data>
+
+  <!-- ===== Filter bar ===== -->
+  <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filter — show only lines that match</value></data>
+  <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match case</value></data>
+  <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match case</value></data>
+  <data name="FilterRegex.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="FilterRegex.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="FilterApplyButton.Content" xml:space="preserve"><value>Apply</value></data>
+  <data name="FilterApplyButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Show only matching lines (Enter)</value></data>
+  <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Clear filter and close</value></data>
+  <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Clear filter and close (Esc)</value></data>
+
+  <!-- ===== Dialogs (read via LocalizedStrings) ===== -->
+  <data name="DialogGo" xml:space="preserve"><value>Go</value></data>
+  <data name="DialogCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="DialogOk" xml:space="preserve"><value>OK</value></data>
+  <data name="DialogClose" xml:space="preserve"><value>Close</value></data>
+  <data name="DialogApply" xml:space="preserve"><value>Apply</value></data>
+
+  <data name="GoToLineTitle" xml:space="preserve"><value>Go To Line</value></data>
+  <data name="GoToLinePlaceholder" xml:space="preserve"><value>Line number</value></data>
+  <data name="GoToOffsetTitle" xml:space="preserve"><value>Go To Offset</value></data>
+  <data name="GoToOffsetPlaceholder" xml:space="preserve"><value>Byte offset (decimal, or 0x for hex)</value></data>
+  <data name="GoToPercentTitle" xml:space="preserve"><value>Go To Percentage</value></data>
+  <data name="GoToPercentPlaceholder" xml:space="preserve"><value>Percentage of the file (0-100)</value></data>
+
+  <data name="OpenErrorTitle" xml:space="preserve"><value>Can't open file</value></data>
+  <data name="OpenErrorContent" xml:space="preserve"><value>Could not open “{0}”.
+
+{1}</value></data>
+  <data name="ErrorFileNotFound" xml:space="preserve"><value>The file was not found.</value></data>
+  <data name="ErrorDirNotFound" xml:space="preserve"><value>The folder was not found.</value></data>
+  <data name="ErrorNoPermission" xml:space="preserve"><value>You don't have permission to read it.</value></data>
+
+  <data name="AboutTitle" xml:space="preserve"><value>About</value></data>
+  <data name="AboutVersion" xml:space="preserve"><value>Version {0}</value></data>
+  <data name="AboutDescription" xml:space="preserve"><value>A lightweight Windows viewer for very large text files.</value></data>
+  <data name="AboutLicense" xml:space="preserve"><value>MIT License — Copyright © 2017 Felipe Pessoto</value></data>
+
+  <data name="HighlightRulesTitle" xml:space="preserve"><value>Highlight Rules</value></data>
+  <data name="InsertPresetText" xml:space="preserve"><value>Insert preset</value></data>
+  <data name="InsertPresetName" xml:space="preserve"><value>Insert highlight preset</value></data>
+  <data name="HighlightRulesHelp" xml:space="preserve"><value>One rule per line:  color[/flags] pattern
+Colors: red, orange, amber, yellow, green, teal, blue, cyan, purple, pink, gray, or #RRGGBB.
+Flags: /regex and/or /case (e.g. blue/regex,case).  Lines starting with # are comments.</value></data>
+</root>
+
+

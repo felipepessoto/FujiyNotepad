@@ -399,7 +399,7 @@ namespace FujiyNotepad.WinUI
                 View.FirstVisibleLine = restoreFirstLine;
                 View.HorizontalOffset = restoreHorizontal;
             }
-            Title = $"{Path.GetFileName(path)} - Fujiy Notepad";
+            Title = LocalizedStrings.Format("WindowTitleWithFile", Path.GetFileName(path));
             EditMenu.IsEnabled = true;
             EncodingMenu.IsEnabled = true;
             ReloadItem.IsEnabled = true;
@@ -485,7 +485,7 @@ namespace FujiyNotepad.WinUI
             pendingSessionFirstLine = -1;
 
             // Back to the empty-state UI (mirrors the XAML defaults before any file is opened).
-            Title = "Fujiy Notepad";
+            Title = LocalizedStrings.Get("AppDisplayName");
             EditMenu.IsEnabled = false;
             EncodingMenu.IsEnabled = false;
             ReloadItem.IsEnabled = false;
@@ -684,24 +684,24 @@ namespace FujiyNotepad.WinUI
                 return;
             }
             string text = StatusText.LineCount(provider.LineCount);
-            LblStatus.Text = followTail ? $"{text}  \u00B7  Following" : text;
+            LblStatus.Text = followTail ? $"{text}  \u00B7  {LocalizedStrings.Get("StatusFollowingSuffix")}" : text;
         }
 
         private async Task ShowOpenErrorAsync(string path, Exception ex)
         {
             string reason = ex switch
             {
-                FileNotFoundException => "The file was not found.",
-                DirectoryNotFoundException => "The folder was not found.",
-                UnauthorizedAccessException => "You don't have permission to read it.",
+                FileNotFoundException => LocalizedStrings.Get("ErrorFileNotFound"),
+                DirectoryNotFoundException => LocalizedStrings.Get("ErrorDirNotFound"),
+                UnauthorizedAccessException => LocalizedStrings.Get("ErrorNoPermission"),
                 _ => ex.Message,
             };
 
             var dialog = new ContentDialog
             {
-                Title = "Can't open file",
-                Content = $"Could not open \u201C{Path.GetFileName(path)}\u201D.\n\n{reason}",
-                CloseButtonText = "OK",
+                Title = LocalizedStrings.Get("OpenErrorTitle"),
+                Content = LocalizedStrings.Format("OpenErrorContent", Path.GetFileName(path), reason),
+                CloseButtonText = LocalizedStrings.Get("DialogOk"),
                 XamlRoot = Content.XamlRoot,
             };
             await dialog.ShowAsync();
@@ -912,13 +912,13 @@ namespace FujiyNotepad.WinUI
             }
 
             ExitFilterToFullView();
-            var input = new TextBox { PlaceholderText = "Line number" };
+            var input = new TextBox { PlaceholderText = LocalizedStrings.Get("GoToLinePlaceholder") };
             var dialog = new ContentDialog
             {
-                Title = "Go To Line",
+                Title = LocalizedStrings.Get("GoToLineTitle"),
                 Content = input,
-                PrimaryButtonText = "Go",
-                CloseButtonText = "Cancel",
+                PrimaryButtonText = LocalizedStrings.Get("DialogGo"),
+                CloseButtonText = LocalizedStrings.Get("DialogCancel"),
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = Content.XamlRoot,
             };
@@ -1107,7 +1107,7 @@ namespace FujiyNotepad.WinUI
             });
 
             await OpenFile(temp, addToRecent: false); // temp == stdinTempPath, so this does not clean itself up
-            Title = "<stdin> - Fujiy Notepad";
+            Title = LocalizedStrings.Get("StdinWindowTitle");
             EnableFollowTail(rebaseline: false); // keep the open-time baseline so spooled-in bytes get indexed
         }
 
@@ -1144,13 +1144,13 @@ namespace FujiyNotepad.WinUI
             }
 
             ExitFilterToFullView();
-            var input = new TextBox { PlaceholderText = "Byte offset (decimal, or 0x for hex)" };
+            var input = new TextBox { PlaceholderText = LocalizedStrings.Get("GoToOffsetPlaceholder") };
             var dialog = new ContentDialog
             {
-                Title = "Go To Offset",
+                Title = LocalizedStrings.Get("GoToOffsetTitle"),
                 Content = input,
-                PrimaryButtonText = "Go",
-                CloseButtonText = "Cancel",
+                PrimaryButtonText = LocalizedStrings.Get("DialogGo"),
+                CloseButtonText = LocalizedStrings.Get("DialogCancel"),
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = Content.XamlRoot,
             };
@@ -1204,13 +1204,13 @@ namespace FujiyNotepad.WinUI
             }
 
             ExitFilterToFullView();
-            var input = new TextBox { PlaceholderText = "Percentage of the file (0-100)" };
+            var input = new TextBox { PlaceholderText = LocalizedStrings.Get("GoToPercentPlaceholder") };
             var dialog = new ContentDialog
             {
-                Title = "Go To Percentage",
+                Title = LocalizedStrings.Get("GoToPercentTitle"),
                 Content = input,
-                PrimaryButtonText = "Go",
-                CloseButtonText = "Cancel",
+                PrimaryButtonText = LocalizedStrings.Get("DialogGo"),
+                CloseButtonText = LocalizedStrings.Get("DialogCancel"),
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = Content.XamlRoot,
             };
@@ -2267,7 +2267,7 @@ namespace FujiyNotepad.WinUI
             CancellationToken token = cts.Token;
             LineProvider activeProvider = provider!;
             var marks = new MatchMarks(activeProvider.LineCount);
-            FindCount.Text = "counting\u2026";
+            FindCount.Text = LocalizedStrings.Get("StatusCounting");
 
             int count;
             try
@@ -2425,10 +2425,10 @@ namespace FujiyNotepad.WinUI
                 FontSize = 20,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             });
-            panel.Children.Add(new TextBlock { Text = $"Version {GetAppVersion()}" });
+            panel.Children.Add(new TextBlock { Text = LocalizedStrings.Format("AboutVersion", GetAppVersion()) });
             panel.Children.Add(new TextBlock
             {
-                Text = "A lightweight Windows viewer for very large text files.",
+                Text = LocalizedStrings.Get("AboutDescription"),
                 TextWrapping = TextWrapping.Wrap,
             });
             panel.Children.Add(new HyperlinkButton
@@ -2439,16 +2439,16 @@ namespace FujiyNotepad.WinUI
             });
             panel.Children.Add(new TextBlock
             {
-                Text = "MIT License — Copyright © 2017 Felipe Pessoto",
+                Text = LocalizedStrings.Get("AboutLicense"),
                 FontSize = 12,
                 Opacity = 0.7,
             });
 
             var dialog = new ContentDialog
             {
-                Title = "About",
+                Title = LocalizedStrings.Get("AboutTitle"),
                 Content = panel,
-                CloseButtonText = "Close",
+                CloseButtonText = LocalizedStrings.Get("DialogClose"),
                 DefaultButton = ContentDialogButton.Close,
                 XamlRoot = Content.XamlRoot,
             };
@@ -2559,9 +2559,7 @@ namespace FujiyNotepad.WinUI
 
             var help = new TextBlock
             {
-                Text = "One rule per line:  color[/flags] pattern\n" +
-                       "Colors: red, orange, amber, yellow, green, teal, blue, cyan, purple, pink, gray, or #RRGGBB.\n" +
-                       "Flags: /regex and/or /case (e.g. blue/regex,case).  Lines starting with # are comments.",
+                Text = LocalizedStrings.Get("HighlightRulesHelp"),
                 TextWrapping = TextWrapping.Wrap,
                 Opacity = 0.75,
                 Margin = new Thickness(0, 0, 0, 8),
@@ -2582,12 +2580,12 @@ namespace FujiyNotepad.WinUI
             }
             var presetButton = new DropDownButton
             {
-                Content = "Insert preset",
+                Content = LocalizedStrings.Get("InsertPresetText"),
                 Flyout = presetMenu,
                 Margin = new Thickness(0, 0, 0, 8),
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(presetButton, "InsertPresetButton");
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(presetButton, "Insert highlight preset");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(presetButton, LocalizedStrings.Get("InsertPresetName"));
 
             var panel = new StackPanel();
             panel.Children.Add(help);
@@ -2596,10 +2594,10 @@ namespace FujiyNotepad.WinUI
 
             var dialog = new ContentDialog
             {
-                Title = "Highlight Rules",
+                Title = LocalizedStrings.Get("HighlightRulesTitle"),
                 Content = panel,
-                PrimaryButtonText = "Apply",
-                CloseButtonText = "Cancel",
+                PrimaryButtonText = LocalizedStrings.Get("DialogApply"),
+                CloseButtonText = LocalizedStrings.Get("DialogCancel"),
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = Content.XamlRoot,
             };
@@ -2697,7 +2695,7 @@ namespace FujiyNotepad.WinUI
             CancellationToken token = cts.Token;
             IByteSource activeSource = source;
             TextEncoding encoding = currentEncoding;
-            LblCharCount.Text = "counting\u2026";
+            LblCharCount.Text = LocalizedStrings.Get("StatusCounting");
 
             long count;
             try

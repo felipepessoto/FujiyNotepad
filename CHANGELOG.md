@@ -29,6 +29,13 @@ tag per published build. Each release also has downloadable builds and notes on 
   **Count characters** action you can click when you actually want the exact total. Single-byte encodings
   (Windows-1252) still show the count instantly, since it equals the byte count.
 
+### Internal
+- **Localization** — user-facing strings now resolve from resource tables (`Strings/<lang>/Resources.resw`)
+  instead of being hardcoded: the menu bar, Find/Filter bars, status-bar links, and all dialogs bind via
+  `x:Uid` or a new AOT-safe `LocalizedStrings` (`ResourceLoader`) helper. A **Brazilian Portuguese (pt-BR)**
+  translation ships as a worked example; set the `FUJIY_LANG` environment variable (e.g. `pt-BR`) to preview a
+  language without changing Windows. English is the default/fallback — no visible change for English users.
+
 ## [4.9.0] - 2026-06-19
 
 ### Added

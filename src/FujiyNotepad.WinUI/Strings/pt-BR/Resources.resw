@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- Brazilian Portuguese (pt-BR) translation of Strings/en-US/Resources.resw (issue #78). Keys must match
+       en-US exactly; any key missing here falls back to en-US. Color/encoding tokens and proper nouns stay
+       literal. To smoke-test: set ApplicationLanguages.PrimaryLanguageOverride = "pt-BR" early in startup. -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- ===== File menu ===== -->
+  <data name="FileMenu.Title" xml:space="preserve"><value>Arquivo</value></data>
+  <data name="OpenItem.Text" xml:space="preserve"><value>Abrir...</value></data>
+  <data name="OpenSampleItem.Text" xml:space="preserve"><value>Abrir Exemplo</value></data>
+  <data name="RecentMenu.Text" xml:space="preserve"><value>Abrir Recentes</value></data>
+  <data name="ReopenLastToggle.Text" xml:space="preserve"><value>Reabrir Último Arquivo ao Iniciar</value></data>
+  <data name="ReloadItem.Text" xml:space="preserve"><value>Recarregar</value></data>
+  <data name="CloseItem.Text" xml:space="preserve"><value>Fechar</value></data>
+  <data name="CopyPathItem.Text" xml:space="preserve"><value>Copiar Caminho do Arquivo</value></data>
+  <data name="RevealItem.Text" xml:space="preserve"><value>Mostrar no Explorador</value></data>
+  <data name="ExitItem.Text" xml:space="preserve"><value>Sair</value></data>
+
+  <!-- ===== Edit menu ===== -->
+  <data name="EditMenu.Title" xml:space="preserve"><value>Editar</value></data>
+  <data name="GoToLineItem.Text" xml:space="preserve"><value>Ir Para Linha...</value></data>
+  <data name="GoToOffsetItem.Text" xml:space="preserve"><value>Ir Para Deslocamento...</value></data>
+  <data name="GoToPercentItem.Text" xml:space="preserve"><value>Ir Para Porcentagem...</value></data>
+  <data name="FindItem.Text" xml:space="preserve"><value>Localizar...</value></data>
+  <data name="FilterItem.Text" xml:space="preserve"><value>Filtrar...</value></data>
+  <data name="CopyMatchingItem.Text" xml:space="preserve"><value>Copiar Linhas Correspondentes</value></data>
+  <data name="SaveMatchingItem.Text" xml:space="preserve"><value>Salvar Linhas Correspondentes Como...</value></data>
+  <data name="ClearSearchHistoryItem.Text" xml:space="preserve"><value>Limpar Histórico de Pesquisa</value></data>
+  <data name="ToggleBookmarkItem.Text" xml:space="preserve"><value>Alternar Marcador</value></data>
+  <data name="NextBookmarkItem.Text" xml:space="preserve"><value>Próximo Marcador</value></data>
+  <data name="PreviousBookmarkItem.Text" xml:space="preserve"><value>Marcador Anterior</value></data>
+  <data name="ClearBookmarksItem.Text" xml:space="preserve"><value>Limpar Todos os Marcadores</value></data>
+  <data name="CopyWithLineNumbersItem.Text" xml:space="preserve"><value>Copiar com Números de Linha</value></data>
+  <data name="StartIndexingItem.Text" xml:space="preserve"><value>Iniciar indexação</value></data>
+  <data name="StopIndexingItem.Text" xml:space="preserve"><value>Parar indexação</value></data>
+  <data name="TabWidthSubMenu.Text" xml:space="preserve"><value>Largura da Tabulação</value></data>
+
+  <!-- ===== View menu ===== -->
+  <data name="ViewMenu.Title" xml:space="preserve"><value>Exibir</value></data>
+  <data name="LineNumbersToggle.Text" xml:space="preserve"><value>Números de Linha</value></data>
+  <data name="WhitespaceToggle.Text" xml:space="preserve"><value>Mostrar Espaços em Branco</value></data>
+  <data name="FollowTailToggle.Text" xml:space="preserve"><value>Acompanhar Final</value></data>
+  <data name="ZoomInItem.Text" xml:space="preserve"><value>Ampliar</value></data>
+  <data name="ZoomOutItem.Text" xml:space="preserve"><value>Reduzir</value></data>
+  <data name="ResetZoomItem.Text" xml:space="preserve"><value>Redefinir Zoom</value></data>
+  <data name="FontSubMenu.Text" xml:space="preserve"><value>Fonte</value></data>
+  <data name="ThemeSubMenu.Text" xml:space="preserve"><value>Tema</value></data>
+  <data name="ThemeSystem.Text" xml:space="preserve"><value>Sistema</value></data>
+  <data name="ThemeLight.Text" xml:space="preserve"><value>Claro</value></data>
+  <data name="ThemeDark.Text" xml:space="preserve"><value>Escuro</value></data>
+  <data name="HighlightRulesItem.Text" xml:space="preserve"><value>Regras de Realce...</value></data>
+
+  <!-- ===== Encoding menu ===== -->
+  <data name="EncodingMenu.Title" xml:space="preserve"><value>Codificação</value></data>
+  <data name="EncAuto.Text" xml:space="preserve"><value>Detectar automaticamente</value></data>
+
+  <!-- ===== Help menu ===== -->
+  <data name="HelpMenu.Title" xml:space="preserve"><value>Ajuda</value></data>
+  <data name="AboutItem.Text" xml:space="preserve"><value>Sobre o FujiyNotepad...</value></data>
+
+  <!-- ===== Status bar ===== -->
+  <data name="ReloadHint.Content" xml:space="preserve"><value>↻ Arquivo alterado no disco — Recarregar</value></data>
+  <data name="CountCharsLink.Content" xml:space="preserve"><value>Contar caracteres</value></data>
+
+  <!-- ===== Code-behind ===== -->
+  <data name="AppDisplayName" xml:space="preserve"><value>Fujiy Notepad</value></data>
+  <data name="WindowTitleWithFile" xml:space="preserve"><value>{0} - Fujiy Notepad</value></data>
+  <data name="StdinWindowTitle" xml:space="preserve"><value>&lt;stdin&gt; - Fujiy Notepad</value></data>
+  <data name="StatusFollowingSuffix" xml:space="preserve"><value>Acompanhando</value></data>
+  <data name="StatusCounting" xml:space="preserve"><value>contando…</value></data>
+
+  <!-- ===== Find bar ===== -->
+  <data name="FindBox.PlaceholderText" xml:space="preserve"><value>Localizar</value></data>
+  <data name="MatchCaseToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Diferenciar maiúsculas/minúsculas</value></data>
+  <data name="MatchCaseToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Diferenciar maiúsculas/minúsculas</value></data>
+  <data name="WholeWordToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Coincidir palavra inteira</value></data>
+  <data name="WholeWordToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Coincidir palavra inteira</value></data>
+  <data name="RegexToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Usar expressão regular</value></data>
+  <data name="RegexToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Usar expressão regular</value></data>
+  <data name="FindPrevButton.Content" xml:space="preserve"><value>Localizar Anterior</value></data>
+  <data name="FindPrevButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Localizar anterior (Shift+F3)</value></data>
+  <data name="FindNextButton.Content" xml:space="preserve"><value>Localizar Próximo</value></data>
+  <data name="FindNextButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Localizar próximo (F3)</value></data>
+  <data name="FindCancelButton.Content" xml:space="preserve"><value>Cancelar</value></data>
+  <data name="FindCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Fechar barra de localização</value></data>
+  <data name="FindCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Fechar</value></data>
+
+  <!-- ===== Filter bar ===== -->
+  <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filtrar — mostrar apenas linhas correspondentes</value></data>
+  <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Diferenciar maiúsculas/minúsculas</value></data>
+  <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Diferenciar maiúsculas/minúsculas</value></data>
+  <data name="FilterRegex.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Usar expressão regular</value></data>
+  <data name="FilterRegex.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Usar expressão regular</value></data>
+  <data name="FilterApplyButton.Content" xml:space="preserve"><value>Aplicar</value></data>
+  <data name="FilterApplyButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Mostrar apenas linhas correspondentes (Enter)</value></data>
+  <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Limpar filtro e fechar</value></data>
+  <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Limpar filtro e fechar (Esc)</value></data>
+
+  <!-- ===== Dialogs ===== -->
+  <data name="DialogGo" xml:space="preserve"><value>Ir</value></data>
+  <data name="DialogCancel" xml:space="preserve"><value>Cancelar</value></data>
+  <data name="DialogOk" xml:space="preserve"><value>OK</value></data>
+  <data name="DialogClose" xml:space="preserve"><value>Fechar</value></data>
+  <data name="DialogApply" xml:space="preserve"><value>Aplicar</value></data>
+
+  <data name="GoToLineTitle" xml:space="preserve"><value>Ir Para Linha</value></data>
+  <data name="GoToLinePlaceholder" xml:space="preserve"><value>Número da linha</value></data>
+  <data name="GoToOffsetTitle" xml:space="preserve"><value>Ir Para Deslocamento</value></data>
+  <data name="GoToOffsetPlaceholder" xml:space="preserve"><value>Deslocamento em bytes (decimal ou 0x para hex)</value></data>
+  <data name="GoToPercentTitle" xml:space="preserve"><value>Ir Para Porcentagem</value></data>
+  <data name="GoToPercentPlaceholder" xml:space="preserve"><value>Porcentagem do arquivo (0-100)</value></data>
+
+  <data name="OpenErrorTitle" xml:space="preserve"><value>Não é possível abrir o arquivo</value></data>
+  <data name="OpenErrorContent" xml:space="preserve"><value>Não foi possível abrir “{0}”.
+
+{1}</value></data>
+  <data name="ErrorFileNotFound" xml:space="preserve"><value>O arquivo não foi encontrado.</value></data>
+  <data name="ErrorDirNotFound" xml:space="preserve"><value>A pasta não foi encontrada.</value></data>
+  <data name="ErrorNoPermission" xml:space="preserve"><value>Você não tem permissão para lê-lo.</value></data>
+
+  <data name="AboutTitle" xml:space="preserve"><value>Sobre</value></data>
+  <data name="AboutVersion" xml:space="preserve"><value>Versão {0}</value></data>
+  <data name="AboutDescription" xml:space="preserve"><value>Um visualizador leve do Windows para arquivos de texto muito grandes.</value></data>
+  <data name="AboutLicense" xml:space="preserve"><value>Licença MIT — Copyright © 2017 Felipe Pessoto</value></data>
+
+  <data name="HighlightRulesTitle" xml:space="preserve"><value>Regras de Realce</value></data>
+  <data name="InsertPresetText" xml:space="preserve"><value>Inserir predefinição</value></data>
+  <data name="InsertPresetName" xml:space="preserve"><value>Inserir predefinição de realce</value></data>
+  <data name="HighlightRulesHelp" xml:space="preserve"><value>Uma regra por linha:  cor[/sinalizadores] padrão
+Cores: red, orange, amber, yellow, green, teal, blue, cyan, purple, pink, gray, ou #RRGGBB.
+Sinalizadores: /regex e/ou /case (ex.: blue/regex,case).  Linhas começando com # são comentários.</value></data>
+</root>

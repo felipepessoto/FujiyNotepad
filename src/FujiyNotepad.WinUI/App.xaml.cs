@@ -19,6 +19,7 @@ namespace FujiyNotepad.WinUI
         /// </summary>
         public App()
         {
+            ApplyLanguageOverride();
             InitializeComponent();
 
             // Turn an otherwise-silent Native AOT crash into an actionable log under
@@ -27,6 +28,25 @@ namespace FujiyNotepad.WinUI
             // Cover both the UI-thread (WinUI) and any-thread (AppDomain) cases.
             UnhandledException += OnXamlUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+        }
+
+        // Lets a user preview a translation (issue #78) without changing their Windows display language: set the
+        // FUJIY_LANG environment variable to a BCP-47 tag (e.g. "pt-BR") before launching. Must run before any
+        // resource/x:Uid is resolved, so it is the very first thing the app does. Empty/unset = follow Windows.
+        private static void ApplyLanguageOverride()
+        {
+            try
+            {
+                string? lang = Environment.GetEnvironmentVariable("FUJIY_LANG");
+                if (!string.IsNullOrWhiteSpace(lang))
+                {
+                    Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = lang;
+                }
+            }
+            catch
+            {
+                // An invalid tag (or the API being unavailable) just means we fall back to the default language.
+            }
         }
 
         /// <summary>
