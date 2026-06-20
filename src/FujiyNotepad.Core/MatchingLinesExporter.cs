@@ -37,7 +37,7 @@ namespace FujiyNotepad.Core
                 {
                     return (sb.ToString(), written, true);
                 }
-                sb.Append(source.GetLine(i)).Append(EndingFor(source, i, count));
+                sb.Append(source.GetLineUncached(i)).Append(EndingFor(source, i, count));
                 written++;
             }
 
@@ -53,7 +53,7 @@ namespace FujiyNotepad.Core
             int count = source.LineCount;
             for (int i = 0; i < count; i++)
             {
-                writer.Write(source.GetLine(i));
+                writer.Write(source.GetLineUncached(i));
                 writer.Write(EndingFor(source, i, count));
             }
         }

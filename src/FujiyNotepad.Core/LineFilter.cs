@@ -49,7 +49,7 @@ namespace FujiyNotepad.Core
                     }
                 }
 
-                if (predicate(source.GetLine(i)))
+                if (predicate(source.GetLineUncached(i)))
                 {
                     result.Add(i);
                     if (result.Count >= maxMatches)

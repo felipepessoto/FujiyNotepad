@@ -17,6 +17,10 @@ tag per published build. Each release also has downloadable builds and notes on 
   path for the common line that has no tabs and no double-width characters (its display text is the source and
   its column maps are the identity). This removes the two integer maps and the string copy (~1.4 KB for a
   100-char line) that were allocated per newly-revealed line, so fast scrolling churns the GC less.
+- **Filter and export no longer thrash the line cache** — a full-file Filter/grep scan (and the matching-line
+  export) reads every line exactly once, so it now reads through a non-caching path instead of inserting every
+  line into the bounded line cache. Previously a big scan evicted the lines the viewport was showing (and
+  re-stored lines it never revisits); the viewport's cached lines now survive a filter.
 
 ## [4.10.0] - 2026-06-19
 

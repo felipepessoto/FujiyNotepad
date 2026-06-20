@@ -259,5 +259,80 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(2, provider.ByteColumnToCharColumn(0, 4)); // 4 bytes = 2 chars
             Assert.Equal(4, provider.CharColumnToByteColumn(0, 2)); // 2 chars = 4 bytes
         }
+
+        [Fact]
+        public async Task GetLineUncached_ReturnsSameTextAsGetLine()
+        {
+            var provider = await BuildAsync("alpha\nbeta\ngamma\n");
+
+            Assert.Equal("alpha", provider.GetLineUncached(0));
+            Assert.Equal("beta", provider.GetLineUncached(1));
+            Assert.Equal("gamma", provider.GetLineUncached(2));
+        }
+
+        [Fact]
+        public async Task GetLineUncached_ServesAnAlreadyCachedLineWithoutReading()
+        {
+            var counting = new CountingByteSource(new InMemoryByteSource("alpha\nbeta\ngamma\n"));
+            var provider = await BuildAsync(counting);
+
+            provider.GetLine(1); // caches line 1
+            int before = counting.Reads;
+            Assert.Equal("beta", provider.GetLineUncached(1)); // cache hit
+            Assert.Equal(before, counting.Reads); // no source read
+        }
+
+        [Fact]
+        public async Task GetLineUncached_DoesNotPopulateCache_SoRepeatsReReadTheSource()
+        {
+            var counting = new CountingByteSource(new InMemoryByteSource("alpha\nbeta\ngamma\ndelta\n"));
+            var provider = await BuildAsync(counting);
+
+            // Prime the index block for line 2 so the reads below are line-content reads, not index expansion.
+            Assert.Equal("gamma", provider.GetLineUncached(2));
+
+            // A second uncached read of the same (never-cached) line still hits the source — it was not stored.
+            int before = counting.Reads;
+            Assert.Equal("gamma", provider.GetLineUncached(2));
+            int afterFirst = counting.Reads;
+            Assert.Equal("gamma", provider.GetLineUncached(2));
+            int afterSecond = counting.Reads;
+
+            Assert.True(afterFirst > before, "uncached read should read the source");
+            Assert.True(afterSecond > afterFirst, "a repeat uncached read should read the source again (not cached)");
+
+            // Contrast: GetLine caches, so a repeat does no further read.
+            provider.GetLine(3);
+            int cached = counting.Reads;
+            Assert.Equal("delta", provider.GetLine(3));
+            Assert.Equal(cached, counting.Reads);
+        }
+
+        // Wraps a byte source to count positional reads, so a test can observe whether a line was cached.
+        private sealed class CountingByteSource : IByteSource
+        {
+            private readonly IByteSource inner;
+            public int Reads;
+
+            public CountingByteSource(IByteSource inner) => this.inner = inner;
+
+            public long Length => inner.Length;
+
+            public long RefreshLength() => inner.RefreshLength();
+
+            public int Read(long offset, Span<byte> buffer)
+            {
+                Reads++;
+                return inner.Read(offset, buffer);
+            }
+
+            public ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken token = default)
+            {
+                Reads++;
+                return inner.ReadAsync(offset, buffer, token);
+            }
+
+            public void Dispose() => inner.Dispose();
+        }
     }
 }
