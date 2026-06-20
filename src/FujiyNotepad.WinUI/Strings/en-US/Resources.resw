@@ -108,6 +108,7 @@
   <data name="LineNumbersToggle.Text" xml:space="preserve"><value>Line Numbers</value></data>
   <data name="WhitespaceToggle.Text" xml:space="preserve"><value>Show Whitespace</value></data>
   <data name="WordWrapToggle.Text" xml:space="preserve"><value>Word Wrap</value></data>
+  <data name="HighlightSelectionToggle.Text" xml:space="preserve"><value>Highlight Selection Occurrences</value></data>
   <data name="FollowTailToggle.Text" xml:space="preserve"><value>Follow Tail</value></data>
   <data name="ZoomInItem.Text" xml:space="preserve"><value>Zoom In</value></data>
   <data name="ZoomOutItem.Text" xml:space="preserve"><value>Zoom Out</value></data>

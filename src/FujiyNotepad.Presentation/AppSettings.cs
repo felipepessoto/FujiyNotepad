@@ -24,6 +24,9 @@ namespace FujiyNotepad.Presentation
         /// <summary>Whether long lines are wrapped to the viewport width (issue #31). Off by default.</summary>
         public bool WordWrap { get; set; }
 
+        /// <summary>Whether selecting text highlights all other occurrences of it in the view (issue #130). On by default.</summary>
+        public bool HighlightSelectionOccurrences { get; set; } = true;
+
         /// <summary>App theme override: "System" (default), "Light", or "Dark".</summary>
         public string Theme { get; set; } = "System";
 

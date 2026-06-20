@@ -117,6 +117,13 @@ namespace FujiyNotepad.Presentation
         public IReadOnlyList<HighlightRect> Matches { get; init; }
 
         /// <summary>
+        /// Highlight rectangles for every occurrence of the selected text on this line (empty when the feature
+        /// is off, there is no qualifying selection, or a Find highlight is active — Find takes precedence).
+        /// Painted under the active selection so the selected occurrence itself reads as the selection colour.
+        /// </summary>
+        public IReadOnlyList<HighlightRect> SelectionMatches { get; init; }
+
+        /// <summary>
         /// Persistent highlight-rule rectangles on this line, each in its rule's colour (empty when no rules are
         /// set). Painted under the Find highlight and the text, so a search still reads over a coloured line.
         /// </summary>
@@ -172,6 +179,7 @@ namespace FujiyNotepad.Presentation
 
         private static readonly IReadOnlyList<HighlightRect> NoHighlights = Array.Empty<HighlightRect>();
         private ILineHighlighter? highlighter;
+        private ILineHighlighter? selectionHighlighter;
 
         private static readonly IReadOnlyList<RuleHighlightRect> NoRuleHighlights = Array.Empty<RuleHighlightRect>();
         private HighlightRuleSet? highlightRules;
@@ -461,6 +469,35 @@ namespace FujiyNotepad.Presentation
         }
 
         /// <summary>
+        /// The selected text when the selection is non-empty and lies on a single source line; otherwise null.
+        /// Used to drive "highlight all occurrences of the selected text" (issue #130), which only applies to a
+        /// single-line selection. Columns are character indices into the line's source, so the slice is exact.
+        /// </summary>
+        public string? GetSelectedTextOnSingleLine()
+        {
+            if (provider == null || anchor == caret)
+            {
+                return null;
+            }
+
+            (TextPosition start, TextPosition end) = NormalizedSelection();
+            if (start.Line != end.Line)
+            {
+                return null;
+            }
+
+            string source = GetColumns(start.Line).Source;
+            int from = Math.Clamp(start.Column, 0, source.Length);
+            int to = Math.Clamp(end.Column, 0, source.Length);
+            if (to <= from)
+            {
+                return null;
+            }
+
+            return source.Substring(from, to - from);
+        }
+
+        /// <summary>
         /// The time difference between the leading timestamps of the first and last selected lines, or
         /// <c>null</c> when there is no multi-line selection or either endpoint line does not begin with a
         /// recognized timestamp. Drives the status bar's log-duration readout (issue #67). Reads only the two
@@ -496,6 +533,20 @@ namespace FujiyNotepad.Presentation
         public void SetHighlighter(ILineHighlighter? value)
         {
             highlighter = value;
+            RaiseRedraw();
+        }
+
+        /// <summary>
+        /// Sets (or clears, with <c>null</c>) the highlighter used to paint every occurrence of the selected
+        /// text in the viewport (issue #130), and requests a redraw. This is a separate channel from
+        /// <see cref="SetHighlighter"/> (Find): when a Find highlight is active it takes precedence and the
+        /// selection occurrences stand down, so the two never paint at once. Each visible line's
+        /// <see cref="VisibleLine.SelectionMatches"/> is computed from this highlighter on the next
+        /// <see cref="GetVisibleLines"/>.
+        /// </summary>
+        public void SetSelectionHighlighter(ILineHighlighter? value)
+        {
+            selectionHighlighter = value;
             RaiseRedraw();
         }
 
@@ -1286,7 +1337,8 @@ namespace FujiyNotepad.Presentation
                     SelectionWidth = selectionWidth,
                     HasCaret = hasCaret,
                     CaretX = caretX,
-                    Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns, 0, columns.Source.Length, horizontalOffset),
+                    Matches = highlighter == null ? NoHighlights : ComputeHighlights(highlighter, columns, 0, columns.Source.Length, horizontalOffset),
+                    SelectionMatches = (selectionHighlighter == null || highlighter != null) ? NoHighlights : ComputeHighlights(selectionHighlighter, columns, 0, columns.Source.Length, horizontalOffset),
                     RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns, 0, columns.Source.Length, horizontalOffset),
                     IsBookmarked = bookmarks.Count > 0 && bookmarks.Contains(lineIndex),
                     Whitespace = showWhitespace
@@ -1372,7 +1424,8 @@ namespace FujiyNotepad.Presentation
                         SelectionWidth = selW,
                         HasCaret = hasCaret,
                         CaretX = caretX,
-                        Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns, row.StartChar, row.EndChar, originPx),
+                        Matches = highlighter == null ? NoHighlights : ComputeHighlights(highlighter, columns, row.StartChar, row.EndChar, originPx),
+                        SelectionMatches = (selectionHighlighter == null || highlighter != null) ? NoHighlights : ComputeHighlights(selectionHighlighter, columns, row.StartChar, row.EndChar, originPx),
                         RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns, row.StartChar, row.EndChar, originPx),
                         IsBookmarked = r == 0 && bookmarks.Count > 0 && bookmarks.Contains(srcLine),
                         Whitespace = NoWhitespace, // whitespace markers aren't shown in wrap mode (v1)
@@ -1412,9 +1465,9 @@ namespace FujiyNotepad.Presentation
         // Maps the highlighter's character-index match spans to viewport-pixel rectangles. Spans are clipped to
         // [clipStart, clipEnd) (the whole line in non-wrap mode, a wrapped row's char range in wrap mode) and
         // positioned with originPx as the left scroll/row origin. A zero-width result is dropped.
-        private IReadOnlyList<HighlightRect> ComputeHighlights(LineColumns columns, int clipStart, int clipEnd, double originPx)
+        private IReadOnlyList<HighlightRect> ComputeHighlights(ILineHighlighter source, LineColumns columns, int clipStart, int clipEnd, double originPx)
         {
-            IReadOnlyList<(int Start, int Length)> spans = highlighter!.Find(columns.Source);
+            IReadOnlyList<(int Start, int Length)> spans = source.Find(columns.Source);
             if (spans.Count == 0)
             {
                 return NoHighlights;

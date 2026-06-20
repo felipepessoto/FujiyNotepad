@@ -8,6 +8,10 @@ tag per published build. Each release also has downloadable builds and notes on 
 ## [Unreleased]
 
 ### Added
+- **Highlight occurrences of the selected text** — selecting a word (or any single-line run of text) now subtly
+  highlights every other occurrence of it in view, so you can eyeball where a token recurs without running a
+  search. It's a single-line, length-bounded reading aid that stands aside while Find is active (Find wins), and
+  you can turn it off any time with **View ▸ Highlight Selection Occurrences** (the setting persists).
 - **Word wrap** — **View ▸ Word Wrap** wraps long lines to the window width instead of scrolling sideways
   (the horizontal scrollbar hides while it's on). It keeps the constant-memory model — the file still scrolls
   by source line, so even multi-gigabyte files wrap instantly — and the setting persists across sessions.

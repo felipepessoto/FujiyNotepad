@@ -31,6 +31,7 @@ namespace FujiyNotepad.Presentation.Tests
                     LastSessionCaretLine = 4321,
                     LastSessionCaretColumn = 7,
                     WordWrap = true,
+                    HighlightSelectionOccurrences = false,
                 };
 
                 store.Save(saved);
@@ -49,6 +50,7 @@ namespace FujiyNotepad.Presentation.Tests
                 Assert.Equal(4321, loaded.LastSessionCaretLine);
                 Assert.Equal(7, loaded.LastSessionCaretColumn);
                 Assert.True(loaded.WordWrap);
+                Assert.False(loaded.HighlightSelectionOccurrences);
             }
             finally
             {
@@ -66,6 +68,7 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.False(s.WindowMaximized);
             Assert.Empty(s.RecentFiles);
             Assert.True(s.RestoreLastSession); // session restore is on by default
+            Assert.True(s.HighlightSelectionOccurrences); // selection-occurrence highlighting is on by default
             Assert.Equal("", s.LastSessionFilePath);
         }
 
