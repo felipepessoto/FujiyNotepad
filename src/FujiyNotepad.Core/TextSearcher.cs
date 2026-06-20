@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace FujiyNotepad.Core
@@ -59,7 +60,11 @@ namespace FujiyNotepad.Core
             }
 
             int overlap = pattern.Length - 1;
-            byte[] buffer = new byte[chunkSize + overlap];
+            // Pool the ~1 MiB scan buffer (a Large Object Heap allocation): Search runs on every find, index
+            // pass and block expansion, so renting instead of allocating avoids per-call LOH churn and Gen2 GCs.
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(chunkSize + overlap);
+            try
+            {
 
             long readPos = startOffset;     // next absolute read position
             int carry = 0;                  // bytes retained at the front of the buffer
@@ -148,6 +153,11 @@ namespace FujiyNotepad.Core
             }
 
             progress?.Report(100);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         /// <summary>
@@ -181,7 +191,9 @@ namespace FujiyNotepad.Core
             }
 
             byte[]? foldedPattern = options.IgnoreCase ? Fold(pattern) : null;
-            byte[] buffer = new byte[chunkSize + overlap];
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(chunkSize + overlap);
+            try
+            {
 
             long pos = startCap; // exclusive upper bound for match starts not yet covered by a higher block
             while (pos > 0)
@@ -233,6 +245,11 @@ namespace FujiyNotepad.Core
             }
 
             return null;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         /// <summary>
@@ -257,7 +274,9 @@ namespace FujiyNotepad.Core
             }
 
             int overlap = pattern.Length - 1;
-            byte[] buffer = new byte[chunkSize + overlap];
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(chunkSize + overlap);
+            try
+            {
             long readPos = startOffset;
             int carry = 0;
             long bufferBase = startOffset;
@@ -310,6 +329,11 @@ namespace FujiyNotepad.Core
                     break;
                 }
             }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         /// <summary>
@@ -324,7 +348,9 @@ namespace FujiyNotepad.Core
                 throw new ArgumentOutOfRangeException(nameof(startOffset), $"{nameof(startOffset)} cannot be negative");
             }
 
-            byte[] buffer = new byte[chunkSize];
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(chunkSize);
+            try
+            {
             long pos = Math.Min(startOffset, source.Length); // scan the range [0, pos)
 
             while (pos > 0)
@@ -351,6 +377,11 @@ namespace FujiyNotepad.Core
             if (value == (byte)'\n')
             {
                 yield return -1;
+            }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
         }
 

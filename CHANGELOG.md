@@ -7,6 +7,13 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Internal
+- **Less GC pressure on the search hot path** — the ~1 MiB byte buffer used to scan the file for every Find,
+  Find Previous, line-index expansion and filter pass is now rented from a shared pool instead of allocated
+  each call. That buffer was a Large Object Heap allocation, so reusing it removes the per-operation LOH
+  allocations and the Gen 2 garbage collections they triggered (measured ~1 MB/op → a few hundred bytes/op on
+  the engine benchmarks), with no change in throughput or behaviour.
+
 ## [4.10.0] - 2026-06-19
 
 ### Added
