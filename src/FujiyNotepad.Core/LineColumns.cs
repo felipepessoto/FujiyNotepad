@@ -18,16 +18,17 @@ namespace FujiyNotepad.Core
 
         // columnAt[i] = display column at which source character i begins; columnAt[Source.Length] is the
         // total display width. Non-decreasing, advancing by 1 per normal char and to the next tab stop
-        // per tab.
-        private readonly int[] columnAt;
+        // per tab. Null for an "identity" line (no tabs, no wide chars), where column == char index.
+        private readonly int[]? columnAt;
 
         // displayIndexAt[i] = index into Display where source character i's expansion begins;
         // displayIndexAt[Source.Length] == Display.Length. Differs from columnAt only because a wide char
         // occupies two columns but a single Display char, and a tab occupies several columns and that many
         // Display spaces. Lets a wrapped row slice the Display string for an arbitrary source-char range.
-        private readonly int[] displayIndexAt;
+        // Null for an identity line, where Display == Source and displayIndexAt[i] == i.
+        private readonly int[]? displayIndexAt;
 
-        private LineColumns(string source, string display, int[] columnAt, int[] displayIndexAt)
+        private LineColumns(string source, string display, int[]? columnAt, int[]? displayIndexAt)
         {
             Source = source;
             Display = display;
@@ -35,7 +36,7 @@ namespace FujiyNotepad.Core
             this.displayIndexAt = displayIndexAt;
         }
 
-        public int TotalColumns => columnAt[Source.Length];
+        public int TotalColumns => columnAt is null ? Source.Length : columnAt[Source.Length];
 
         /// <summary>
         /// The tab-expanded Display text for the source-char range <c>[startChar, endChar)</c> — the rendered
@@ -45,6 +46,11 @@ namespace FujiyNotepad.Core
         {
             startChar = Math.Clamp(startChar, 0, Source.Length);
             endChar = Math.Clamp(endChar, startChar, Source.Length);
+            if (displayIndexAt is null)
+            {
+                // Identity line: Display == Source, so the source-char range slices the display directly.
+                return Source.Substring(startChar, endChar - startChar);
+            }
             int from = displayIndexAt[startChar];
             int to = displayIndexAt[endChar];
             return Display.Substring(from, to - from);
@@ -55,6 +61,16 @@ namespace FujiyNotepad.Core
             if (tabSize < 1)
             {
                 tabSize = 1;
+            }
+
+            if (IsIdentity(source))
+            {
+                // Fast path for the overwhelmingly common line that has no tabs and no double-width characters:
+                // its display form IS the source (no copy) and every column map is the identity i -> i. Skipping
+                // the two int maps, the StringBuilder and the display-string copy cuts the per-line allocation
+                // (~1.4 KB for a 100-char line) to zero — this runs per newly-revealed line while scrolling. The
+                // accessors treat null maps as the identity mapping.
+                return new LineColumns(source, source, null, null);
             }
 
             int n = source.Length;
@@ -86,6 +102,20 @@ namespace FujiyNotepad.Core
             return new LineColumns(source, display.ToString(), columnAt, displayIndexAt);
         }
 
+        // True when the line needs no tab expansion and has no double-width character, so its display form
+        // equals the source and both column maps are the identity. An allocation-free scan; the common case.
+        private static bool IsIdentity(string source)
+        {
+            foreach (char c in source)
+            {
+                if (c == '\t' || IsWide(c))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         // East Asian Wide / Fullwidth code points (BMP) that a monospace font renders two cells wide:
         // CJK ideographs, kana, Hangul, fullwidth forms, etc. Surrogate-pair code points (e.g. most emoji
         // and CJK Ext-B) are treated as one cell per code unit and are not handled here.
@@ -109,6 +139,11 @@ namespace FujiyNotepad.Core
             {
                 return 0;
             }
+            if (columnAt is null)
+            {
+                // Identity line: the display column equals the char index, clamped to the line length.
+                return Math.Min(charIndex, Source.Length);
+            }
             if (charIndex >= columnAt.Length)
             {
                 charIndex = columnAt.Length - 1;
@@ -122,11 +157,22 @@ namespace FujiyNotepad.Core
         /// </summary>
         public int CharIndexOfColumn(double column)
         {
-            if (column <= 0)
+            if (column <= 0 || double.IsNaN(column))
             {
                 return 0;
             }
             int last = Source.Length;
+            if (columnAt is null)
+            {
+                // Identity line: boundaries sit at every integer column 0..last; pick the nearest source
+                // character, breaking ties toward the lower index (matching the general path below).
+                if (column >= last)
+                {
+                    return last;
+                }
+                int i = (int)column;
+                return (column - i) <= (i + 1 - column) ? i : i + 1;
+            }
             if (column >= columnAt[last])
             {
                 return last;

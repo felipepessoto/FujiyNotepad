@@ -23,6 +23,8 @@ namespace FujiyNotepad.Benchmarks
         private static readonly byte[] LateNeedle = Encoding.ASCII.GetBytes("Line 599999 :");
 
         private LineProvider provider = null!;
+        private IByteSource indexedSource = null!;
+        private LineIndexer indexer = null!;
         private int[] randomLines = Array.Empty<int>();
 
         [GlobalSetup]
@@ -36,10 +38,10 @@ namespace FujiyNotepad.Benchmarks
             data = Encoding.ASCII.GetBytes(sb.ToString());
 
             // A fully-indexed provider for the random line-access benchmark.
-            var source = new InMemoryByteSource(data);
-            var indexer = new LineIndexer(new TextSearcher(source));
+            indexedSource = new InMemoryByteSource(data);
+            indexer = new LineIndexer(new TextSearcher(indexedSource));
             await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
-            provider = new LineProvider(source, indexer);
+            provider = new LineProvider(indexedSource, indexer);
 
             var rng = new Random(12345);
             randomLines = new int[1000];
@@ -86,6 +88,25 @@ namespace FujiyNotepad.Benchmarks
             foreach (int line in randomLines)
             {
                 total += provider.GetLine(line).Length;
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// Cold random line retrieval: a fresh <see cref="LineProvider"/> per invocation (empty line cache), so
+        /// every access pays the real decode (positional read + <c>GetString</c>). The warm
+        /// <see cref="GetLineRandom"/> above, by contrast, serves cache hits after the first iteration and so
+        /// reports ~0 allocation — it hides this cost. Block expansion is still served by the shared indexer's
+        /// block cache (the realistic "scrolled here recently" case), so this isolates the per-line decode cost.
+        /// </summary>
+        [Benchmark]
+        public int GetLineRandomCold()
+        {
+            var cold = new LineProvider(indexedSource, indexer);
+            int total = 0;
+            foreach (int line in randomLines)
+            {
+                total += cold.GetLine(line).Length;
             }
             return total;
         }

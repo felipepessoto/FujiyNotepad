@@ -128,6 +128,27 @@ namespace FujiyNotepad.Core
             return text;
         }
 
+        /// <summary>
+        /// Decoded text of <paramref name="lineIndex"/> for a one-pass bulk scan (filter / grep / export),
+        /// <b>without</b> inserting the line into the cache. A whole-file scan reads each line exactly once, so
+        /// caching every line only thrashes the bounded cache — evicting the lines the viewport is showing — for
+        /// no reuse benefit. A line already cached by the viewport is still served from the cache (a cheap hit);
+        /// a miss is decoded and returned but not stored. Like <see cref="GetLine"/>, the decode is a thread-safe
+        /// positional read, so bulk scans can run off the UI thread while it renders.
+        /// </summary>
+        public string GetLineUncached(int lineIndex)
+        {
+            lock (cacheLock)
+            {
+                if (cache.TryGetValue(lineIndex, out string? cached))
+                {
+                    return cached;
+                }
+            }
+
+            return ReadLine(lineIndex);
+        }
+
         private (long start, long end) GetByteRange(int lineIndex)
         {
             // 0-based display line i starts at index entry [i+1]; it ends at entry [i+2] when that next
