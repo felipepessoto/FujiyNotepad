@@ -61,6 +61,10 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
   whole file — e.g. `ERROR` red and `WARN` amber — with literal or **regex** rules, **per-rule colours**
   (names or hex), and an optional case-sensitive flag. Rules are edited as text, **persist across sessions**,
   and apply on top of the filter view. Distinct from Find (which highlights the current search term only).
+- **Highlight selection occurrences** (*View ▸ Highlight Selection Occurrences*, on by default): selecting a
+  word or any single-line run of text subtly highlights every other occurrence of it in view, so you can spot
+  where a token recurs without starting a search. It stands aside while Find is active (Find wins) and the
+  setting persists.
 - **Bookmarks**: toggle a bookmark on the caret line (`Ctrl+F2`) and jump to the next / previous one
   (`F2` / `Shift+F2`, wrapping around), to flag points of interest in a large file. Bookmarked lines show a
   dot in the line-number gutter (*View ▸ Line Numbers*) and a **tick on the scrollbar** so you can see where

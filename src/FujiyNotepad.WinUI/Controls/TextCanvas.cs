@@ -49,6 +49,7 @@ namespace FujiyNotepad.WinUI.Controls
         private Color caretColor = Colors.Black;
         private Color selectionColor = Color.FromArgb(255, 0xAD, 0xD6, 0xFF);
         private Color matchHighlightColor = Color.FromArgb(255, 0xFF, 0xD5, 0x4F);
+        private Color selectionOccurrenceColor = Color.FromArgb(0x80, 0x3F, 0xB5, 0x7F);
         private Color gutterTextColor = Color.FromArgb(255, 0x88, 0x88, 0x88);
         private Color gutterSeparatorColor = Color.FromArgb(255, 0xE0, 0xE0, 0xE0);
         private Color bookmarkColor = Color.FromArgb(255, 0x1A, 0x7F, 0xD6);
@@ -265,6 +266,9 @@ namespace FujiyNotepad.WinUI.Controls
 
         public TextPosition SelectionStart => engine.SelectionStart;
 
+        /// <summary>The selected text when it lies on a single source line; otherwise null (issue #130).</summary>
+        public string? GetSelectedTextOnSingleLine() => engine.GetSelectedTextOnSingleLine();
+
         /// <summary>The size (characters and lines) of the current selection, for the status bar.</summary>
         public SelectionStats GetSelectionStats() => engine.GetSelectionStats();
 
@@ -367,6 +371,8 @@ namespace FujiyNotepad.WinUI.Controls
 
         /// <summary>Sets (or clears, with null) the highlighter that paints every Find match in the viewport.</summary>
         public void SetHighlighter(ILineHighlighter? highlighter) => engine.SetHighlighter(highlighter);
+
+        public void SetSelectionHighlighter(ILineHighlighter? highlighter) => engine.SetSelectionHighlighter(highlighter);
 
         /// <summary>Sets (or clears, with null) the persistent highlight rules painted across the whole file.</summary>
         public void SetHighlightRules(HighlightRuleSet? rules) => engine.SetHighlightRules(rules);
@@ -714,6 +720,17 @@ namespace FujiyNotepad.WinUI.Controls
                     }
                 }
 
+                // Highlight every occurrence of the selected text (issue #130), under the active selection so the
+                // selected occurrence itself reads as the selection colour. The engine leaves this empty while a
+                // Find highlight is active, so Find and selection-occurrence highlighting never paint at once.
+                if (line.SelectionMatches is { Count: > 0 })
+                {
+                    foreach (HighlightRect h in line.SelectionMatches)
+                    {
+                        ds.FillRectangle((float)h.X, ty, (float)h.Width, (float)lineHeight, selectionOccurrenceColor);
+                    }
+                }
+
                 if (line.HasSelection)
                 {
                     ds.FillRectangle((float)line.SelectionX, ty, (float)line.SelectionWidth, (float)lineHeight, selectionColor);
@@ -913,6 +930,7 @@ namespace FujiyNotepad.WinUI.Controls
             caretColor = ToColor(c.Caret);
             selectionColor = ToColor(c.Selection);
             matchHighlightColor = ToColor(c.MatchHighlight);
+            selectionOccurrenceColor = ToColor(c.SelectionOccurrence);
             gutterTextColor = ToColor(c.GutterText);
             gutterSeparatorColor = ToColor(c.GutterSeparator);
             bookmarkColor = ToColor(c.Bookmark);

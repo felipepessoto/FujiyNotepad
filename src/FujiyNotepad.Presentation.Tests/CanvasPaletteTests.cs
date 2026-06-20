@@ -40,6 +40,7 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.Equal(Hc.WindowText, c.Caret);
             Assert.Equal(Hc.Highlight, c.Selection);
             Assert.Equal(Hc.Hotlight, c.MatchHighlight);
+            Assert.Equal(Hc.Hotlight, c.SelectionOccurrence);
             Assert.Equal(Hc.GrayText, c.GutterText);
             Assert.Equal(Hc.GrayText, c.GutterSeparator);
             Assert.Equal(Hc.Hotlight, c.Bookmark);

@@ -172,6 +172,13 @@ try {
     UiMenu 'View' 'Line Numbers';   Assert (-not $proc.HasExited) "Line Numbers toggle did not crash the app"
     UiMenu 'View' 'Show Whitespace'; Assert (-not $proc.HasExited) "Show Whitespace toggle did not crash the app"
 
+    # 8a) Highlight Selection Occurrences (#130): the highlight is Win2D-painted from the current selection, so
+    #     assert the toggle handler runs without crashing (the decision + render model are unit-tested).
+    UiMenu 'View' 'Highlight Selection Occurrences'
+    Assert (-not $proc.HasExited) "Highlight Selection toggle off did not crash"
+    UiMenu 'View' 'Highlight Selection Occurrences'  # toggle back on
+    Assert (-not $proc.HasExited) "Highlight Selection toggle on did not crash"
+
     # 8b) Word Wrap (#31): turning it on wraps long lines and hides the (now meaningless) horizontal scrollbar;
     #     turning it off restores it. The wrap layout math is unit-tested; here we assert the live wiring.
     UiMenu 'View' 'Word Wrap'

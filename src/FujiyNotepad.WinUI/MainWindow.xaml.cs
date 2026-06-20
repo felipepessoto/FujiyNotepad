@@ -891,6 +891,31 @@ namespace FujiyNotepad.WinUI
 
             LblCursor.Text = StatusText.CursorStatus(
                 displayLine, pos.Column, View.GetSelectionStats(), View.GetSelectionTimestampDelta());
+
+            UpdateSelectionHighlight();
+        }
+
+        // Highlights all occurrences of the selected text (issue #130). Driven by every caret/selection change
+        // (this is called from UpdateCursorStatus). The engine stands the highlight down while a Find highlight
+        // is active, so Find always wins; opening/closing a file or entering/leaving the filter collapses the
+        // selection and raises CaretChanged, which clears the highlighter here. The last applied term is cached
+        // so the common case (caret navigation with no selection) is a no-op — no highlighter rebuild, no redraw.
+        private string? selectionHighlightTerm;
+
+        private void UpdateSelectionHighlight()
+        {
+            string? term = HighlightSelectionToggle.IsChecked
+                ? SelectionHighlightPolicy.TermFor(View.GetSelectedTextOnSingleLine(), isSingleLine: true)
+                : null;
+
+            if (term == selectionHighlightTerm)
+            {
+                return;
+            }
+
+            selectionHighlightTerm = term;
+            View.SetSelectionHighlighter(
+                term is null ? null : new LiteralLineHighlighter(term, ignoreCase: false, wholeWord: false));
         }
 
         private void VScroll_Scroll(object sender, ScrollEventArgs e)
@@ -2518,6 +2543,14 @@ namespace FujiyNotepad.WinUI
             View.FocusCanvas();
         }
 
+        private void HighlightSelection_Click(object sender, RoutedEventArgs e)
+        {
+            settings.HighlightSelectionOccurrences = HighlightSelectionToggle.IsChecked;
+            settingsStore.Save(settings);
+            UpdateSelectionHighlight();
+            View.FocusCanvas();
+        }
+
         private void Theme_Click(object sender, RoutedEventArgs e)
         {
             if (sender is RadioMenuFlyoutItem item && item.Tag is string theme)
@@ -2781,6 +2814,8 @@ namespace FujiyNotepad.WinUI
             WordWrapToggle.IsChecked = settings.WordWrap;
             View.WordWrap = settings.WordWrap;
             UpdateScrollBarVisibility();
+
+            HighlightSelectionToggle.IsChecked = settings.HighlightSelectionOccurrences;
 
             string theme = settings.Theme is "Light" or "Dark" ? settings.Theme : "System";
             ThemeSystem.IsChecked = theme == "System";
