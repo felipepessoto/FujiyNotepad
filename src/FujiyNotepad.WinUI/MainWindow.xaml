@@ -118,6 +118,7 @@
             <MenuBarItem x:Uid="ViewMenu" x:Name="ViewMenu" Title="View">
                 <ToggleMenuFlyoutItem x:Uid="LineNumbersToggle" x:Name="LineNumbersToggle" Text="Line Numbers" Click="LineNumbers_Click" />
                 <ToggleMenuFlyoutItem x:Uid="WhitespaceToggle" x:Name="WhitespaceToggle" Text="Show Whitespace" Click="Whitespace_Click" />
+                <ToggleMenuFlyoutItem x:Uid="WordWrapToggle" x:Name="WordWrapToggle" Text="Word Wrap" Click="WordWrap_Click" />
                 <ToggleMenuFlyoutItem x:Uid="FollowTailToggle" x:Name="FollowTailToggle" Text="Follow Tail" Click="FollowTail_Click" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem x:Uid="ZoomInItem" Text="Zoom In" Click="ZoomIn_Click">

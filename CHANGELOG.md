@@ -8,6 +8,11 @@ tag per published build. Each release also has downloadable builds and notes on 
 ## [Unreleased]
 
 ### Added
+- **Word wrap** — **View ▸ Word Wrap** wraps long lines to the window width instead of scrolling sideways
+  (the horizontal scrollbar hides while it's on). It keeps the constant-memory model — the file still scrolls
+  by source line, so even multi-gigabyte files wrap instantly — and the setting persists across sessions.
+
+### Added
 - **Reopen last file on startup** — launching with no file now reopens the file you had open, scrolled back to
   where you left it (first visible line and caret), so resuming a big log is instant. Toggle it off any time
   with **File ▸ Reopen Last File on Startup** (which also forgets the remembered file). Closing a file

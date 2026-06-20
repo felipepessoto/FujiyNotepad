@@ -373,6 +373,24 @@ namespace FujiyNotepad.WinUI.Controls
             set => engine.ShowWhitespace = value;
         }
 
+        /// <summary>Word wrap (issue #31): wrap long lines to the viewport width instead of scrolling sideways.
+        /// Re-syncs the scrollbars (the horizontal one is hidden while wrapping) and repaints.</summary>
+        public bool WordWrap
+        {
+            get => engine.WordWrap;
+            set
+            {
+                if (engine.WordWrap == value)
+                {
+                    return;
+                }
+                Ready();
+                engine.WordWrap = value;
+                ViewChanged?.Invoke();
+                canvas?.Invalidate();
+            }
+        }
+
         public void FocusCanvas() => Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
 
         /// <summary>Copies the current selection to the clipboard (no-op when nothing is selected).</summary>
@@ -772,6 +790,11 @@ namespace FujiyNotepad.WinUI.Controls
 
             foreach (VisibleLine line in lines)
             {
+                if (line.IsWrapContinuation)
+                {
+                    continue; // the line number and bookmark tick belong only to a wrapped line's first row
+                }
+
                 if (line.IsBookmarked)
                 {
                     // A small dot near the gutter's left edge (numbers are right-aligned, so this stays clear).

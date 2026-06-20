@@ -30,6 +30,7 @@ namespace FujiyNotepad.Presentation.Tests
                     LastSessionFirstVisibleLine = 4200,
                     LastSessionCaretLine = 4321,
                     LastSessionCaretColumn = 7,
+                    WordWrap = true,
                 };
 
                 store.Save(saved);
@@ -47,6 +48,7 @@ namespace FujiyNotepad.Presentation.Tests
                 Assert.Equal(4200, loaded.LastSessionFirstVisibleLine);
                 Assert.Equal(4321, loaded.LastSessionCaretLine);
                 Assert.Equal(7, loaded.LastSessionCaretColumn);
+                Assert.True(loaded.WordWrap);
             }
             finally
             {

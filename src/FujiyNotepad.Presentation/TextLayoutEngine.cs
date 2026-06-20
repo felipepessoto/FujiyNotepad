@@ -130,6 +130,12 @@ namespace FujiyNotepad.Presentation
         /// a display column, width, kind (space/tab/control) and whether it is part of the trailing run.
         /// </summary>
         public IReadOnlyList<WhitespaceMarker> Whitespace { get; init; }
+
+        /// <summary>
+        /// In word-wrap mode, true for the 2nd…Nth display rows of a wrapped source line (the gutter shows the
+        /// line number only on the first row). Always false in the non-wrap, one-row-per-line model.
+        /// </summary>
+        public bool IsWrapContinuation { get; init; }
     }
 
     /// <summary>
@@ -182,6 +188,13 @@ namespace FujiyNotepad.Presentation
         private int firstVisibleLine;
         private double horizontalOffset;
         private double horizontalExtentPx;
+
+        // Word wrap (issue #31). When on, one source line renders as N display rows wrapped to the viewport
+        // width, and there is no horizontal scroll. The vertical scrollbar stays in *source-line* units (so the
+        // constant-memory "extent = line count" model is preserved); firstVisibleRow is which wrapped row of
+        // firstVisibleLine sits at the very top, giving smooth scrolling through a line longer than the viewport.
+        private bool wordWrap;
+        private int firstVisibleRow;
 
         private TextPosition caret;
         private TextPosition anchor;
@@ -253,10 +266,52 @@ namespace FujiyNotepad.Presentation
 
         public int TotalLines => totalLines;
         public int FullyVisibleLineCount => lineHeight > 0 ? Math.Max(1, (int)(ViewportHeight / lineHeight)) : 1;
-        public int MaxFirstLine => Math.Max(0, totalLines - FullyVisibleLineCount);
+        public int MaxFirstLine => wordWrap
+            ? Math.Max(0, totalLines - 1)
+            : Math.Max(0, totalLines - FullyVisibleLineCount);
         public double CharWidthPx => charWidth;
         public double HorizontalExtentPx => Math.Max(horizontalExtentPx, ViewportWidth);
         public TextPosition CaretPosition => caret;
+
+        /// <summary>
+        /// Word wrap (issue #31). Off by default — the whole non-wrap path is unchanged. Turning it on clears
+        /// the horizontal scroll, keeps the current source line at the top, and re-lays out.
+        /// </summary>
+        public bool WordWrap
+        {
+            get => wordWrap;
+            set
+            {
+                if (wordWrap == value)
+                {
+                    return;
+                }
+                wordWrap = value;
+                firstVisibleRow = 0;
+                horizontalOffset = 0;
+                firstVisibleLine = Math.Clamp(firstVisibleLine, 0, MaxFirstLine);
+                RaiseViewChanged();
+                RaiseRedraw();
+            }
+        }
+
+        // The wrap budget in display columns: the viewport width minus the gutter, left padding and a right
+        // padding, divided by the cell width. At least 1 so a line always makes progress.
+        private int WrapColumns
+        {
+            get
+            {
+                if (charWidth <= 0)
+                {
+                    return 1;
+                }
+                double avail = ViewportWidth - TextOriginX - TextPadding;
+                return Math.Max(1, (int)Math.Floor(avail / charWidth));
+            }
+        }
+
+        private IReadOnlyList<LineWrapper.WrapRow> WrapRowsOf(int lineIndex) =>
+            LineWrapper.Wrap(GetColumns(lineIndex), WrapColumns);
 
         /// <summary>
         /// The raw source text of the line the caret is on, for screen readers (issue #75). Bounded to a single
@@ -461,6 +516,7 @@ namespace FujiyNotepad.Presentation
             provider = newProvider;
             totalLines = newProvider?.LineCount ?? 0;
             firstVisibleLine = 0;
+            firstVisibleRow = 0;
             horizontalOffset = 0;
             caret = anchor = new TextPosition(0, 0);
             desiredColumn = -1;
@@ -588,13 +644,21 @@ namespace FujiyNotepad.Presentation
             anchor = new TextPosition(lineIndex, start);
             caret = new TextPosition(lineIndex, end);
             desiredColumn = -1;
-            // Only scroll when the match line is off-screen; if it is already visible, keep the scroll
-            // position and just highlight (the horizontal nudge below is a no-op when it is fully visible).
-            if (lineIndex < firstVisibleLine || lineIndex >= firstVisibleLine + FullyVisibleLineCount)
+            if (wordWrap)
             {
-                SetFirstVisibleLine(Math.Min(lineIndex, MaxFirstLine));
+                // Make the match's wrapped row visible (the match may be deep in a long, wrapped line).
+                EnsureCaretVisibleVerticallyWrapped();
             }
-            EnsureCaretVisibleHorizontally();
+            else
+            {
+                // Only scroll when the match line is off-screen; if it is already visible, keep the scroll
+                // position and just highlight (the horizontal nudge below is a no-op when it is fully visible).
+                if (lineIndex < firstVisibleLine || lineIndex >= firstVisibleLine + FullyVisibleLineCount)
+                {
+                    SetFirstVisibleLine(Math.Min(lineIndex, MaxFirstLine));
+                }
+                EnsureCaretVisibleHorizontally();
+            }
             RaiseBlinkReset();
             RaiseCaretChanged();
             RaiseRedraw();
@@ -607,11 +671,12 @@ namespace FujiyNotepad.Presentation
         private void SetFirstVisibleLine(int value)
         {
             value = Math.Clamp(value, 0, MaxFirstLine);
-            if (value == firstVisibleLine)
+            if (value == firstVisibleLine && firstVisibleRow == 0)
             {
                 return;
             }
             firstVisibleLine = value;
+            firstVisibleRow = 0; // a source-line scroll (scrollbar/Go To) lands at the top of that line
             RaiseViewChanged();
             RaiseRedraw();
         }
@@ -634,7 +699,14 @@ namespace FujiyNotepad.Presentation
         {
             int linesPerNotch = 3;
             int lines = -(delta / 120) * linesPerNotch;
-            SetFirstVisibleLine(firstVisibleLine + lines);
+            if (wordWrap)
+            {
+                ScrollDisplayRows(lines);
+            }
+            else
+            {
+                SetFirstVisibleLine(firstVisibleLine + lines);
+            }
         }
 
         #endregion
@@ -713,11 +785,11 @@ namespace FujiyNotepad.Presentation
             // Auto-scroll when dragging past the top/bottom edge.
             if (y < 0)
             {
-                SetFirstVisibleLine(firstVisibleLine - 1);
+                if (wordWrap) { ScrollDisplayRows(-1); } else { SetFirstVisibleLine(firstVisibleLine - 1); }
             }
             else if (y > ViewportHeight)
             {
-                SetFirstVisibleLine(firstVisibleLine + 1);
+                if (wordWrap) { ScrollDisplayRows(1); } else { SetFirstVisibleLine(firstVisibleLine + 1); }
             }
 
             caret = HitTest(x, y);
@@ -731,6 +803,11 @@ namespace FujiyNotepad.Presentation
             if (provider == null || totalLines == 0 || lineHeight <= 0)
             {
                 return new TextPosition(0, 0);
+            }
+
+            if (wordWrap)
+            {
+                return HitTestWrapped(x, y);
             }
 
             int line = firstVisibleLine + (int)Math.Floor(y / lineHeight);
@@ -768,16 +845,16 @@ namespace FujiyNotepad.Presentation
                     MoveCaretByChar(+1, shift);
                     break;
                 case NavKey.Up:
-                    MoveCaretByLine(-1, shift);
+                    if (wordWrap) { MoveCaretByDisplayRow(-1, shift); } else { MoveCaretByLine(-1, shift); }
                     break;
                 case NavKey.Down:
-                    MoveCaretByLine(+1, shift);
+                    if (wordWrap) { MoveCaretByDisplayRow(+1, shift); } else { MoveCaretByLine(+1, shift); }
                     break;
                 case NavKey.PageUp:
-                    MoveCaretByLine(-FullyVisibleLineCount, shift);
+                    if (wordWrap) { MoveCaretByDisplayRow(-VisibleRowCount, shift); } else { MoveCaretByLine(-FullyVisibleLineCount, shift); }
                     break;
                 case NavKey.PageDown:
-                    MoveCaretByLine(+FullyVisibleLineCount, shift);
+                    if (wordWrap) { MoveCaretByDisplayRow(+VisibleRowCount, shift); } else { MoveCaretByLine(+FullyVisibleLineCount, shift); }
                     break;
                 case NavKey.LineStart:
                     MoveCaretTo(new TextPosition(caret.Line, 0), shift);
@@ -870,11 +947,146 @@ namespace FujiyNotepad.Presentation
             {
                 desiredColumn = -1;
             }
-            EnsureCaretVisibleVertically();
-            EnsureCaretVisibleHorizontally();
+            if (wordWrap)
+            {
+                EnsureCaretVisibleVerticallyWrapped();
+            }
+            else
+            {
+                EnsureCaretVisibleVertically();
+                EnsureCaretVisibleHorizontally();
+            }
             RaiseBlinkReset();
             RaiseCaretChanged();
             RaiseRedraw();
+        }
+
+        // ----- Word-wrap navigation/scrolling (issue #31). Only reached when WordWrap is on. -----
+
+        private int VisibleRowCount => lineHeight > 0 ? Math.Max(1, (int)(ViewportHeight / lineHeight)) : 1;
+
+        private static int ComparePos(int line1, int row1, int line2, int row2)
+            => line1 != line2 ? line1.CompareTo(line2) : row1.CompareTo(row2);
+
+        // Advances a (source line, wrapped row) position by <paramref name="delta"/> display rows (negative =
+        // up), clamping at the document's first/last row.
+        private (int line, int row) AdvanceDisplayRows(int line, int row, int delta)
+        {
+            int wrapCols = WrapColumns;
+            while (delta > 0)
+            {
+                int rowsInLine = LineWrapper.RowCount(GetColumns(line), wrapCols);
+                if (row + 1 < rowsInLine)
+                {
+                    row++;
+                }
+                else if (line + 1 < totalLines)
+                {
+                    line++;
+                    row = 0;
+                }
+                else
+                {
+                    break;
+                }
+                delta--;
+            }
+            while (delta < 0)
+            {
+                if (row > 0)
+                {
+                    row--;
+                }
+                else if (line > 0)
+                {
+                    line--;
+                    row = LineWrapper.RowCount(GetColumns(line), wrapCols) - 1;
+                }
+                else
+                {
+                    break;
+                }
+                delta++;
+            }
+            return (line, row);
+        }
+
+        private void SetTopPosition(int line, int row)
+        {
+            line = Math.Clamp(line, 0, Math.Max(0, totalLines - 1));
+            row = Math.Max(0, row);
+            if (line == firstVisibleLine && row == firstVisibleRow)
+            {
+                return;
+            }
+            firstVisibleLine = line;
+            firstVisibleRow = row;
+            RaiseViewChanged();
+            RaiseRedraw();
+        }
+
+        private void ScrollDisplayRows(int delta)
+        {
+            (int line, int row) = AdvanceDisplayRows(firstVisibleLine, firstVisibleRow, delta);
+            SetTopPosition(line, row);
+        }
+
+        // Moves the caret up/down by display rows, preserving the visual column within the row (desiredColumn is
+        // the row-local display column here).
+        private void MoveCaretByDisplayRow(int delta, bool shift)
+        {
+            int wrapCols = WrapColumns;
+            LineColumns curCols = GetColumns(caret.Line);
+            IReadOnlyList<LineWrapper.WrapRow> curRows = LineWrapper.Wrap(curCols, wrapCols);
+            int curRow = LineWrapper.RowOfCharIndex(curRows, caret.Column);
+            int caretDisplayCol = curCols.ColumnOfCharIndex(caret.Column);
+
+            if (desiredColumn < 0)
+            {
+                desiredColumn = caretDisplayCol - curRows[curRow].StartColumn;
+            }
+            int localCol = desiredColumn;
+
+            (int line, int row) = AdvanceDisplayRows(caret.Line, curRow, delta);
+            LineColumns cols = GetColumns(line);
+            IReadOnlyList<LineWrapper.WrapRow> rows = LineWrapper.Wrap(cols, wrapCols);
+            row = Math.Clamp(row, 0, rows.Count - 1);
+            int targetDisplayCol = rows[row].StartColumn + localCol;
+            int charIndex = Math.Clamp(cols.CharIndexOfColumn(targetDisplayCol), rows[row].StartChar, rows[row].EndChar);
+            ApplyCaret(new TextPosition(line, charIndex), shift, keepDesired: true);
+        }
+
+        private void EnsureCaretVisibleVerticallyWrapped()
+        {
+            int wrapCols = WrapColumns;
+            int caretRow = LineWrapper.RowOfCharIndex(LineWrapper.Wrap(GetColumns(caret.Line), wrapCols), caret.Column);
+
+            if (ComparePos(caret.Line, caretRow, firstVisibleLine, firstVisibleRow) < 0)
+            {
+                SetTopPosition(caret.Line, caretRow);
+                return;
+            }
+
+            int visible = VisibleRowCount;
+            (int lastLine, int lastRow) = AdvanceDisplayRows(firstVisibleLine, firstVisibleRow, visible - 1);
+            if (ComparePos(caret.Line, caretRow, lastLine, lastRow) > 0)
+            {
+                (int topLine, int topRow) = AdvanceDisplayRows(caret.Line, caretRow, -(visible - 1));
+                SetTopPosition(topLine, topRow);
+            }
+        }
+
+        private TextPosition HitTestWrapped(double x, double y)
+        {
+            int wrapCols = WrapColumns;
+            int rowsDown = Math.Max(0, (int)Math.Floor(y / lineHeight));
+            (int line, int row) = AdvanceDisplayRows(firstVisibleLine, firstVisibleRow, rowsDown);
+            LineColumns columns = GetColumns(line);
+            IReadOnlyList<LineWrapper.WrapRow> rows = LineWrapper.Wrap(columns, wrapCols);
+            row = Math.Clamp(row, 0, rows.Count - 1);
+            double column = (x - TextOriginX) / charWidth + rows[row].StartColumn;
+            int charIndex = Math.Clamp(columns.CharIndexOfColumn(column), rows[row].StartChar, rows[row].EndChar);
+            return new TextPosition(line, charIndex);
         }
 
         private void SelectAll()
@@ -1021,6 +1233,11 @@ namespace FujiyNotepad.Presentation
                 return lines;
             }
 
+            if (wordWrap)
+            {
+                return GetVisibleLinesWrapped(hasFocus, caretVisible);
+            }
+
             int renderCount = (int)Math.Ceiling(ViewportHeight / lineHeight) + 1;
             (TextPosition selStart, TextPosition selEnd) = NormalizedSelection();
             bool hasSelection = selStart != selEnd;
@@ -1069,8 +1286,8 @@ namespace FujiyNotepad.Presentation
                     SelectionWidth = selectionWidth,
                     HasCaret = hasCaret,
                     CaretX = caretX,
-                    Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns),
-                    RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns),
+                    Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns, 0, columns.Source.Length, horizontalOffset),
+                    RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns, 0, columns.Source.Length, horizontalOffset),
                     IsBookmarked = bookmarks.Count > 0 && bookmarks.Contains(lineIndex),
                     Whitespace = showWhitespace
                         ? WhitespaceMarkers.Compute(columns, LineEndingOf(lineIndex))
@@ -1084,6 +1301,89 @@ namespace FujiyNotepad.Presentation
                 horizontalExtentPx = newExtent;
                 RaiseViewChanged();
             }
+            return lines;
+        }
+
+        // Word-wrap render model (issue #31): one source line emits N display rows, each carrying its own sliced
+        // text and row-local selection/caret/highlight positions. The gutter line number and bookmark tick show
+        // only on a line's first row. There is no horizontal scroll, so the extent is just the viewport width.
+        private IReadOnlyList<VisibleLine> GetVisibleLinesWrapped(bool hasFocus, bool caretVisible)
+        {
+            var lines = new List<VisibleLine>();
+            int wrapCols = WrapColumns;
+            (TextPosition selStart, TextPosition selEnd) = NormalizedSelection();
+            bool hasSelection = selStart != selEnd;
+
+            double y = 0;
+            int srcLine = firstVisibleLine;
+            while (srcLine < totalLines && y < ViewportHeight)
+            {
+                LineColumns columns = GetColumns(srcLine);
+                IReadOnlyList<LineWrapper.WrapRow> rows = LineWrapper.Wrap(columns, wrapCols);
+                int startRow = srcLine == firstVisibleLine ? Math.Clamp(firstVisibleRow, 0, rows.Count - 1) : 0;
+
+                for (int r = startRow; r < rows.Count && y < ViewportHeight; r++)
+                {
+                    LineWrapper.WrapRow row = rows[r];
+                    double originPx = row.StartColumn * charWidth;
+
+                    bool rowHasSel = false;
+                    double selX = 0, selW = 0;
+                    if (hasSelection && srcLine >= selStart.Line && srcLine <= selEnd.Line)
+                    {
+                        int selStartChar = srcLine == selStart.Line ? selStart.Column : 0;
+                        int selEndChar = srcLine == selEnd.Line ? selEnd.Column : columns.Source.Length;
+                        int s = Math.Max(selStartChar, row.StartChar);
+                        int e = Math.Min(selEndChar, row.EndChar);
+                        if (e >= s)
+                        {
+                            int startCol = columns.ColumnOfCharIndex(s) - row.StartColumn;
+                            int endCol = columns.ColumnOfCharIndex(e) - row.StartColumn;
+                            // Show the wrap break / newline as selected when the selection continues past this row.
+                            if (srcLine < selEnd.Line || selEndChar > row.EndChar)
+                            {
+                                endCol += 1;
+                            }
+                            double x0 = startCol * charWidth + TextOriginX;
+                            double x1 = endCol * charWidth + TextOriginX;
+                            if (x1 > x0)
+                            {
+                                rowHasSel = true;
+                                selX = x0;
+                                selW = x1 - x0;
+                            }
+                        }
+                    }
+
+                    bool hasCaret = hasFocus && caretVisible && caret.Line == srcLine
+                                    && LineWrapper.RowOfCharIndex(rows, caret.Column) == r;
+                    double caretX = hasCaret
+                        ? (columns.ColumnOfCharIndex(caret.Column) - row.StartColumn) * charWidth + TextOriginX
+                        : 0;
+
+                    lines.Add(new VisibleLine
+                    {
+                        LineIndex = srcLine,
+                        Y = y,
+                        Display = columns.DisplaySlice(row.StartChar, row.EndChar),
+                        TextX = TextOriginX,
+                        HasSelection = rowHasSel,
+                        SelectionX = selX,
+                        SelectionWidth = selW,
+                        HasCaret = hasCaret,
+                        CaretX = caretX,
+                        Matches = highlighter == null ? NoHighlights : ComputeHighlights(columns, row.StartChar, row.EndChar, originPx),
+                        RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns, row.StartChar, row.EndChar, originPx),
+                        IsBookmarked = r == 0 && bookmarks.Count > 0 && bookmarks.Contains(srcLine),
+                        Whitespace = NoWhitespace, // whitespace markers aren't shown in wrap mode (v1)
+                        IsWrapContinuation = r > 0,
+                    });
+                    y += lineHeight;
+                }
+                srcLine++;
+            }
+
+            horizontalExtentPx = ViewportWidth;
             return lines;
         }
 
@@ -1109,10 +1409,10 @@ namespace FujiyNotepad.Presentation
             return columns;
         }
 
-        // Maps the highlighter's character-index match spans on this line to viewport-pixel rectangles, using
-        // the same column/scroll math as the selection. Off-screen rectangles are kept (cheaply clipped by the
-        // renderer); a zero-width span is dropped.
-        private IReadOnlyList<HighlightRect> ComputeHighlights(LineColumns columns)
+        // Maps the highlighter's character-index match spans to viewport-pixel rectangles. Spans are clipped to
+        // [clipStart, clipEnd) (the whole line in non-wrap mode, a wrapped row's char range in wrap mode) and
+        // positioned with originPx as the left scroll/row origin. A zero-width result is dropped.
+        private IReadOnlyList<HighlightRect> ComputeHighlights(LineColumns columns, int clipStart, int clipEnd, double originPx)
         {
             IReadOnlyList<(int Start, int Length)> spans = highlighter!.Find(columns.Source);
             if (spans.Count == 0)
@@ -1123,10 +1423,16 @@ namespace FujiyNotepad.Presentation
             var rects = new List<HighlightRect>(spans.Count);
             foreach ((int start, int length) in spans)
             {
-                int startCol = columns.ColumnOfCharIndex(start);
-                int endCol = columns.ColumnOfCharIndex(start + length);
-                double x0 = startCol * charWidth - horizontalOffset + TextOriginX;
-                double x1 = endCol * charWidth - horizontalOffset + TextOriginX;
+                int s = Math.Max(start, clipStart);
+                int e = Math.Min(start + length, clipEnd);
+                if (e <= s)
+                {
+                    continue;
+                }
+                int startCol = columns.ColumnOfCharIndex(s);
+                int endCol = columns.ColumnOfCharIndex(e);
+                double x0 = startCol * charWidth - originPx + TextOriginX;
+                double x1 = endCol * charWidth - originPx + TextOriginX;
                 if (x1 > x0)
                 {
                     rects.Add(new HighlightRect(x0, x1 - x0));
@@ -1135,9 +1441,9 @@ namespace FujiyNotepad.Presentation
             return rects.Count > 0 ? rects : NoHighlights;
         }
 
-        // Maps the persistent rule set's coloured character spans on this line to viewport-pixel rectangles
-        // (same column/scroll math as ComputeHighlights), carrying each rule's colour through to the renderer.
-        private IReadOnlyList<RuleHighlightRect> ComputeRuleHighlights(LineColumns columns)
+        // Maps the persistent rule set's coloured character spans to viewport-pixel rectangles (same clip/origin
+        // math as ComputeHighlights), carrying each rule's colour through to the renderer.
+        private IReadOnlyList<RuleHighlightRect> ComputeRuleHighlights(LineColumns columns, int clipStart, int clipEnd, double originPx)
         {
             IReadOnlyList<HighlightSpan> spans = highlightRules!.Find(columns.Source);
             if (spans.Count == 0)
@@ -1148,10 +1454,16 @@ namespace FujiyNotepad.Presentation
             var rects = new List<RuleHighlightRect>(spans.Count);
             foreach (HighlightSpan span in spans)
             {
-                int startCol = columns.ColumnOfCharIndex(span.Start);
-                int endCol = columns.ColumnOfCharIndex(span.Start + span.Length);
-                double x0 = startCol * charWidth - horizontalOffset + TextOriginX;
-                double x1 = endCol * charWidth - horizontalOffset + TextOriginX;
+                int s = Math.Max(span.Start, clipStart);
+                int e = Math.Min(span.Start + span.Length, clipEnd);
+                if (e <= s)
+                {
+                    continue;
+                }
+                int startCol = columns.ColumnOfCharIndex(s);
+                int endCol = columns.ColumnOfCharIndex(e);
+                double x0 = startCol * charWidth - originPx + TextOriginX;
+                double x1 = endCol * charWidth - originPx + TextOriginX;
                 if (x1 > x0)
                 {
                     rects.Add(new RuleHighlightRect(x0, x1 - x0, span.Argb));
