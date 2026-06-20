@@ -97,6 +97,7 @@
   <data name="ViewMenu.Title" xml:space="preserve"><value>Exibir</value></data>
   <data name="LineNumbersToggle.Text" xml:space="preserve"><value>Números de Linha</value></data>
   <data name="WhitespaceToggle.Text" xml:space="preserve"><value>Mostrar Espaços em Branco</value></data>
+  <data name="WordWrapToggle.Text" xml:space="preserve"><value>Quebra de Linha</value></data>
   <data name="FollowTailToggle.Text" xml:space="preserve"><value>Acompanhar Final</value></data>
   <data name="ZoomInItem.Text" xml:space="preserve"><value>Ampliar</value></data>
   <data name="ZoomOutItem.Text" xml:space="preserve"><value>Reduzir</value></data>

@@ -172,6 +172,15 @@ try {
     UiMenu 'View' 'Line Numbers';   Assert (-not $proc.HasExited) "Line Numbers toggle did not crash the app"
     UiMenu 'View' 'Show Whitespace'; Assert (-not $proc.HasExited) "Show Whitespace toggle did not crash the app"
 
+    # 8b) Word Wrap (#31): turning it on wraps long lines and hides the (now meaningless) horizontal scrollbar;
+    #     turning it off restores it. The wrap layout math is unit-tested; here we assert the live wiring.
+    UiMenu 'View' 'Word Wrap'
+    Assert (-not $proc.HasExited) "Word Wrap toggle on did not crash"
+    $hScrollHidden = ((winapp ui search 'HScroll' -w $hwnd 2>$null | Out-String) -notmatch 'Found\s+[1-9]')
+    Assert $hScrollHidden "Word Wrap hides the horizontal scrollbar"
+    UiMenu 'View' 'Word Wrap'  # toggle off
+    Assert (-not $proc.HasExited) "Word Wrap toggle off did not crash"
+
     # 9) Menu reachability for features whose effect is Win2D-painted or clipboard-bound: invoke and assert
     #    the handler ran without crashing (a throwing handler would exit the AOT process).
     UiMenu 'Edit' 'Toggle Bookmark';        Assert (-not $proc.HasExited) "Toggle Bookmark did not crash"

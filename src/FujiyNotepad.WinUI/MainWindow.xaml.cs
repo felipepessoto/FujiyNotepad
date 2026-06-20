@@ -875,6 +875,13 @@ namespace FujiyNotepad.WinUI
             }
         }
 
+        // The horizontal scrollbar is meaningless while word-wrap is on (there is no horizontal overflow), so
+        // hide it; show it again when wrap is off.
+        private void UpdateScrollBarVisibility()
+        {
+            HScroll.Visibility = View.WordWrap ? Visibility.Collapsed : Visibility.Visible;
+        }
+
         private void UpdateCursorStatus(TextPosition pos)
         {
             // While filtering, the engine's line index is a filtered row; show the real source line number.
@@ -2501,6 +2508,16 @@ namespace FujiyNotepad.WinUI
             View.FocusCanvas();
         }
 
+        private void WordWrap_Click(object sender, RoutedEventArgs e)
+        {
+            View.WordWrap = WordWrapToggle.IsChecked;
+            settings.WordWrap = WordWrapToggle.IsChecked;
+            settingsStore.Save(settings);
+            UpdateScrollBarVisibility();
+            SyncScrollBars();
+            View.FocusCanvas();
+        }
+
         private void Theme_Click(object sender, RoutedEventArgs e)
         {
             if (sender is RadioMenuFlyoutItem item && item.Tag is string theme)
@@ -2760,6 +2777,10 @@ namespace FujiyNotepad.WinUI
 
             WhitespaceToggle.IsChecked = settings.ShowWhitespace;
             View.ShowWhitespace = settings.ShowWhitespace;
+
+            WordWrapToggle.IsChecked = settings.WordWrap;
+            View.WordWrap = settings.WordWrap;
+            UpdateScrollBarVisibility();
 
             string theme = settings.Theme is "Light" or "Dark" ? settings.Theme : "System";
             ThemeSystem.IsChecked = theme == "System";

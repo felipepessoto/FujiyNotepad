@@ -21,14 +21,34 @@ namespace FujiyNotepad.Core
         // per tab.
         private readonly int[] columnAt;
 
-        private LineColumns(string source, string display, int[] columnAt)
+        // displayIndexAt[i] = index into Display where source character i's expansion begins;
+        // displayIndexAt[Source.Length] == Display.Length. Differs from columnAt only because a wide char
+        // occupies two columns but a single Display char, and a tab occupies several columns and that many
+        // Display spaces. Lets a wrapped row slice the Display string for an arbitrary source-char range.
+        private readonly int[] displayIndexAt;
+
+        private LineColumns(string source, string display, int[] columnAt, int[] displayIndexAt)
         {
             Source = source;
             Display = display;
             this.columnAt = columnAt;
+            this.displayIndexAt = displayIndexAt;
         }
 
         public int TotalColumns => columnAt[Source.Length];
+
+        /// <summary>
+        /// The tab-expanded Display text for the source-char range <c>[startChar, endChar)</c> — the rendered
+        /// text of one wrapped row. Tab stops stay aligned to the whole line (the expansion was computed once).
+        /// </summary>
+        public string DisplaySlice(int startChar, int endChar)
+        {
+            startChar = Math.Clamp(startChar, 0, Source.Length);
+            endChar = Math.Clamp(endChar, startChar, Source.Length);
+            int from = displayIndexAt[startChar];
+            int to = displayIndexAt[endChar];
+            return Display.Substring(from, to - from);
+        }
 
         public static LineColumns Build(string source, int tabSize)
         {
@@ -39,12 +59,14 @@ namespace FujiyNotepad.Core
 
             int n = source.Length;
             var columnAt = new int[n + 1];
+            var displayIndexAt = new int[n + 1];
             var display = new StringBuilder(n);
 
             int col = 0;
             for (int i = 0; i < n; i++)
             {
                 columnAt[i] = col;
+                displayIndexAt[i] = display.Length;
                 char c = source[i];
                 if (c == '\t')
                 {
@@ -59,8 +81,9 @@ namespace FujiyNotepad.Core
                 }
             }
             columnAt[n] = col;
+            displayIndexAt[n] = display.Length;
 
-            return new LineColumns(source, display.ToString(), columnAt);
+            return new LineColumns(source, display.ToString(), columnAt, displayIndexAt);
         }
 
         // East Asian Wide / Fullwidth code points (BMP) that a monospace font renders two cells wide:
