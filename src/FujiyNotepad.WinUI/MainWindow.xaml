@@ -183,28 +183,28 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBox x:Name="FindBox" Grid.Column="0" PlaceholderText="Find" VerticalAlignment="Center"
+            <TextBox x:Uid="FindBox" x:Name="FindBox" Grid.Column="0" PlaceholderText="Find" VerticalAlignment="Center"
                      TextChanged="FindBox_TextChanged" KeyDown="FindBox_KeyDown" />
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                <ToggleButton x:Name="MatchCaseToggle" Content="Aa" MinWidth="36" Padding="6,2"
+                <ToggleButton x:Uid="MatchCaseToggle" x:Name="MatchCaseToggle" Content="Aa" MinWidth="36" Padding="6,2"
                               FontFamily="Consolas" ToolTipService.ToolTip="Match case"
                               AutomationProperties.Name="Match case"
                               Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
-                <ToggleButton x:Name="WholeWordToggle" Content="[ab]" MinWidth="40" Padding="6,2"
+                <ToggleButton x:Uid="WholeWordToggle" x:Name="WholeWordToggle" Content="[ab]" MinWidth="40" Padding="6,2"
                               FontFamily="Consolas" ToolTipService.ToolTip="Match whole word"
                               AutomationProperties.Name="Match whole word"
                               Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
-                <ToggleButton x:Name="RegexToggle" Content=".*" MinWidth="36" Padding="6,2"
+                <ToggleButton x:Uid="RegexToggle" x:Name="RegexToggle" Content=".*" MinWidth="36" Padding="6,2"
                               FontFamily="Consolas" ToolTipService.ToolTip="Use regular expression"
                               AutomationProperties.Name="Use regular expression"
                               Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
             </StackPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                <Button x:Name="FindPrevButton" Content="Find Previous" Click="FindPrev_Click"
+                <Button x:Uid="FindPrevButton" x:Name="FindPrevButton" Content="Find Previous" Click="FindPrev_Click"
                         ToolTipService.ToolTip="Find previous (Shift+F3)" />
-                <Button x:Name="FindNextButton" Content="Find Next" Click="FindNext_Click"
+                <Button x:Uid="FindNextButton" x:Name="FindNextButton" Content="Find Next" Click="FindNext_Click"
                         ToolTipService.ToolTip="Find next (F3)" />
             </StackPanel>
 
@@ -218,11 +218,11 @@
             <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                 <ProgressBar x:Name="FindProgress" Width="100" Minimum="0" Maximum="100"
                              VerticalAlignment="Center" Visibility="Collapsed" />
-                <Button x:Name="FindCancelButton" Content="Cancel" VerticalAlignment="Center"
+                <Button x:Uid="FindCancelButton" x:Name="FindCancelButton" Content="Cancel" VerticalAlignment="Center"
                         Visibility="Collapsed" Click="FindCancel_Click" />
             </StackPanel>
 
-            <Button Grid.Column="6" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
+            <Button x:Uid="FindCloseButton" Grid.Column="6" Content="&#x2715;" VerticalAlignment="Center" Click="FindClose_Click"
                     AutomationProperties.Name="Close find bar"
                     ToolTipService.ToolTip="Close" />
         </Grid>
@@ -236,21 +236,21 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="FilterBox" Grid.Column="0" PlaceholderText="Filter — show only lines that match"
+            <TextBox x:Uid="FilterBox" x:Name="FilterBox" Grid.Column="0" PlaceholderText="Filter — show only lines that match"
                      VerticalAlignment="Center" KeyDown="FilterBox_KeyDown" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                <ToggleButton x:Name="FilterMatchCase" Content="Aa" MinWidth="36" Padding="6,2"
+                <ToggleButton x:Uid="FilterMatchCase" x:Name="FilterMatchCase" Content="Aa" MinWidth="36" Padding="6,2"
                               FontFamily="Consolas" ToolTipService.ToolTip="Match case"
                               AutomationProperties.Name="Match case" />
-                <ToggleButton x:Name="FilterRegex" Content=".*" MinWidth="36" Padding="6,2"
+                <ToggleButton x:Uid="FilterRegex" x:Name="FilterRegex" Content=".*" MinWidth="36" Padding="6,2"
                               FontFamily="Consolas" ToolTipService.ToolTip="Use regular expression"
                               AutomationProperties.Name="Use regular expression" />
             </StackPanel>
-            <Button Grid.Column="2" Content="Apply" Click="FilterApply_Click" VerticalAlignment="Center"
+            <Button x:Uid="FilterApplyButton" Grid.Column="2" Content="Apply" Click="FilterApply_Click" VerticalAlignment="Center"
                     ToolTipService.ToolTip="Show only matching lines (Enter)" />
             <TextBlock x:Name="FilterStatus" Grid.Column="3" VerticalAlignment="Center" Margin="8,0"
                        TextTrimming="CharacterEllipsis" />
-            <Button Grid.Column="4" Content="&#x2715;" VerticalAlignment="Center" Click="FilterClose_Click"
+            <Button x:Uid="FilterCloseButton" Grid.Column="4" Content="&#x2715;" VerticalAlignment="Center" Click="FilterClose_Click"
                     AutomationProperties.Name="Clear filter and close"
                     ToolTipService.ToolTip="Clear filter and close (Esc)" />
         </Grid>

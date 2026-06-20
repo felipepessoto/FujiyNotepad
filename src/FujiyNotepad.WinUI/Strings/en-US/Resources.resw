@@ -137,5 +137,67 @@
   <data name="StdinWindowTitle" xml:space="preserve"><value>&lt;stdin&gt; - Fujiy Notepad</value></data>
   <data name="StatusFollowingSuffix" xml:space="preserve"><value>Following</value></data>
   <data name="StatusCounting" xml:space="preserve"><value>counting…</value></data>
+
+  <!-- ===== Find bar ===== -->
+  <data name="FindBox.PlaceholderText" xml:space="preserve"><value>Find</value></data>
+  <data name="MatchCaseToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match case</value></data>
+  <data name="MatchCaseToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match case</value></data>
+  <data name="WholeWordToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match whole word</value></data>
+  <data name="WholeWordToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match whole word</value></data>
+  <data name="RegexToggle.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="RegexToggle.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="FindPrevButton.Content" xml:space="preserve"><value>Find Previous</value></data>
+  <data name="FindPrevButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Find previous (Shift+F3)</value></data>
+  <data name="FindNextButton.Content" xml:space="preserve"><value>Find Next</value></data>
+  <data name="FindNextButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Find next (F3)</value></data>
+  <data name="FindCancelButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="FindCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Close find bar</value></data>
+  <data name="FindCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Close</value></data>
+
+  <!-- ===== Filter bar ===== -->
+  <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filter — show only lines that match</value></data>
+  <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match case</value></data>
+  <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match case</value></data>
+  <data name="FilterRegex.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="FilterRegex.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="FilterApplyButton.Content" xml:space="preserve"><value>Apply</value></data>
+  <data name="FilterApplyButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Show only matching lines (Enter)</value></data>
+  <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Clear filter and close</value></data>
+  <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Clear filter and close (Esc)</value></data>
+
+  <!-- ===== Dialogs (read via LocalizedStrings) ===== -->
+  <data name="DialogGo" xml:space="preserve"><value>Go</value></data>
+  <data name="DialogCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="DialogOk" xml:space="preserve"><value>OK</value></data>
+  <data name="DialogClose" xml:space="preserve"><value>Close</value></data>
+  <data name="DialogApply" xml:space="preserve"><value>Apply</value></data>
+
+  <data name="GoToLineTitle" xml:space="preserve"><value>Go To Line</value></data>
+  <data name="GoToLinePlaceholder" xml:space="preserve"><value>Line number</value></data>
+  <data name="GoToOffsetTitle" xml:space="preserve"><value>Go To Offset</value></data>
+  <data name="GoToOffsetPlaceholder" xml:space="preserve"><value>Byte offset (decimal, or 0x for hex)</value></data>
+  <data name="GoToPercentTitle" xml:space="preserve"><value>Go To Percentage</value></data>
+  <data name="GoToPercentPlaceholder" xml:space="preserve"><value>Percentage of the file (0-100)</value></data>
+
+  <data name="OpenErrorTitle" xml:space="preserve"><value>Can't open file</value></data>
+  <data name="OpenErrorContent" xml:space="preserve"><value>Could not open “{0}”.
+
+{1}</value></data>
+  <data name="ErrorFileNotFound" xml:space="preserve"><value>The file was not found.</value></data>
+  <data name="ErrorDirNotFound" xml:space="preserve"><value>The folder was not found.</value></data>
+  <data name="ErrorNoPermission" xml:space="preserve"><value>You don't have permission to read it.</value></data>
+
+  <data name="AboutTitle" xml:space="preserve"><value>About</value></data>
+  <data name="AboutVersion" xml:space="preserve"><value>Version {0}</value></data>
+  <data name="AboutDescription" xml:space="preserve"><value>A lightweight Windows viewer for very large text files.</value></data>
+  <data name="AboutLicense" xml:space="preserve"><value>MIT License — Copyright © 2017 Felipe Pessoto</value></data>
+
+  <data name="HighlightRulesTitle" xml:space="preserve"><value>Highlight Rules</value></data>
+  <data name="InsertPresetText" xml:space="preserve"><value>Insert preset</value></data>
+  <data name="InsertPresetName" xml:space="preserve"><value>Insert highlight preset</value></data>
+  <data name="HighlightRulesHelp" xml:space="preserve"><value>One rule per line:  color[/flags] pattern
+Colors: red, orange, amber, yellow, green, teal, blue, cyan, purple, pink, gray, or #RRGGBB.
+Flags: /regex and/or /case (e.g. blue/regex,case).  Lines starting with # are comments.</value></data>
 </root>
+
 

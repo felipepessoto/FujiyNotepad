@@ -34,17 +34,33 @@ Title = LocalizedStrings.Format("WindowTitleWithFile", Path.GetFileName(path)); 
 ## Adding a translation
 
 Copy `Strings/en-US/Resources.resw` to `Strings/<bcp47>/Resources.resw` (e.g. `Strings/pt-BR/`) and translate the
-`<value>`s. To smoke-test a language without changing Windows, set
-`Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = "pt-BR";` early in startup and
-confirm the strings resolve from the new table (falling back to `en-US` for any missing key).
+`<value>`s — a **pt-BR** (Brazilian Portuguese) translation ships as a worked example. Keys must match `en-US`
+exactly; any missing key falls back to `en-US`.
+
+To preview a language **without changing your Windows display language**, set the `FUJIY_LANG` environment
+variable to a BCP-47 tag before launching:
+
+```powershell
+$env:FUJIY_LANG = 'pt-BR'; .\FujiyNotepad.WinUI.exe
+```
+
+(`App.ApplyLanguageOverride` reads it and sets `ApplicationLanguages.PrimaryLanguageOverride` before any string
+resolves.) Unset it to follow Windows. Numbers stay culture-aware via `:N0` / `CurrentCulture`.
 
 ## Status / what is converted
 
-- Done: the whole **menu bar** (titles + items) and the interactive **status-bar links**, plus the key
-  **code-behind** strings (window title, `<stdin>` title, the "Following" status, "counting…") — these establish
-  every binding pattern the app uses and are verified to resolve under Native AOT.
-- Intentionally left literal: proper nouns / technical identifiers (font family names, encoding names like
-  `UTF-8`, the tab-width digits).
-- Follow-up (same pattern): the Find/Filter bar tooltips and `AutomationProperties.Name`s, and the
-  `ContentDialog` bodies built in code (Go To…, About, Highlight Rules, error dialogs). Move each into the
-  `.resw` and read it via `x:Uid` (attached-property syntax) or `LocalizedStrings`.
+- **Done:** the whole **menu bar**, the **Find/Filter bars** (placeholders, button text, tooltips, and
+  `AutomationProperties.Name`s via the attached-property `x:Uid` syntax), the interactive **status-bar links**,
+  and **every code-behind string** — window/`<stdin>` titles, status (`Following`, `counting…`), all
+  **dialogs** (Go To Line/Offset/Percentage, the open-error dialog, About, Highlight Rules). Verified to resolve
+  in **en-US and pt-BR** under Native AOT.
+- **Intentionally left literal:** proper nouns / technical identifiers — font family names, encoding names
+  (`UTF-8`, …), the tab-width digits, and the highlight-rule colour/flag keywords the parser accepts
+  (`red`, `/regex`, …), which the user types verbatim.
+
+## Gotchas
+
+- Code-behind `LocalizedStrings.Get/Format` needs **flat** keys (`InsertPresetText`); the dotted
+  `Element.Property` form is only for XAML `x:Uid`. The Windows App SDK `ResourceLoader.GetString` **throws**
+  for a missing key, so `LocalizedStrings.Get` catches it and returns the key as a visible fallback.
+

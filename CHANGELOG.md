@@ -30,11 +30,11 @@ tag per published build. Each release also has downloadable builds and notes on 
   (Windows-1252) still show the count instantly, since it equals the byte count.
 
 ### Internal
-- **Localization scaffolding** — user-facing strings now resolve from a `Strings/en-US/Resources.resw` resource
-  table instead of being hardcoded: the menu bar and status-bar links bind via `x:Uid`, and code-behind strings
-  go through a new AOT-safe `LocalizedStrings` (Windows App SDK `ResourceLoader`) helper. English is the default;
-  translating is now a matter of adding a `Strings/<lang>/Resources.resw` (see `Strings/README.md`). No visible
-  change for English users.
+- **Localization** — user-facing strings now resolve from resource tables (`Strings/<lang>/Resources.resw`)
+  instead of being hardcoded: the menu bar, Find/Filter bars, status-bar links, and all dialogs bind via
+  `x:Uid` or a new AOT-safe `LocalizedStrings` (`ResourceLoader`) helper. A **Brazilian Portuguese (pt-BR)**
+  translation ships as a worked example; set the `FUJIY_LANG` environment variable (e.g. `pt-BR`) to preview a
+  language without changing Windows. English is the default/fallback — no visible change for English users.
 
 ## [4.9.0] - 2026-06-19
 

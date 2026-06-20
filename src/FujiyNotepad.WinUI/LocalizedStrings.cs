@@ -16,8 +16,17 @@ namespace FujiyNotepad.WinUI
         /// <summary>Returns the localized string for <paramref name="key"/>, or the key itself if missing.</summary>
         public static string Get(string key)
         {
-            string value = Loader.GetString(key);
-            return string.IsNullOrEmpty(value) ? key : value;
+            try
+            {
+                string value = Loader.GetString(key);
+                return string.IsNullOrEmpty(value) ? key : value;
+            }
+            catch
+            {
+                // ResourceLoader.GetString throws (NamedResource Not Found) for a missing key rather than
+                // returning empty; degrade gracefully to the key so a missing string never crashes the UI.
+                return key;
+            }
         }
 
         /// <summary>Returns the localized format string for <paramref name="key"/> filled with <paramref name="args"/>.</summary>
