@@ -98,6 +98,39 @@ namespace FujiyNotepad.Presentation.Tests
         }
 
         [Fact]
+        public async Task GetVisibleLines_CaretSharesItsLineTop()
+        {
+            // The caret is now a composition overlay positioned from its line's top, so the caret's Y must equal
+            // that line's top exactly — an exact multiple of the (device-snapped) line height, never a sub-pixel.
+            // This locks the vertical contract the overlay relies on for the user's "click the second line" repro.
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 100), cw: 10, lh: 20, vw: 100, vh: 200);
+            e.SelectMatch(1, 0, 0); // caret on the second line, no selection
+
+            IReadOnlyList<VisibleLine> lines = e.GetVisibleLines(hasFocus: true, caretVisible: true);
+            VisibleLine caretLine = lines.Single(l => l.HasCaret);
+
+            Assert.Equal(1, caretLine.LineIndex);
+            Assert.Equal(20.0, caretLine.Y);                       // 1 * lineHeight
+            Assert.Equal(caretLine.LineIndex * 20.0, caretLine.Y); // shares the line's top exactly
+        }
+
+        [Fact]
+        public async Task GetVisibleLines_CaretYTracksScroll()
+        {
+            // When the view is scrolled, the caret's Y is measured from the top of the visible range, still landing
+            // on an exact line-height multiple, so the overlay tracks the text instead of drifting off the grid.
+            TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 100), cw: 10, lh: 20, vw: 100, vh: 200);
+            e.FirstVisibleLine = 10;
+            e.SelectMatch(12, 0, 0); // caret two rows below the top of the scrolled view
+
+            IReadOnlyList<VisibleLine> lines = e.GetVisibleLines(hasFocus: true, caretVisible: true);
+            VisibleLine caretLine = lines.Single(l => l.HasCaret);
+
+            Assert.Equal(12, caretLine.LineIndex);
+            Assert.Equal(40.0, caretLine.Y); // (12 - 10) * lineHeight
+        }
+
+        [Fact]
         public async Task GetVisibleLines_SelectionSpanOnSingleLine()
         {
             TextLayoutEngine e = await NewEngineAsync(TestData.RepeatLines("ABCDE", 5), cw: 10, lh: 20);

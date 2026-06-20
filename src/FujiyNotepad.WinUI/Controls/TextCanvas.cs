@@ -68,6 +68,15 @@ namespace FujiyNotepad.WinUI.Controls
         private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer caretTimer;
         private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer autoScrollTimer;
 
+        // The caret is a composition OVERLAY (a 1px element above the Win2D surface), not part of the text
+        // drawing. Blinking toggles only this element's opacity, so a blink never invalidates the canvas and
+        // therefore can never re-rasterize (and jitter) the text — the stability guarantee is structural, not a
+        // pixel-snapping mitigation that unrelated layout changes keep breaking (issues #113 / #75).
+        private readonly Grid rootPanel;
+        private readonly Microsoft.UI.Xaml.Shapes.Rectangle caretElement;
+        private readonly Microsoft.UI.Xaml.Media.TranslateTransform caretTransform;
+        private Microsoft.UI.Xaml.Media.SolidColorBrush? caretBrush;
+
         private bool isSelecting;
         private Point lastPointer;
 
@@ -86,11 +95,31 @@ namespace FujiyNotepad.WinUI.Controls
 
             canvas = new CanvasControl();
             canvas.Draw += OnDraw;
-            Content = canvas;
+
+            // Compose the caret as a sibling overlay above the Win2D surface (see the field remarks). It is
+            // hit-test invisible so clicks still reach the canvas, and starts hidden until focus places it.
+            caretTransform = new Microsoft.UI.Xaml.Media.TranslateTransform();
+            caretElement = new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Width = 1,
+                Height = 1,
+                HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Left,
+                VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Top,
+                IsHitTestVisible = false,
+                Visibility = Microsoft.UI.Xaml.Visibility.Collapsed,
+                RenderTransform = caretTransform,
+            };
+
+            rootPanel = new Grid();
+            rootPanel.Children.Add(canvas);
+            rootPanel.Children.Add(caretElement);
+            Content = rootPanel;
 
             caretTimer = DispatcherQueue.CreateTimer();
             caretTimer.Interval = TimeSpan.FromMilliseconds(530);
-            caretTimer.Tick += (_, _) => { caretBlinkOn = !caretBlinkOn; canvas.Invalidate(); };
+            // The caret blink toggles ONLY the overlay element's opacity. It deliberately does NOT invalidate
+            // the canvas, so the text surface is never redrawn for a blink and therefore can never jitter.
+            caretTimer.Tick += (_, _) => { caretBlinkOn = !caretBlinkOn; caretElement.Opacity = caretBlinkOn ? 1 : 0; };
 
             // Repeats the drag while the pointer is held past the top/bottom edge during a selection.
             autoScrollTimer = DispatcherQueue.CreateTimer();
@@ -120,13 +149,13 @@ namespace FujiyNotepad.WinUI.Controls
             DoubleTapped += OnDoubleTapped;
             KeyDown += OnKeyDown;
             GotFocus += (_, _) => { hasFocusInternal = true; RestartCaretBlink(); canvas.Invalidate(); };
-            LostFocus += (_, _) => { hasFocusInternal = false; caretTimer.Stop(); canvas.Invalidate(); };
-            SizeChanged += (_, _) => { SyncViewport(); ViewChanged?.Invoke(); canvas.Invalidate(); };
+            LostFocus += (_, _) => { hasFocusInternal = false; caretTimer.Stop(); caretElement.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed; canvas.Invalidate(); };
+            SizeChanged += (_, _) => { UpdateRootClip(); SyncViewport(); ViewChanged?.Invoke(); canvas.Invalidate(); };
 
             // The Win2D surface paints its own colors, so re-theme it whenever the app theme changes.
             ApplyTheme();
             ActualThemeChanged += (_, _) => ApplyTheme();
-            Loaded += (_, _) => ApplyTheme();
+            Loaded += (_, _) => { UpdateRootClip(); ApplyTheme(); };
 
             // Re-theme when the user toggles Windows High Contrast or switches HC scheme (the event also
             // covers scheme changes). It can fire off the UI thread, so marshal back before repainting.
@@ -629,10 +658,10 @@ namespace FujiyNotepad.WinUI.Controls
             }
 
             // Snap the line height to a whole *device* pixel so every line's top lands on the physical pixel
-            // grid. With a fractional line height, line.Y falls on sub-pixels and Win2D re-rasterizes the text
-            // a pixel up or down between swap-chain buffers on each redraw — a subtle vertical jitter that is
-            // visible while the caret-blink timer repaints the canvas every 530 ms. The snapping math is the
-            // pure, unit-tested PixelSnap so this stability guarantee is covered by automated tests.
+            // grid and the text stays crisp at fractional DPI (e.g. 150%). This is no longer what prevents the
+            // historical caret-blink jitter — the caret is now a composition overlay, so a blink never redraws
+            // the text at all (see the caret overlay remarks) — but keeping tops on the grid avoids sub-pixel
+            // softening. The snapping math is the pure, unit-tested PixelSnap.
             double dpiScale = dpi / 96.0;
             lineHeight = PixelSnap.SnapToDevicePixels(lineHeightRaw, dpiScale);
             lastMetricsDpi = dpi;
@@ -651,7 +680,12 @@ namespace FujiyNotepad.WinUI.Controls
             // The selection keeps its colour even when the canvas isn't focused (e.g. the menu has focus), so
             // it stays clearly visible; only the caret is hidden while unfocused.
             double dpiScale = (canvas.Dpi > 0 ? canvas.Dpi : 96.0) / 96.0;
-            IReadOnlyList<VisibleLine> lines = engine.GetVisibleLines(hasFocusInternal, caretBlinkOn);
+            // Always ask for the caret (caretVisible: true) so its line is reported whenever the surface is
+            // focused; the blink itself is handled by the overlay's opacity, not by toggling this flag, so the
+            // text layout the canvas draws is identical on every redraw.
+            IReadOnlyList<VisibleLine> lines = engine.GetVisibleLines(hasFocusInternal, caretVisible: true);
+            bool caretShown = false;
+            double caretLeftPx = 0, caretTopPx = 0;
             foreach (VisibleLine line in lines)
             {
                 // Snap this line's top to a whole device pixel so the text never lands on a sub-pixel (and so
@@ -694,11 +728,17 @@ namespace FujiyNotepad.WinUI.Controls
 
                 if (line.HasCaret)
                 {
-                    ds.FillRectangle((float)line.CaretX, ty, 1.0f, (float)lineHeight, caretColor);
+                    // The caret is painted as a composition overlay (see UpdateCaretOverlay), not on this
+                    // surface, so a blink never touches the text. Just record where it should go.
+                    caretShown = true;
+                    caretLeftPx = line.CaretX;
+                    caretTopPx = ty;
                 }
             }
 
             DrawGutter(ds, sender, lines);
+
+            UpdateCaretOverlay(caretShown, caretLeftPx, caretTopPx, dpiScale);
         }
 
         // Overlays markers for spaces (dot), tabs (arrow) and other control chars (box) when "Show Whitespace"
@@ -813,12 +853,43 @@ namespace FujiyNotepad.WinUI.Controls
         private void RestartCaretBlink()
         {
             caretBlinkOn = true;
+            caretElement.Opacity = 1; // show the caret solid immediately on a move/type, then resume blinking
             if (hasFocusInternal)
             {
                 caretTimer.Stop();
                 caretTimer.Start();
             }
         }
+
+        // Positions (and shows/hides) the composition caret overlay from the freshly computed layout. The caret
+        // is intentionally NOT drawn on the Win2D surface: keeping it a separate overlay means the 530 ms blink
+        // toggles only this element's opacity and never invalidates the canvas, so the text is never
+        // re-rasterized for a blink and cannot jitter (issues #113 / #75 — made structural rather than a
+        // pixel-snapping mitigation). The left edge is snapped to a device pixel so the 1px bar stays crisp.
+        private void UpdateCaretOverlay(bool show, double leftPx, double topPx, double dpiScale)
+        {
+            // Hide when unfocused / off-screen, or when a horizontal scroll has pushed the caret column under the
+            // fixed gutter or past the right edge (the overlay sits above the gutter, so unlike the old in-surface
+            // caret it would otherwise paint over it).
+            if (!show || leftPx < engine.GutterWidthPx || leftPx > ActualWidth || topPx < 0 || topPx >= ActualHeight)
+            {
+                caretElement.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+                return;
+            }
+
+            double widthDip = dpiScale > 0 ? 1.0 / dpiScale : 1.0; // exactly one device pixel, for a crisp bar
+            caretTransform.X = PixelSnap.SnapToDevicePixels(leftPx, dpiScale);
+            caretTransform.Y = topPx; // already device-snapped (the line top), so it shares the text's pixel grid
+            caretElement.Width = widthDip;
+            caretElement.Height = lineHeight;
+            caretElement.Opacity = caretBlinkOn ? 1 : 0;
+            caretElement.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+        }
+
+        // Clips the overlay host to the control bounds so a caret on a partially visible bottom line can't paint
+        // past the edge. Cheap and only re-evaluated on size changes.
+        private void UpdateRootClip() =>
+            rootPanel.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry { Rect = new Rect(0, 0, ActualWidth, ActualHeight) };
 
         // Unpacks a 0xAARRGGBB highlight-rule colour into a Win2D Color.
         private static Color ToColor(uint argb) =>
@@ -848,6 +919,17 @@ namespace FujiyNotepad.WinUI.Controls
             whitespaceColor = ToColor(c.Whitespace);
             trailingWhitespaceColor = ToColor(c.TrailingWhitespace);
             controlCharColor = ToColor(c.ControlChar);
+
+            // The overlay caret uses a XAML brush (it isn't painted by Win2D); keep it in sync with the palette.
+            if (caretBrush is null)
+            {
+                caretBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(caretColor);
+                caretElement.Fill = caretBrush;
+            }
+            else
+            {
+                caretBrush.Color = caretColor;
+            }
 
             canvas?.Invalidate();
         }

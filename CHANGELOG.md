@@ -24,9 +24,12 @@ tag per published build. Each release also has downloadable builds and notes on 
   focused but its content was opaque to screen readers.
 
 ### Fixed
-- **Text stays rock-steady** — hardened the fix that stops the text shifting up/down by a pixel as the caret
-  blinks: line heights and line tops are snapped to whole physical pixels through a now unit-tested helper, so
-  the text no longer shimmers (e.g. it stayed visibly stable against the Narrator focus outline).
+- **Text stays rock-steady on caret blink** — the caret is now drawn as a separate composition overlay above
+  the text surface, so the blink toggles only the caret and no longer repaints (and re-rasterizes) the text.
+  This makes the long-standing "text shifts up/down by a pixel as the caret blinks" problem *structurally*
+  impossible — at any display scale (it was most visible at 150%) and regardless of future layout changes —
+  rather than relying on every redraw staying perfectly pixel-aligned. Line heights and tops are still snapped
+  to whole physical pixels to keep the text crisp.
 
 ### Changed
 - **Faster open for very large files** — the exact character count is no longer computed with a full-file
