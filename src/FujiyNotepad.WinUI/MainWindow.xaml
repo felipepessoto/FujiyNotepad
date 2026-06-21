@@ -30,6 +30,15 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <Grid.Resources>
+            <!-- Shared chrome for the Find/Filter option toggles (Aa, [ab], .*) so the two bars stay consistent. -->
+            <Style x:Key="OptionToggleStyle" TargetType="ToggleButton">
+                <Setter Property="MinWidth" Value="36" />
+                <Setter Property="Padding" Value="6,2" />
+                <Setter Property="FontFamily" Value="Consolas" />
+            </Style>
+        </Grid.Resources>
+
         <MenuBar Grid.Row="0">
             <MenuBarItem x:Uid="FileMenu" Title="File">
                 <MenuFlyoutItem x:Uid="OpenItem" Text="Open..." Click="Open_Click">
@@ -189,16 +198,16 @@
                      TextChanged="FindBox_TextChanged" KeyDown="FindBox_KeyDown" />
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                <ToggleButton x:Uid="MatchCaseToggle" x:Name="MatchCaseToggle" Content="Aa" MinWidth="36" Padding="6,2"
-                              FontFamily="Consolas" ToolTipService.ToolTip="Match case"
+                <ToggleButton x:Uid="MatchCaseToggle" x:Name="MatchCaseToggle" Content="Aa" Style="{StaticResource OptionToggleStyle}"
+                              ToolTipService.ToolTip="Match case"
                               AutomationProperties.Name="Match case"
                               Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
-                <ToggleButton x:Uid="WholeWordToggle" x:Name="WholeWordToggle" Content="[ab]" MinWidth="40" Padding="6,2"
-                              FontFamily="Consolas" ToolTipService.ToolTip="Match whole word"
+                <ToggleButton x:Uid="WholeWordToggle" x:Name="WholeWordToggle" Content="[ab]" Style="{StaticResource OptionToggleStyle}" MinWidth="40"
+                              ToolTipService.ToolTip="Match whole word"
                               AutomationProperties.Name="Match whole word"
                               Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
-                <ToggleButton x:Uid="RegexToggle" x:Name="RegexToggle" Content=".*" MinWidth="36" Padding="6,2"
-                              FontFamily="Consolas" ToolTipService.ToolTip="Use regular expression"
+                <ToggleButton x:Uid="RegexToggle" x:Name="RegexToggle" Content=".*" Style="{StaticResource OptionToggleStyle}"
+                              ToolTipService.ToolTip="Use regular expression"
                               AutomationProperties.Name="Use regular expression"
                               Checked="FindOption_Toggled" Unchecked="FindOption_Toggled" />
             </StackPanel>
@@ -241,11 +250,11 @@
             <TextBox x:Uid="FilterBox" x:Name="FilterBox" Grid.Column="0" PlaceholderText="Filter — show only lines that match"
                      VerticalAlignment="Center" KeyDown="FilterBox_KeyDown" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                <ToggleButton x:Uid="FilterMatchCase" x:Name="FilterMatchCase" Content="Aa" MinWidth="36" Padding="6,2"
-                              FontFamily="Consolas" ToolTipService.ToolTip="Match case"
+                <ToggleButton x:Uid="FilterMatchCase" x:Name="FilterMatchCase" Content="Aa" Style="{StaticResource OptionToggleStyle}"
+                              ToolTipService.ToolTip="Match case"
                               AutomationProperties.Name="Match case" />
-                <ToggleButton x:Uid="FilterRegex" x:Name="FilterRegex" Content=".*" MinWidth="36" Padding="6,2"
-                              FontFamily="Consolas" ToolTipService.ToolTip="Use regular expression"
+                <ToggleButton x:Uid="FilterRegex" x:Name="FilterRegex" Content=".*" Style="{StaticResource OptionToggleStyle}"
+                              ToolTipService.ToolTip="Use regular expression"
                               AutomationProperties.Name="Use regular expression" />
             </StackPanel>
             <Button x:Uid="FilterApplyButton" Grid.Column="2" Content="Apply" Click="FilterApply_Click" VerticalAlignment="Center"
