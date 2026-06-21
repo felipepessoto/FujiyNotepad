@@ -160,6 +160,8 @@
   <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filter — show only lines that match</value></data>
   <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match case</value></data>
   <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match case</value></data>
+  <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match whole word</value></data>
+  <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match whole word</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Use regular expression</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Use regular expression</value></data>
   <data name="FilterApplyButton.Content" xml:space="preserve"><value>Apply</value></data>

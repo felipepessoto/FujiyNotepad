@@ -8,6 +8,10 @@ tag per published build. Each release also has downloadable builds and notes on 
 ## [Unreleased]
 
 ### Added
+- **Match whole word in the Filter bar** — the Filter / grep view now has a **whole-word** (`[ab]`) toggle next to
+  Match case and Regex, matching the Find bar, so you can filter to lines containing a term only as a standalone
+  word (e.g. `id` without matching `width`). It works with the fast literal scan and with the regex toggle (which
+  wraps the pattern in `\b(?:…)\b`).
 - **Progress bar for long operations** — the status bar now shows a determinate progress bar while building the
   line index, running a Filter scan, and generating the sample file, so the wait on a very large file is legible
   instead of just a percentage in text. Sample-file generation can also be **cancelled** with a Cancel button next
