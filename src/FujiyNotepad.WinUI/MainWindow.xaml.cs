@@ -1410,7 +1410,9 @@ namespace FujiyNotepad.WinUI
             }
         }
 
-        // Paints the scrollbar marker margin: find-match ticks (orange, under) and bookmark ticks (blue, on top).
+        // Paints the marker overview-ruler strip beside the scrollbar: find-match ticks (orange, under) and
+        // bookmark ticks (blue, on top). The strip is narrow and left-pinned (see XAML), so the ticks fill its
+        // full width and never reach over the scrollbar thumb (#138).
         private void MarkerMargin_Draw(CanvasControl sender, CanvasDrawEventArgs args)
         {
             if (provider is null)
@@ -1428,14 +1430,14 @@ namespace FujiyNotepad.WinUI
                 Windows.UI.Color matchColor = Windows.UI.Color.FromArgb(255, 0xE0, 0x6C, 0x00);
                 foreach (int row in ScrollbarMarkers.Rows(matchMarks.Buckets, MatchMarks.Resolution, height))
                 {
-                    ds.FillRectangle(2f, row, width - 4f, 2f, matchColor);
+                    ds.FillRectangle(0f, row, width, 2f, matchColor);
                 }
             }
 
             Windows.UI.Color bookmarkColor = Windows.UI.Color.FromArgb(255, 0x2E, 0x8B, 0xE6);
             foreach (int row in ScrollbarMarkers.Rows(View.BookmarkLines, View.TotalLines, height))
             {
-                ds.FillRectangle(2f, row, width - 4f, 2f, bookmarkColor);
+                ds.FillRectangle(0f, row, width, 2f, bookmarkColor);
             }
         }
 

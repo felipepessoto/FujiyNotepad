@@ -7,6 +7,12 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Fixed
+- **Scrollbar stays visible with markers** — the find-match and bookmark ticks on the scrollbar are now drawn
+  in a narrow overview-ruler strip on the inner edge instead of across the whole scrollbar, so they no longer
+  cover the scrollbar thumb. Previously a search that matched many lines painted over the thumb and made the
+  scroll position impossible to find.
+
 ### Internal
 - **Less GC pressure on the search hot path** — the ~1 MiB byte buffer used to scan the file for every Find,
   Find Previous, line-index expansion and filter pass is now rented from a shared pool instead of allocated

@@ -274,10 +274,11 @@
                                   IndicatorMode="MouseIndicator" Visibility="Visible"
                                   Scroll="VScroll_Scroll" />
 
-            <!-- Marker margin: bookmark (and future find-match) ticks painted over the scrollbar track.
-                 Hit-test transparent so the scrollbar underneath still receives clicks/hover. -->
+            <!-- Marker overview-ruler: find-match (orange) and bookmark (blue) ticks in a narrow strip pinned to
+                 the LEFT edge of the scrollbar column, so they never paint over the scrollbar thumb and hide the
+                 scroll position (#138). Hit-test transparent so the scrollbar underneath still gets clicks/hover. -->
             <canvas:CanvasControl x:Name="MarkerMargin" Grid.Row="0" Grid.Column="1"
-                                  Width="16" IsHitTestVisible="False" Draw="MarkerMargin_Draw" />
+                                  Width="6" HorizontalAlignment="Left" IsHitTestVisible="False" Draw="MarkerMargin_Draw" />
 
             <primitives:ScrollBar x:Name="HScroll" Grid.Row="1" Grid.Column="0"
                                   Orientation="Horizontal" Height="16"
