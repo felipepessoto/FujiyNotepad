@@ -365,10 +365,7 @@ namespace FujiyNotepad.WinUI
             source = newSource;
 
             // A fresh open starts with follow off; baseline the tail length for when it is enabled.
-            followTail = false;
-            tailSnapToBottom = false;
-            followTailTimer.Stop();
-            FollowTailToggle.IsChecked = false;
+            ResetFollowTailState();
             tail = new TailController(newSource.Length);
 
             // Auto-detect the encoding (BOM + heuristic) unless the user forced one from the Encoding menu.
@@ -378,12 +375,7 @@ namespace FujiyNotepad.WinUI
             searcher = new TextSearcher(source);
             LineIndexer = new LineIndexer(searcher, currentEncoding);
             provider = new LineProvider(source, LineIndexer, currentEncoding);
-            findCoordinator.Reset();
-            countCts?.Cancel();
-            countedKey = null;
-            FindCount.Text = string.Empty;
-            View.SetHighlighter(null);
-            matchMarks = null; // the margin is repainted by RefreshMarkerMargin() after SetProvider below
+            ResetFindAndCountState();
             ResetFilter();
 
             View.SetProvider(provider);
@@ -400,12 +392,7 @@ namespace FujiyNotepad.WinUI
                 View.HorizontalOffset = restoreHorizontal;
             }
             Title = LocalizedStrings.Format("WindowTitleWithFile", Path.GetFileName(path));
-            EditMenu.IsEnabled = true;
-            EncodingMenu.IsEnabled = true;
-            ReloadItem.IsEnabled = true;
-            CloseItem.IsEnabled = true;
-            CopyPathItem.IsEnabled = true;
-            RevealItem.IsEnabled = true;
+            SetFileCommandsEnabled(true);
             UpdateEncodingUi();
             _ = RefreshCharacterCountAsync();
             UpdateLineEndingLabel();
@@ -455,22 +442,14 @@ namespace FujiyNotepad.WinUI
             indexRefreshTimer.Stop();
 
             // Stop following / watching / spooling and leave any filter view.
-            followTail = false;
-            tailSnapToBottom = false;
-            followTailTimer.Stop();
-            FollowTailToggle.IsChecked = false;
+            ResetFollowTailState();
             StopWatchingFile();
             CleanupStdin();
             ResetFilter();
 
             // Drop find / count / highlight state tied to the file.
-            findCoordinator.Reset();
-            countCts?.Cancel();
-            countedKey = null;
+            ResetFindAndCountState();
             charCountCts?.Cancel();
-            FindCount.Text = string.Empty;
-            View.SetHighlighter(null);
-            matchMarks = null;
 
             // Tear down the engine + byte source and clear pending navigation.
             View.SetProvider(null);
@@ -486,12 +465,7 @@ namespace FujiyNotepad.WinUI
 
             // Back to the empty-state UI (mirrors the XAML defaults before any file is opened).
             Title = LocalizedStrings.Get("AppDisplayName");
-            EditMenu.IsEnabled = false;
-            EncodingMenu.IsEnabled = false;
-            ReloadItem.IsEnabled = false;
-            CloseItem.IsEnabled = false;
-            CopyPathItem.IsEnabled = false;
-            RevealItem.IsEnabled = false;
+            SetFileCommandsEnabled(false);
             CountCharsLink.Visibility = Visibility.Collapsed;
             ReloadHint.Visibility = Visibility.Collapsed;
             LblStatus.Text = string.Empty;
@@ -506,6 +480,38 @@ namespace FujiyNotepad.WinUI
             settingsStore.Save(settings);
 
             View.FocusCanvas();
+        }
+
+        // Resets the "follow tail" state shared by opening a new file and closing the current one.
+        private void ResetFollowTailState()
+        {
+            followTail = false;
+            tailSnapToBottom = false;
+            followTailTimer.Stop();
+            FollowTailToggle.IsChecked = false;
+        }
+
+        // Clears the find / line-count / highlight state tied to the current file (shared by open and close).
+        private void ResetFindAndCountState()
+        {
+            findCoordinator.Reset();
+            countCts?.Cancel();
+            countedKey = null;
+            FindCount.Text = string.Empty;
+            View.SetHighlighter(null);
+            matchMarks = null;
+        }
+
+        // Enables or disables the menu commands that require an open file, kept in one place so the open and
+        // close paths stay in sync.
+        private void SetFileCommandsEnabled(bool enabled)
+        {
+            EditMenu.IsEnabled = enabled;
+            EncodingMenu.IsEnabled = enabled;
+            ReloadItem.IsEnabled = enabled;
+            CloseItem.IsEnabled = enabled;
+            CopyPathItem.IsEnabled = enabled;
+            RevealItem.IsEnabled = enabled;
         }
 
         // (Re)starts watching the open file's folder for external changes and clears any pending hint. Watching

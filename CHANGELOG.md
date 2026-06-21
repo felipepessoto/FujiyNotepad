@@ -41,6 +41,10 @@ tag per published build. Each release also has downloadable builds and notes on 
   around a huge file via Go To Line/Offset/Percentage or the scrollbar) now writes the line offsets straight
   into the cached array instead of via a throwaway list, roughly halving the per-block allocation (measured
   ~16.3 MB -> ~8.3 MB for 1000 cold random line reads on the engine benchmark). No behaviour change.
+- **Less duplicated UI code** — the Find and Filter bars' option toggles (match case / regex) now share a single
+  `OptionToggleStyle`, and the file open and close paths call shared `ResetFollowTailState`,
+  `ResetFindAndCountState` and `SetFileCommandsEnabled` helpers instead of repeating the same reset/teardown and
+  menu-enable blocks (issue #146). No behaviour change.
 
 ## [4.10.0] - 2026-06-19
 
