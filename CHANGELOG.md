@@ -7,6 +7,8 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+## [4.11.0] - 2026-06-21
+
 ### Added
 - **Spark / YARN highlight preset** — the Highlight Rules dialog's **Insert preset** menu has a new
   **Spark / YARN** preset tuned for Apache Spark driver/executor logs: it emphasises scheduler and lifecycle
