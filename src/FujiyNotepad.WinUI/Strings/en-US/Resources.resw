@@ -200,6 +200,11 @@
   <data name="HighlightRulesHelp" xml:space="preserve"><value>One rule per line:  color[/flags] pattern
 Colors: red, orange, amber, yellow, green, teal, blue, cyan, purple, pink, gray, or #RRGGBB.
 Flags: /regex and/or /case (e.g. blue/regex,case).  Lines starting with # are comments.</value></data>
+
+  <!-- ===== Status bar ===== -->
+  <data name="SampleCancelButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="SampleCancelButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Cancel generating the sample file</value></data>
+  <data name="SampleCancelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Cancel sample generation</value></data>
 </root>
 
 

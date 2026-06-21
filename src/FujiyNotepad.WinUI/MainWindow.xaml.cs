@@ -56,6 +56,7 @@ namespace FujiyNotepad.WinUI
         private readonly DispatcherQueueTimer findPreviewTimer;
         private readonly DispatcherQueueTimer followTailTimer;
         private CancellationTokenSource? cancelIndexing;
+        private CancellationTokenSource? sampleGenCts;
 
         // Tail / follow mode (issue #28): poll the file size, resume indexing over appended bytes, and (while the
         // user is at the bottom) stick to the new end. `tail` tracks the last observed length.
@@ -232,13 +233,42 @@ namespace FujiyNotepad.WinUI
             string path = Path.Combine(Path.GetTempPath(), "FujiyNotepadSample-v3.txt");
             if (!File.Exists(path))
             {
-                LblStatus.Text = "Generating sample...";
-                await Task.Run(() => CreateSampleFile(path));
+                var cts = new CancellationTokenSource();
+                sampleGenCts = cts;
+                var progress = new Progress<int>(p =>
+                {
+                    LblStatus.Text = $"Generating sample\u2026 {p}%";
+                    SetStatusProgress(true, p);
+                });
+                LblStatus.Text = "Generating sample\u2026";
+                SetStatusProgress(true, 0);
+                SampleCancelButton.Visibility = Visibility.Visible;
+                try
+                {
+                    await Task.Run(() => CreateSampleFile(path, progress, cts.Token), cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // The writer is disposed as the cancellation unwinds CreateSampleFile, so the partial file's
+                    // handle is released and can be deleted (best-effort).
+                    try { File.Delete(path); } catch { /* leave the partial file if it can't be removed */ }
+                    LblStatus.Text = "Sample generation cancelled";
+                    return;
+                }
+                finally
+                {
+                    sampleGenCts = null;
+                    SetStatusProgress(false);
+                    SampleCancelButton.Visibility = Visibility.Collapsed;
+                }
             }
             await OpenFile(path, addToRecent: false);
         }
 
-        private static void CreateSampleFile(string path)
+        // Cancels an in-progress sample-file generation (the one long op with no other cancel affordance).
+        private void SampleCancel_Click(object sender, RoutedEventArgs e) => sampleGenCts?.Cancel();
+
+        private static void CreateSampleFile(string path, IProgress<int>? progress, CancellationToken token)
         {
             using var writer = new StreamWriter(path);
 
@@ -249,9 +279,24 @@ namespace FujiyNotepad.WinUI
                 writer.WriteLine(line);
             }
 
+            const int total = 10_000_000;
             var random = new Random(1);
-            for (int i = 1; i <= 10_000_000; i++)
+            int lastPercent = -1;
+            for (int i = 1; i <= total; i++)
             {
+                // Check cancellation and report progress periodically rather than every line, so the tight write
+                // loop stays fast and the UI receives at most ~100 updates.
+                if ((i & 0xFFFF) == 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    int percent = (int)((long)i * 100 / total);
+                    if (percent != lastPercent)
+                    {
+                        lastPercent = percent;
+                        progress?.Report(percent);
+                    }
+                }
+
                 writer.Write(i);
                 writer.Write(" - ");
                 writer.WriteLine(new string('x', random.Next(300, 500)));
@@ -440,6 +485,7 @@ namespace FujiyNotepad.WinUI
 
             await StopIndexingAsync();
             indexRefreshTimer.Stop();
+            SetStatusProgress(false); // indexing was cancelled (never marked complete), so hide the bar here
 
             // Stop following / watching / spooling and leave any filter view.
             ResetFollowTailState();
@@ -747,13 +793,28 @@ namespace FujiyNotepad.WinUI
                 : LineEndingDetector.ToLabel(LineEndingDetector.Detect(source, currentEncoding));
         }
 
+        // Shows or hides the shared status-bar progress bar (#144), used by the index rebuild, the filter scan
+        // and sample generation. Determinate: callers pass the 0-100 percent.
+        private void SetStatusProgress(bool active, int percent = 0)
+        {
+            StatusProgress.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+            if (active)
+            {
+                StatusProgress.Value = percent;
+            }
+        }
+
         private void StartIndexing()
         {
             StartIndexingItem.IsEnabled = false;
             StopIndexingItem.IsEnabled = true;
             cancelIndexing = new CancellationTokenSource();
             CancellationToken token = cancelIndexing.Token;
-            var progress = new Progress<int>(p => LblStatus.Text = StatusText.IndexProgress(p));
+            var progress = new Progress<int>(p =>
+            {
+                LblStatus.Text = StatusText.IndexProgress(p);
+                SetStatusProgress(true, p);
+            });
             indexingTask = Task.Run(async () =>
             {
                 try
@@ -821,6 +882,7 @@ namespace FujiyNotepad.WinUI
             {
                 indexRefreshTimer.Stop();
                 StopIndexingItem.IsEnabled = false;
+                SetStatusProgress(false);
                 if (filteredSource is null)
                 {
                     SetLineCountStatus();
@@ -845,6 +907,7 @@ namespace FujiyNotepad.WinUI
             indexRefreshTimer.Stop();
             StartIndexingItem.IsEnabled = true;
             StopIndexingItem.IsEnabled = false;
+            SetStatusProgress(false);
             if (provider is not null)
             {
                 LblStatus.Text = StatusText.LineCount(provider.LineCount) + " (indexing stopped)";
@@ -1584,6 +1647,7 @@ namespace FujiyNotepad.WinUI
                 if (!token.IsCancellationRequested)
                 {
                     FilterStatus.Text = $"Filtering\u2026 {p}%";
+                    SetStatusProgress(true, p);
                 }
             });
 
@@ -1625,13 +1689,17 @@ namespace FujiyNotepad.WinUI
             }
             catch (OperationCanceledException)
             {
+                SetStatusProgress(false);
                 return; // superseded by a newer filter or a clear
             }
             catch (Exception)
             {
+                SetStatusProgress(false);
                 FilterStatus.Text = "Filter failed";
                 return;
             }
+
+            SetStatusProgress(false);
 
             // Ignore a stale result (the file changed or another filter started while we scanned).
             if (token.IsCancellationRequested || !ReferenceEquals(provider, activeProvider))
