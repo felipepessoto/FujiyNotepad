@@ -308,7 +308,17 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="LblStatus" Grid.Column="0" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <TextBlock x:Name="LblStatus" Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+                <!-- Shared determinate progress for the long operations (index rebuild, filter scan, sample
+                     generation); collapsed when idle so it takes no space (#144). -->
+                <ProgressBar x:Name="StatusProgress" Width="120" Minimum="0" Maximum="100" VerticalAlignment="Center"
+                             Visibility="Collapsed" AutomationProperties.AutomationId="StatusProgress"
+                             AutomationProperties.Name="Operation progress" />
+                <Button x:Uid="SampleCancelButton" x:Name="SampleCancelButton" Visibility="Collapsed"
+                        FontSize="12" Padding="8,1" MinHeight="0" VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="SampleCancelButton" Click="SampleCancel_Click" />
+            </StackPanel>
             <HyperlinkButton x:Uid="ReloadHint" x:Name="ReloadHint" Grid.Column="1" Visibility="Collapsed"
                              Content="↻ File changed on disk — Reload" FontSize="12"
                              Padding="6,0" MinHeight="0" Margin="0,0,16,0" VerticalAlignment="Center"

@@ -189,4 +189,9 @@
   <data name="HighlightRulesHelp" xml:space="preserve"><value>Uma regra por linha:  cor[/sinalizadores] padrão
 Cores: red, orange, amber, yellow, green, teal, blue, cyan, purple, pink, gray, ou #RRGGBB.
 Sinalizadores: /regex e/ou /case (ex.: blue/regex,case).  Linhas começando com # são comentários.</value></data>
+
+  <!-- ===== Barra de status ===== -->
+  <data name="SampleCancelButton.Content" xml:space="preserve"><value>Cancelar</value></data>
+  <data name="SampleCancelButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Cancelar a geração do arquivo de exemplo</value></data>
+  <data name="SampleCancelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Cancelar geração de exemplo</value></data>
 </root>

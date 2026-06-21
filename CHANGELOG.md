@@ -7,6 +7,13 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Added
+- **Progress bar for long operations** — the status bar now shows a determinate progress bar while building the
+  line index, running a Filter scan, and generating the sample file, so the wait on a very large file is legible
+  instead of just a percentage in text. Sample-file generation can also be **cancelled** with a Cancel button next
+  to the bar (the index already has *View > Stop Indexing* and a Filter is cancelled with Esc); cancelling sample
+  generation removes the partial file (issue #144).
+
 ## [4.11.0] - 2026-06-21
 
 ### Added
