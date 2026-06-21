@@ -4,8 +4,9 @@ namespace FujiyNotepad.Presentation.Tests
 {
     /// <summary>
     /// Tests the selection-occurrence highlight channel (issue #130) in the render model: it paints every
-    /// occurrence of the selected term via <see cref="VisibleLine.SelectionMatches"/>, stands down while a Find
-    /// highlight is active (Find takes precedence), and the engine slices the single-line selected text.
+    /// occurrence of the selected term via <see cref="VisibleLine.SelectionMatches"/>, coexists with an active
+    /// Find (a different selected word still highlights, while occurrences sitting on a Find match are excluded
+    /// to avoid double-painting), and the engine slices the single-line selected text.
     /// </summary>
     public class EngineSelectionHighlightTests
     {
@@ -48,7 +49,7 @@ namespace FujiyNotepad.Presentation.Tests
         }
 
         [Fact]
-        public async Task FindHighlight_TakesPrecedenceOverSelectionOccurrences()
+        public async Task SelectionOccurrence_OnTheFindTerm_IsExcludedToAvoidDoublePaint()
         {
             TextLayoutEngine e = await NewEngineAsync("ABCDE\nABCDE");
             e.SetSelectionHighlighter(new LiteralLineHighlighter("ABC", ignoreCase: false, wholeWord: false));
@@ -56,9 +57,29 @@ namespace FujiyNotepad.Presentation.Tests
 
             IReadOnlyList<VisibleLine> lines = e.GetVisibleLines(hasFocus: false, caretVisible: false);
 
-            // Find paints; selection-occurrence stands down so the two never paint at once.
+            // Selecting the searched word: Find paints it, and the selection-occurrence span coincides with the
+            // Find match, so it is excluded — no second colour over the Find highlight.
             Assert.Single(lines[0].Matches);
             Assert.Empty(lines[0].SelectionMatches);
+        }
+
+        [Fact]
+        public async Task SelectionOccurrence_OfADifferentWord_CoexistsWithFind()
+        {
+            // "ABC" at [0,3], "XY" at [3,2] on each line.
+            TextLayoutEngine e = await NewEngineAsync("ABCXY\nABCXY");
+            e.SetHighlighter(new LiteralLineHighlighter("ABC", ignoreCase: false, wholeWord: false));      // searching ABC
+            e.SetSelectionHighlighter(new LiteralLineHighlighter("XY", ignoreCase: false, wholeWord: false)); // selected XY
+
+            IReadOnlyList<VisibleLine> lines = e.GetVisibleLines(hasFocus: false, caretVisible: false);
+
+            // Both highlight: Find paints "ABC", and the differently-selected "XY" still paints its occurrences.
+            Assert.Single(lines[0].Matches);
+            Assert.Equal(TextLayoutEngine.TextPadding, lines[0].Matches[0].X);              // ABC at column 0
+            Assert.Single(lines[0].SelectionMatches);
+            Assert.Equal(30.0 + TextLayoutEngine.TextPadding, lines[0].SelectionMatches[0].X); // XY at column 3
+            Assert.Equal(20.0, lines[0].SelectionMatches[0].Width);                          // 2 chars * 10px
+            Assert.Single(lines[1].SelectionMatches);
         }
 
         [Fact]

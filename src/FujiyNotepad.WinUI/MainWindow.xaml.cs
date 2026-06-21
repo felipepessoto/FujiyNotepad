@@ -896,10 +896,11 @@ namespace FujiyNotepad.WinUI
         }
 
         // Highlights all occurrences of the selected text (issue #130). Driven by every caret/selection change
-        // (this is called from UpdateCursorStatus). The engine stands the highlight down while a Find highlight
-        // is active, so Find always wins; opening/closing a file or entering/leaving the filter collapses the
-        // selection and raises CaretChanged, which clears the highlighter here. The last applied term is cached
-        // so the common case (caret navigation with no selection) is a no-op — no highlighter rebuild, no redraw.
+        // (this is called from UpdateCursorStatus). It coexists with an active Find: the engine excludes any
+        // occurrence that sits on a Find match (so selecting the searched word adds no second colour), while a
+        // different selected word still highlights. Opening/closing a file or entering/leaving the filter
+        // collapses the selection and raises CaretChanged, which clears the highlighter here. The last applied
+        // term is cached so the common case (caret navigation with no selection) is a no-op — no rebuild, no redraw.
         private string? selectionHighlightTerm;
 
         private void UpdateSelectionHighlight()

@@ -118,8 +118,10 @@ namespace FujiyNotepad.Presentation
 
         /// <summary>
         /// Highlight rectangles for every occurrence of the selected text on this line (empty when the feature
-        /// is off, there is no qualifying selection, or a Find highlight is active — Find takes precedence).
-        /// Painted under the active selection so the selected occurrence itself reads as the selection colour.
+        /// is off or there is no qualifying selection). Occurrences that coincide with a Find match are excluded,
+        /// so selecting the searched word doesn't double-paint over the Find highlight — but a different selected
+        /// word still highlights alongside an active Find. Painted under the active selection so the selected
+        /// occurrence itself reads as the selection colour.
         /// </summary>
         public IReadOnlyList<HighlightRect> SelectionMatches { get; init; }
 
@@ -539,10 +541,10 @@ namespace FujiyNotepad.Presentation
         /// <summary>
         /// Sets (or clears, with <c>null</c>) the highlighter used to paint every occurrence of the selected
         /// text in the viewport (issue #130), and requests a redraw. This is a separate channel from
-        /// <see cref="SetHighlighter"/> (Find): when a Find highlight is active it takes precedence and the
-        /// selection occurrences stand down, so the two never paint at once. Each visible line's
-        /// <see cref="VisibleLine.SelectionMatches"/> is computed from this highlighter on the next
-        /// <see cref="GetVisibleLines"/>.
+        /// <see cref="SetHighlighter"/> (Find) and coexists with it: occurrences that fall on a Find match are
+        /// excluded (so selecting the searched word adds no second colour), but a different selected word still
+        /// highlights alongside the Find matches. Each visible line's <see cref="VisibleLine.SelectionMatches"/>
+        /// is computed from this highlighter on the next <see cref="GetVisibleLines"/>.
         /// </summary>
         public void SetSelectionHighlighter(ILineHighlighter? value)
         {
@@ -1338,7 +1340,7 @@ namespace FujiyNotepad.Presentation
                     HasCaret = hasCaret,
                     CaretX = caretX,
                     Matches = highlighter == null ? NoHighlights : ComputeHighlights(highlighter, columns, 0, columns.Source.Length, horizontalOffset),
-                    SelectionMatches = (selectionHighlighter == null || highlighter != null) ? NoHighlights : ComputeHighlights(selectionHighlighter, columns, 0, columns.Source.Length, horizontalOffset),
+                    SelectionMatches = selectionHighlighter == null ? NoHighlights : ComputeHighlights(selectionHighlighter, columns, 0, columns.Source.Length, horizontalOffset, exclude: highlighter),
                     RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns, 0, columns.Source.Length, horizontalOffset),
                     IsBookmarked = bookmarks.Count > 0 && bookmarks.Contains(lineIndex),
                     Whitespace = showWhitespace
@@ -1425,7 +1427,7 @@ namespace FujiyNotepad.Presentation
                         HasCaret = hasCaret,
                         CaretX = caretX,
                         Matches = highlighter == null ? NoHighlights : ComputeHighlights(highlighter, columns, row.StartChar, row.EndChar, originPx),
-                        SelectionMatches = (selectionHighlighter == null || highlighter != null) ? NoHighlights : ComputeHighlights(selectionHighlighter, columns, row.StartChar, row.EndChar, originPx),
+                        SelectionMatches = selectionHighlighter == null ? NoHighlights : ComputeHighlights(selectionHighlighter, columns, row.StartChar, row.EndChar, originPx, exclude: highlighter),
                         RuleHighlights = highlightRules == null ? NoRuleHighlights : ComputeRuleHighlights(columns, row.StartChar, row.EndChar, originPx),
                         IsBookmarked = r == 0 && bookmarks.Count > 0 && bookmarks.Contains(srcLine),
                         Whitespace = NoWhitespace, // whitespace markers aren't shown in wrap mode (v1)
@@ -1465,7 +1467,7 @@ namespace FujiyNotepad.Presentation
         // Maps the highlighter's character-index match spans to viewport-pixel rectangles. Spans are clipped to
         // [clipStart, clipEnd) (the whole line in non-wrap mode, a wrapped row's char range in wrap mode) and
         // positioned with originPx as the left scroll/row origin. A zero-width result is dropped.
-        private IReadOnlyList<HighlightRect> ComputeHighlights(ILineHighlighter source, LineColumns columns, int clipStart, int clipEnd, double originPx)
+        private IReadOnlyList<HighlightRect> ComputeHighlights(ILineHighlighter source, LineColumns columns, int clipStart, int clipEnd, double originPx, ILineHighlighter? exclude = null)
         {
             IReadOnlyList<(int Start, int Length)> spans = source.Find(columns.Source);
             if (spans.Count == 0)
@@ -1473,9 +1475,18 @@ namespace FujiyNotepad.Presentation
                 return NoHighlights;
             }
 
+            // The selection-occurrence layer passes the Find highlighter as <paramref name="exclude"/>: any span
+            // that exactly coincides with a Find match is dropped, so selecting the searched word doesn't paint a
+            // second colour over the Find matches, while a different selected word still highlights (#130).
+            IReadOnlyList<(int Start, int Length)>? excludeSpans = exclude?.Find(columns.Source);
+
             var rects = new List<HighlightRect>(spans.Count);
             foreach ((int start, int length) in spans)
             {
+                if (excludeSpans != null && Coincides(excludeSpans, start, length))
+                {
+                    continue;
+                }
                 int s = Math.Max(start, clipStart);
                 int e = Math.Min(start + length, clipEnd);
                 if (e <= s)
@@ -1492,6 +1503,20 @@ namespace FujiyNotepad.Presentation
                 }
             }
             return rects.Count > 0 ? rects : NoHighlights;
+        }
+
+        // True when (start, length) exactly matches one of the spans — used to drop a selection-occurrence span
+        // that sits on a Find match so the two highlight layers never double-paint the same run.
+        private static bool Coincides(IReadOnlyList<(int Start, int Length)> spans, int start, int length)
+        {
+            foreach ((int s, int l) in spans)
+            {
+                if (s == start && l == length)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         // Maps the persistent rule set's coloured character spans to viewport-pixel rectangles (same clip/origin
