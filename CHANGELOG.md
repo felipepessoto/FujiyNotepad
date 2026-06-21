@@ -8,6 +8,10 @@ tag per published build. Each release also has downloadable builds and notes on 
 ## [Unreleased]
 
 ### Fixed
+- **Selection highlighting now works during a search** — selecting a word while the Find bar is active now
+  highlights that word's other occurrences too, alongside the search matches. Previously the selection
+  highlight stood down entirely whenever Find was active. Occurrences that land exactly on a Find match are
+  still skipped, so selecting the searched word itself doesn't paint a second colour over the Find highlights.
 - **Scrollbar stays visible with markers** — the find-match and bookmark ticks on the scrollbar are now drawn
   in a narrow overview-ruler strip on the inner edge instead of across the whole scrollbar, so they no longer
   cover the scrollbar thumb. Previously a search that matched many lines painted over the thumb and made the
