@@ -149,6 +149,8 @@
   <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filtrar — mostrar apenas linhas correspondentes</value></data>
   <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Diferenciar maiúsculas/minúsculas</value></data>
   <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Diferenciar maiúsculas/minúsculas</value></data>
+  <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Coincidir palavra inteira</value></data>
+  <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Coincidir palavra inteira</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Usar expressão regular</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Usar expressão regular</value></data>
   <data name="FilterApplyButton.Content" xml:space="preserve"><value>Aplicar</value></data>

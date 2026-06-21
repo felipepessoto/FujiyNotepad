@@ -1581,11 +1581,15 @@ namespace FujiyNotepad.WinUI
             }
 
             bool matchCase = FilterMatchCase.IsChecked == true;
+            bool wholeWord = FilterWholeWord.IsChecked == true;
             if (FilterRegex.IsChecked == true)
             {
                 try
                 {
-                    var regex = new Regex(term, matchCase ? RegexOptions.None : RegexOptions.IgnoreCase);
+                    // Whole-word wraps the user's pattern in \b(?:…)\b (FindRegexBuilder), mirroring the Find bar.
+                    Regex regex = wholeWord
+                        ? FindRegexBuilder.Build(term, matchCase, wholeWord: true)
+                        : new Regex(term, matchCase ? RegexOptions.None : RegexOptions.IgnoreCase);
                     return line => regex.IsMatch(line);
                 }
                 catch (ArgumentException)
@@ -1593,6 +1597,13 @@ namespace FujiyNotepad.WinUI
                     error = "Invalid regex";
                     return null;
                 }
+            }
+
+            if (wholeWord)
+            {
+                // Literal whole-word: escape the term, then \b-anchor it the same way the Find bar does.
+                Regex regex = FindRegexBuilder.Build(Regex.Escape(term), matchCase, wholeWord: true);
+                return line => regex.IsMatch(line);
             }
 
             StringComparison comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
@@ -1670,6 +1681,7 @@ namespace FujiyNotepad.WinUI
                     var options = new SearchOptions
                     {
                         IgnoreCase = FilterMatchCase.IsChecked != true,
+                        WholeWord = FilterWholeWord.IsChecked == true,
                         UnitAlignment = currentEncoding.CodeUnitSize,
                         BigEndian = currentEncoding.IsBigEndian,
                     };

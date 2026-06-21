@@ -253,6 +253,9 @@
                 <ToggleButton x:Uid="FilterMatchCase" x:Name="FilterMatchCase" Content="Aa" Style="{StaticResource OptionToggleStyle}"
                               ToolTipService.ToolTip="Match case"
                               AutomationProperties.Name="Match case" />
+                <ToggleButton x:Uid="FilterWholeWord" x:Name="FilterWholeWord" Content="[ab]" Style="{StaticResource OptionToggleStyle}" MinWidth="40"
+                              ToolTipService.ToolTip="Match whole word"
+                              AutomationProperties.Name="Match whole word" />
                 <ToggleButton x:Uid="FilterRegex" x:Name="FilterRegex" Content=".*" Style="{StaticResource OptionToggleStyle}"
                               ToolTipService.ToolTip="Use regular expression"
                               AutomationProperties.Name="Use regular expression" />

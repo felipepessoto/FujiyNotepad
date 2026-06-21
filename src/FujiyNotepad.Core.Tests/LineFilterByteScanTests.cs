@@ -130,5 +130,30 @@ namespace FujiyNotepad.Core.Tests
 
             Assert.Equal(new[] { 1 }, lines);
         }
+
+        [Fact]
+        public async Task MatchLinesByPattern_WholeWord_MatchesBoundedTermOnly()
+        {
+            var (searcher, indexer) = await BuildAsync("error\nerrors\nan error here\nterror\nERROR caps\n(error)");
+
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("error"), new SearchOptions { WholeWord = true });
+
+            // "errors" (trailing 's') and "terror" (leading 't') are not whole-word matches; the caps line is
+            // dropped by the case-sensitive default; "(error)" matches since '(' and ')' are word boundaries.
+            Assert.Equal(new[] { 0, 2, 5 }, lines);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_WholeWord_IgnoreCase_FoldsButStillBounded()
+        {
+            var (searcher, indexer) = await BuildAsync("error\nERROR\nerrors\nMyError");
+
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("error"), new SearchOptions { WholeWord = true, IgnoreCase = true });
+
+            // Case-folded so ERROR matches, but "errors" (trailing 's') and "MyError" (leading word char) don't.
+            Assert.Equal(new[] { 0, 1 }, lines);
+        }
     }
 }
