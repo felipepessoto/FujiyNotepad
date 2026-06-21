@@ -1577,6 +1577,8 @@ namespace FujiyNotepad.WinUI
 
             FilterStatus.Text = "Filtering\u2026";
             LineProvider activeProvider = provider;
+            TextSearcher activeSearcher = searcher;
+            LineIndexer activeIndexer = LineIndexer;
             var progress = new Progress<int>(p =>
             {
                 if (!token.IsCancellationRequested)
@@ -1585,16 +1587,41 @@ namespace FujiyNotepad.WinUI
                 }
             });
 
+            // Fast path: a literal term over a fully-indexed file reuses the byte scanner instead of decoding
+            // every line, so its cost scales with the number of matches rather than the total line count. It is
+            // limited to a case-sensitive or ASCII term, where the scanner's ASCII case-folding is identical to
+            // the decode path's Ordinal / OrdinalIgnoreCase Contains; a regex, a non-ASCII case-insensitive term,
+            // or a still-building index falls back to the per-line decode scan.
+            bool literalByteScan = FilterRegex.IsChecked != true
+                && activeIndexer.IsCompleted
+                && (FilterMatchCase.IsChecked == true || System.Text.Ascii.IsValid(FilterBox.Text));
+
             List<int> matches;
             bool capped = false;
             try
             {
-                matches = await Task.Run(() =>
+                if (literalByteScan)
                 {
-                    List<int> hits = LineFilter.Match(activeProvider, predicate, out bool c, progress: progress, token: token);
-                    capped = c;
-                    return hits;
-                }, token);
+                    byte[] pattern = currentEncoding.Encode(FilterBox.Text);
+                    var options = new SearchOptions
+                    {
+                        IgnoreCase = FilterMatchCase.IsChecked != true,
+                        UnitAlignment = currentEncoding.CodeUnitSize,
+                        BigEndian = currentEncoding.IsBigEndian,
+                    };
+                    (matches, capped) = await Task.Run(() =>
+                        LineFilter.MatchLinesByPatternAsync(
+                            activeSearcher, activeIndexer, pattern, options, progress: progress, token: token));
+                }
+                else
+                {
+                    matches = await Task.Run(() =>
+                    {
+                        List<int> hits = LineFilter.Match(activeProvider, predicate, out bool c, progress: progress, token: token);
+                        capped = c;
+                        return hits;
+                    }, token);
+                }
             }
             catch (OperationCanceledException)
             {

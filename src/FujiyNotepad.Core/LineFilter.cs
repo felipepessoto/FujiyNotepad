@@ -63,5 +63,52 @@ namespace FujiyNotepad.Core
             progress?.Report(100);
             return result;
         }
+
+        /// <summary>
+        /// Returns the ascending, de-duplicated 0-based indices of the lines that contain at least one match of
+        /// the literal byte <paramref name="pattern"/>. It scans the raw bytes with <paramref name="searcher"/>
+        /// (no per-line decoding) and maps each match offset to its line via
+        /// <see cref="LineIndexer.GetLineNumberFromOffset"/>, so its cost scales with the number of matches
+        /// rather than the total line count — the fast equivalent of <see cref="Match"/> for a literal term.
+        /// <para>
+        /// The caller must ensure <paramref name="indexer"/> is fully built (<see cref="LineIndexer.IsCompleted"/>):
+        /// past the indexed frontier <see cref="LineIndexer.GetLineNumberFromOffset"/> clamps to the last indexed
+        /// line, which would map later matches onto the wrong line. Scanning stops once <paramref name="maxMatches"/>
+        /// distinct lines are collected (then the returned <c>Capped</c> is true). Cancellation is cooperative,
+        /// mirroring <see cref="TextSearcher.Search"/>: a cancelled <paramref name="token"/> ends the scan and
+        /// returns the lines found so far rather than throwing, so the caller decides whether to keep or discard them.
+        /// </para>
+        /// </summary>
+        public static async Task<(List<int> Lines, bool Capped)> MatchLinesByPatternAsync(
+            TextSearcher searcher,
+            LineIndexer indexer,
+            byte[] pattern,
+            SearchOptions options,
+            int maxMatches = DefaultMaxMatches,
+            IProgress<int>? progress = null,
+            CancellationToken token = default)
+        {
+            var lines = new List<int>();
+            int lastLine = -1;
+
+            await foreach (long offset in searcher.Search(0, pattern, options, progress, token))
+            {
+                int line = indexer.GetLineNumberFromOffset(offset);
+
+                // Matches arrive in ascending offset order, so their line numbers are non-decreasing: a match on
+                // the same line as the previous one is a duplicate to skip, yielding an ascending, distinct list.
+                if (line != lastLine)
+                {
+                    lines.Add(line);
+                    lastLine = line;
+                    if (lines.Count >= maxMatches)
+                    {
+                        return (lines, true);
+                    }
+                }
+            }
+
+            return (lines, false);
+        }
     }
 }

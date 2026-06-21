@@ -45,6 +45,14 @@ tag per published build. Each release also has downloadable builds and notes on 
   `OptionToggleStyle`, and the file open and close paths call shared `ResetFollowTailState`,
   `ResetFindAndCountState` and `SetFileCommandsEnabled` helpers instead of repeating the same reset/teardown and
   menu-enable blocks (issue #146). No behaviour change.
+- **Faster literal Filter** — applying a Filter with a plain (non-regex) term over a fully-indexed file now scans
+  the raw bytes with the same vectorized engine Find uses and maps matches to lines, instead of decoding and
+  testing every line. Its cost scales with the number of matches rather than the total line count, so filtering a
+  huge log down to a handful of lines is far faster and allocates far less (~33x faster and ~196 MB -> under 1 KB
+  allocated on the engine benchmark's rare-literal filter). A regex filter, a non-ASCII case-insensitive term, or a
+  file that is still indexing keep the per-line scan. The literal filter now also matches consistently with Find,
+  including a term that occurs beyond a very long line's first 64 KB — which the old per-line filter (it truncates
+  each line at 64 KB before testing) could miss.
 
 ## [4.10.0] - 2026-06-19
 
