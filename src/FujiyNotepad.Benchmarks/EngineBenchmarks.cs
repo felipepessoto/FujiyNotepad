@@ -25,6 +25,7 @@ namespace FujiyNotepad.Benchmarks
         private LineProvider provider = null!;
         private IByteSource indexedSource = null!;
         private LineIndexer indexer = null!;
+        private TextSearcher searcher = null!;
         private int[] randomLines = Array.Empty<int>();
 
         [GlobalSetup]
@@ -42,6 +43,7 @@ namespace FujiyNotepad.Benchmarks
             indexer = new LineIndexer(new TextSearcher(indexedSource));
             await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
             provider = new LineProvider(indexedSource, indexer);
+            searcher = new TextSearcher(indexedSource);
 
             var rng = new Random(12345);
             randomLines = new int[1000];
@@ -109,6 +111,29 @@ namespace FujiyNotepad.Benchmarks
                 total += cold.GetLine(line).Length;
             }
             return total;
+        }
+
+        /// <summary>
+        /// Filtering for a rare literal via the per-line decode path (<see cref="LineFilter.Match"/>): reads and
+        /// decodes every line, then runs String.Contains. This is the cost the byte-scan fast path replaces.
+        /// </summary>
+        [Benchmark]
+        public int FilterDecode()
+        {
+            List<int> hits = LineFilter.Match(
+                provider, l => l.Contains("Line 599999 :", StringComparison.Ordinal), out _);
+            return hits.Count;
+        }
+
+        /// <summary>
+        /// Filtering for the same rare literal via the byte scanner (<see cref="LineFilter.MatchLinesByPatternAsync"/>):
+        /// no per-line decode, so the cost scales with the number of matches rather than the total line count.
+        /// </summary>
+        [Benchmark]
+        public async Task<int> FilterByteScan()
+        {
+            (List<int> lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, LateNeedle, default);
+            return lines.Count;
         }
     }
 }
