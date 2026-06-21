@@ -39,6 +39,19 @@ if ([string]::IsNullOrWhiteSpace($Exe) -or -not (Test-Path $Exe)) {
     exit 2
 }
 
+# The test drives the real app, which persists every settings change (theme, font, tab width, the View
+# toggles, ...) to its settings.json — that would clobber the developer's saved settings on a local run. Back
+# the file up now and restore it in Cleanup so a run is non-destructive. On a fresh CI runner there is no prior
+# file, so settingsExisted is false and Cleanup just deletes the one the test created.
+$script:settingsPath = Join-Path $env:LOCALAPPDATA 'FujiyNotepad\settings.json'
+$script:settingsExisted = Test-Path $script:settingsPath
+$script:settingsBackup = $null
+if ($script:settingsExisted) {
+    $script:settingsBackup = [System.IO.Path]::GetTempFileName()
+    Copy-Item $script:settingsPath $script:settingsBackup -Force
+    Write-Host "Backed up settings.json (restored after the test)"
+}
+
 $script:failures = 0
 function Assert([bool]$Condition, [string]$Message, [string]$Detail = '') {
     if ($Condition) {
@@ -70,6 +83,19 @@ function Cleanup {
         try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch { }
     }
     Remove-Item $sample -Force -ErrorAction SilentlyContinue
+
+    # Restore the settings the app overwrote while the test drove it (done after killing the process so it can't
+    # write again). Give the killed process a moment to release the file first.
+    Start-Sleep -Milliseconds 400
+    if ($script:settingsExisted) {
+        if ($script:settingsBackup -and (Test-Path $script:settingsBackup)) {
+            Copy-Item $script:settingsBackup $script:settingsPath -Force
+            Remove-Item $script:settingsBackup -Force -ErrorAction SilentlyContinue
+            Write-Host "Restored settings.json"
+        }
+    } else {
+        Remove-Item $script:settingsPath -Force -ErrorAction SilentlyContinue
+    }
 }
 
 $script:proc = $proc
