@@ -455,5 +455,46 @@ namespace FujiyNotepad.Core.Tests
             searcher.FindForward(0, Ascii("x"), new SearchOptions { UnitAlignment = 2 }, 10, results);
             Assert.Equal(new long[] { 4 }, results);
         }
+
+        [Fact]
+        public void FindForward_Span_WritesAscending_AndReturnsCount()
+        {
+            var searcher = new TextSearcher(new InMemoryByteSource("a.b.c.d.e")); // '.' at 1,3,5,7
+            Span<long> dest = new long[10];
+            int n = searcher.FindForward(0, Ascii("."), default, dest);
+            Assert.Equal(4, n);
+            Assert.Equal(new long[] { 1, 3, 5, 7 }, dest[..n].ToArray());
+        }
+
+        [Fact]
+        public void FindForward_Span_IsBoundedBySpanLength()
+        {
+            var searcher = new TextSearcher(new InMemoryByteSource("a.b.c.d.e")); // '.' at 1,3,5,7
+            Span<long> dest = new long[2];
+            int n = searcher.FindForward(0, Ascii("."), default, dest);
+            Assert.Equal(2, n); // capped at the span length
+            Assert.Equal(new long[] { 1, 3 }, dest.ToArray());
+        }
+
+        [Fact]
+        public void FindForward_Span_EmptyDestination_ReturnsZero()
+        {
+            var searcher = new TextSearcher(new InMemoryByteSource("a.b.c"));
+            Assert.Equal(0, searcher.FindForward(0, Ascii("."), default, Span<long>.Empty));
+        }
+
+        [Fact]
+        public void FindForward_Span_MatchesListOverload_AcrossChunkBoundary()
+        {
+            // The two overloads share one scan core, so they must agree (incl. the chunk-boundary carry).
+            var bySpan = new TextSearcher(new InMemoryByteSource("a.b.c.d.e.f"), chunkSize: 4); // '.' at 1,3,5,7,9
+            var byList = new TextSearcher(new InMemoryByteSource("a.b.c.d.e.f"), chunkSize: 4);
+            Span<long> dest = new long[100];
+            int n = bySpan.FindForward(0, Ascii("."), default, dest);
+            var list = new List<long>();
+            byList.FindForward(0, Ascii("."), default, 100, list);
+            Assert.Equal(list, dest[..n].ToArray());
+            Assert.Equal(new long[] { 1, 3, 5, 7, 9 }, dest[..n].ToArray());
+        }
     }
 }

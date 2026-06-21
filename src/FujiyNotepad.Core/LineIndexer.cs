@@ -277,16 +277,28 @@ namespace FujiyNotepad.Core
                 return new[] { checkpointOffset };
             }
 
-            var newlines = new List<long>(knownInBlock - 1);
-            searcher.FindForward(checkpointOffset, encoding.NewLineBytes, newlineOptions, knownInBlock - 1, newlines);
-
-            long[] starts = new long[1 + newlines.Count];
+            // Expand straight into the array that will be cached: write the (knownInBlock - 1) newline offsets
+            // into starts[1..] with no intermediate list (issue #136), then shift each past the newline to get
+            // the next line's start. starts[0] is the checkpoint (the block's first line start).
+            long[] starts = new long[knownInBlock];
             starts[0] = checkpointOffset;
-            for (int i = 0; i < newlines.Count; i++)
+            int found = searcher.FindForward(checkpointOffset, encoding.NewLineBytes, newlineOptions, starts.AsSpan(1));
+            int nlLen = encoding.NewLineBytes.Length;
+            for (int i = 1; i <= found; i++)
             {
-                starts[i + 1] = newlines[i] + encoding.NewLineBytes.Length;
+                starts[i] += nlLen;
             }
-            return starts;
+
+            if (found == knownInBlock - 1)
+            {
+                return starts;
+            }
+
+            // Rare: the source was truncated since indexing, so fewer newlines exist than expected. Trim to the
+            // line starts actually found so callers never read a stale (zero) tail slot as a line start.
+            long[] trimmed = new long[1 + found];
+            Array.Copy(starts, trimmed, 1 + found);
+            return trimmed;
         }
 
         // Moves a block to the front of the LRU list (most-recently-used). Called under indexLock.

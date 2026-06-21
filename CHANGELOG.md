@@ -21,6 +21,10 @@ tag per published build. Each release also has downloadable builds and notes on 
   export) reads every line exactly once, so it now reads through a non-caching path instead of inserting every
   line into the bounded line cache. Previously a big scan evicted the lines the viewport was showing (and
   re-stored lines it never revisits); the viewport's cached lines now survive a filter.
+- **Less allocation during random navigation** — expanding a line-index checkpoint block (done when jumping
+  around a huge file via Go To Line/Offset/Percentage or the scrollbar) now writes the line offsets straight
+  into the cached array instead of via a throwaway list, roughly halving the per-block allocation (measured
+  ~16.3 MB -> ~8.3 MB for 1000 cold random line reads on the engine benchmark). No behaviour change.
 
 ## [4.10.0] - 2026-06-19
 
