@@ -40,6 +40,14 @@ namespace FujiyNotepad.Presentation
                 "gray/regex \\b\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}\n" +
                 "teal/regex \\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b\n" +
                 "blue/regex \\b\\d{1,3}(\\.\\d{1,3}){3}\\b\n"),
+
+            new HighlightPreset("Spark / YARN",
+                "# Apache Spark driver / executor logs: emphasise scheduler & lifecycle events, dim token/SAS noise\n" +
+                "red/regex (Lost executor|ExecutorLostFailure|FetchFailed|TaskKilled|Container .* exited|OutOfMemory)\n" +
+                "orange/regex (Removing executor|\\bWARN\\b|Stage .* failed)\n" +
+                "green/regex (Added executor|Job \\d+ finished|took [\\d.]+ s\\b)\n" +
+                "blue/regex (DAGScheduler|TaskSetManager|Submitting .*Stage|YarnAllocator)\n" +
+                "gray/regex (TokenLibrary|SystemSASProviderWithRefresh|SasUtils|AsyncAppender)\n"),
         };
     }
 }

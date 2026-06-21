@@ -7,6 +7,12 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Added
+- **Spark / YARN highlight preset** — the Highlight Rules dialog's **Insert preset** menu has a new
+  **Spark / YARN** preset tuned for Apache Spark driver/executor logs: it emphasises scheduler and lifecycle
+  events (job/stage scheduling, executor add/remove, durations) and failures, while dimming the repetitive
+  token/SAS boilerplate (`TokenLibrary`, `SystemSASProviderWithRefresh`, ...). Drop it in and tweak as needed.
+
 ### Fixed
 - **Selection highlighting now works during a search** — selecting a word while the Find bar is active now
   highlights that word's other occurrences too, alongside the search matches. Previously the selection

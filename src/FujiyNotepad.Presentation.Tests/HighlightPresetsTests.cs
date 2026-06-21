@@ -46,12 +46,32 @@ namespace FujiyNotepad.Presentation.Tests
         [InlineData("Web access log", "127.0.0.1 - - [17/Jun/2026] \"GET /index.html HTTP/1.1\" 200 1234")]
         [InlineData("JSON", "{\"status\": \"ok\", \"count\": 42, \"ready\": true}")]
         [InlineData("Timestamps & IDs", "2026-06-17 22:05:51 host 10.0.0.5 id 3f2504e0-4f89-41d3-9a0c-0305e82c3301")]
+        [InlineData("Spark / YARN", "26/06/17 22:05:51 INFO DAGScheduler: Job 5 finished: collect, took 12.345 s")]
         public void Preset_MatchesRepresentativeLine(string name, string sample)
         {
             HighlightPreset preset = HighlightPresets.All.Single(p => p.Name == name);
             HighlightRuleSet set = HighlightRuleSet.Build(HighlightRuleText.Parse(preset.RulesText));
 
             Assert.NotEmpty(set.Find(sample));
+        }
+
+        [Fact]
+        public void SparkYarnPreset_HighlightsEventsAndDimsTokenNoise()
+        {
+            HighlightPreset preset = HighlightPresets.All.Single(p => p.Name == "Spark / YARN");
+            HighlightRuleSet set = HighlightRuleSet.Build(HighlightRuleText.Parse(preset.RulesText));
+
+            // Scheduler / lifecycle events are highlighted.
+            Assert.NotEmpty(set.Find("26/06/17 22:05:51 INFO DAGScheduler: Job 5 finished: collect, took 12.345 s"));
+            Assert.NotEmpty(set.Find("26/06/17 22:06:01 ERROR YarnScheduler: Lost executor 7 on host-1"));
+            Assert.NotEmpty(set.Find("26/06/17 22:05:50 INFO DAGScheduler: Submitting ResultStage 3"));
+
+            // The token / SAS boilerplate is dimmed in gray.
+            Assert.True(HighlightColors.TryParse("gray", out uint gray));
+            IReadOnlyList<HighlightSpan> tokenLine =
+                set.Find("26/06/17 22:05:40 INFO TokenLibrary: refresh via SystemSASProviderWithRefresh");
+            Assert.NotEmpty(tokenLine);
+            Assert.Contains(tokenLine, s => s.Argb == gray);
         }
     }
 }
