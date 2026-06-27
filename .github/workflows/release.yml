@@ -24,7 +24,7 @@ jobs:
       # No actions/setup-dotnet: the windows runner image already provides a .NET 10 SDK that global.json
       # (10.0.100, rollForward latestMinor) accepts, so we skip the ~35s SDK re-download.
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
@@ -64,7 +64,7 @@ jobs:
       # Cache the global NuGet package folder per architecture (self-contained AOT restores arch-specific
       # runtime packs). On a miss it restores from nuget.org as before.
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ matrix.rid }}-${{ hashFiles('**/*.csproj') }}
