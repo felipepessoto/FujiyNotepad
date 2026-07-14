@@ -7,6 +7,8 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+## [4.12.0] - 2026-07-14
+
 ### Added
 - **Match whole word in the Filter bar** — the Filter / grep view now has a **whole-word** (`[ab]`) toggle next to
   Match case and Regex, matching the Find bar, so you can filter to lines containing a term only as a standalone
