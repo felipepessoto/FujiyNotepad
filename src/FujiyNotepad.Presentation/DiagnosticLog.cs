@@ -14,7 +14,10 @@ namespace FujiyNotepad.Presentation
     public sealed class DiagnosticLog
     {
         private readonly Func<string, string?, string?, bool> write;
-        private readonly Dictionary<string, string> lastSignature = new();
+        // Keyed by context, which now embeds a Windows file path (e.g. "FileWatcher: C:\a.log"), so compare keys
+        // case-insensitively — matching the codebase's path convention (RecentFiles) — so the same file opened
+        // with different casing de-dupes as one file rather than logging twice.
+        private readonly Dictionary<string, string> lastSignature = new(StringComparer.OrdinalIgnoreCase);
         private readonly object gate = new();
 
         /// <summary>

@@ -154,5 +154,18 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.False(log.LogSwallowed("TailRefresh", error));
             Assert.Equal(3, writes);
         }
+
+        [Fact]
+        public void LogSwallowed_ContextPathsDifferingOnlyInCase_DeDupeAsOneFile()
+        {
+            int writes = 0;
+            var log = new DiagnosticLog((_, _, _) => { writes++; return true; });
+            var error = new IOException("boom");
+
+            Assert.True(log.LogSwallowed(@"FileWatcher: C:\Logs\App.log", error));
+            // Same file, different casing — on Windows this is the same path, so it must de-dupe, not log twice.
+            Assert.False(log.LogSwallowed(@"FileWatcher: c:\logs\app.log", error));
+            Assert.Equal(1, writes);
+        }
     }
 }
