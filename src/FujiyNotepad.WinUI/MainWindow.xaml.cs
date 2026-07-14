@@ -593,8 +593,9 @@ namespace FujiyNotepad.WinUI
             catch (Exception ex) when (ex is ArgumentException or IOException or System.Security.SecurityException)
             {
                 // Watching is best-effort (Reload still works by hand); record why it couldn't start so a
-                // persistently-unwatchable path is diagnosable rather than silently non-refreshing.
-                diagnostics.LogSwallowed("FileWatcher", ex);
+                // persistently-unwatchable path is diagnosable rather than silently non-refreshing. The path is in
+                // the context so the entry names the file and de-dup is per-file (a different file still logs).
+                diagnostics.LogSwallowed($"FileWatcher: {path}", ex);
                 fileWatcher = null;
             }
         }
@@ -699,9 +700,10 @@ namespace FujiyNotepad.WinUI
             }
             catch (Exception ex)
             {
-                // A transient read failure mid-rotation; retry next tick. Record it (de-duped so a persistently
-                // failing read logs once, not every tick) so a stuck tail is diagnosable.
-                diagnostics.LogSwallowed("TailRefresh", ex);
+                // A transient read failure mid-rotation; retry next tick. Record it (de-duped per file so a
+                // persistently failing read logs once, not every tick) so a stuck tail is diagnosable and the
+                // entry identifies which file. currentFilePath is non-null here (guarded at the top of the tick).
+                diagnostics.LogSwallowed($"TailRefresh: {currentFilePath}", ex);
                 return;
             }
 
