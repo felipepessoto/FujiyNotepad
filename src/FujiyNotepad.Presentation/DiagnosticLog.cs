@@ -13,11 +13,19 @@ namespace FujiyNotepad.Presentation
     /// </summary>
     public sealed class DiagnosticLog
     {
-        private readonly CrashLogger sink;
+        private readonly Func<string, string?, string?, bool> write;
         private readonly Dictionary<string, string> lastSignature = new();
         private readonly object gate = new();
 
-        public DiagnosticLog(CrashLogger sink) => this.sink = sink;
+        /// <summary>
+        /// Creates a log that appends via <paramref name="write"/> — <c>(type, message, stackTrace) => written</c>.
+        /// The delegate must be best-effort (never throw and return <c>false</c> on failure); the seam also keeps
+        /// the type unit-testable without touching the disk.
+        /// </summary>
+        public DiagnosticLog(Func<string, string?, string?, bool> write) => this.write = write;
+
+        /// <summary>Creates a log whose entries are appended by <paramref name="sink"/>.</summary>
+        public DiagnosticLog(CrashLogger sink) : this(sink.Write) { }
 
         /// <summary>The default diagnostics log at <c>%LOCALAPPDATA%\FujiyNotepad\diagnostics.log</c>.</summary>
         public static DiagnosticLog Default()
@@ -30,13 +38,14 @@ namespace FujiyNotepad.Presentation
 
         /// <summary>
         /// Records <paramref name="error"/> under the <paramref name="context"/> label (e.g. "FileWatcher"),
-        /// unless the previous report for that same context was identical (same exception type and message) — so a
-        /// failure that recurs every tick is written once rather than every tick. Returns <c>true</c> when an entry
-        /// was written; a <c>null</c> exception (or a swallowed I/O failure in the sink) returns <c>false</c>.
+        /// unless the previous <em>written</em> report for that same context was identical (same exception type and
+        /// message) — so a failure that recurs every tick is written once rather than every tick. Returns
+        /// <c>true</c> only when an entry was actually written; a <c>null</c> exception, a null/blank context, or a
+        /// failed write returns <c>false</c> (and does not suppress the next identical attempt). Never throws.
         /// </summary>
         public bool LogSwallowed(string context, Exception? error)
         {
-            if (error is null)
+            if (error is null || string.IsNullOrWhiteSpace(context))
             {
                 return false;
             }
@@ -48,10 +57,17 @@ namespace FujiyNotepad.Presentation
                 {
                     return false; // same failure already reported for this context; don't repeat it every tick
                 }
-                lastSignature[context] = signature;
-            }
 
-            return sink.Write(context, signature, error.StackTrace);
+                // Write while holding the lock (so concurrent callers can't interleave their file appends) and
+                // remember the signature only after the write actually succeeds — a transient write failure must
+                // not cache the signature and thereby suppress the next identical attempt.
+                if (!write(context, signature, error.StackTrace))
+                {
+                    return false;
+                }
+                lastSignature[context] = signature;
+                return true;
+            }
         }
     }
 }

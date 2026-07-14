@@ -118,5 +118,41 @@ namespace FujiyNotepad.Presentation.Tests
                 }
             }
         }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void LogSwallowed_NullOrBlankContext_ReturnsFalseWithoutThrowing(string? context)
+        {
+            int writes = 0;
+            var log = new DiagnosticLog((_, _, _) => { writes++; return true; });
+
+            Assert.False(log.LogSwallowed(context!, new IOException("boom")));
+            Assert.Equal(0, writes);
+        }
+
+        [Fact]
+        public void LogSwallowed_FailedWrite_DoesNotCacheSignature_SoNextAttemptRetries()
+        {
+            int writes = 0;
+            bool writeSucceeds = false;
+            var log = new DiagnosticLog((_, _, _) => { writes++; return writeSucceeds; });
+            var error = new IOException("boom");
+
+            // Write fails: each identical call must re-attempt (not be de-duped), since nothing was recorded.
+            Assert.False(log.LogSwallowed("TailRefresh", error));
+            Assert.False(log.LogSwallowed("TailRefresh", error));
+            Assert.Equal(2, writes);
+
+            // Once the write succeeds it is recorded and counted...
+            writeSucceeds = true;
+            Assert.True(log.LogSwallowed("TailRefresh", error));
+            Assert.Equal(3, writes);
+
+            // ...and now the identical failure is de-duped (no further write attempt).
+            Assert.False(log.LogSwallowed("TailRefresh", error));
+            Assert.Equal(3, writes);
+        }
     }
 }
