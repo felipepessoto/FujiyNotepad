@@ -109,7 +109,7 @@ jobs:
             nuget-${{ runner.os }}-
 
       - name: Set up winapp CLI
-        uses: microsoft/setup-WinAppCli@v0.1
+        uses: microsoft/setup-WinAppCli@v0.2
 
       # Mirrors the release publish (Properties/PublishProfiles/win-x64.pubxml): self-contained Native AOT,
       # AOT linking via the runner's C++ toolchain. One arch (x64) is enough for the UI tests.
