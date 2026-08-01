@@ -54,7 +54,7 @@ jobs:
       # on the Windows runner; the popular gate action (irongut/CodeCoverageSummary) is Docker/Linux-only, so the
       # threshold gate stays a small inline script instead.
       - name: Coverage report
-        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.10
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.11
         with:
           reports: ${{ github.workspace }}/TestResults/**/coverage.cobertura.xml
           targetdir: ${{ github.workspace }}/coveragereport
