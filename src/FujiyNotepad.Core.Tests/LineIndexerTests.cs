@@ -318,6 +318,30 @@ namespace FujiyNotepad.Core.Tests
             Assert.Throws<InvalidOperationException>(() => indexer.GetOffsetFromLineNumber(50));
         }
 
+        [Fact]
+        public async Task GetOffsetFromLineNumber_BlockCachedBeforeTruncation_ReturnsStaleOffsetWithoutThrowing()
+        {
+            // Documents the boundary of the clamp. When the block was expanded BEFORE the source shrank, the
+            // cached array is still full length, so nothing re-reads and the clamp cannot engage — the offset
+            // returned is the pre-truncation one. That is safe (a byte range past the end reads nothing and
+            // renders as an empty line, rather than throwing on the render path like it used to), and it is
+            // corrected when the shrink is noticed and the file reloaded.
+            //
+            // It cannot be detected here: the source's cached Length is only updated by an explicit
+            // RefreshLength, which the app issues only while following the file — so with Follow Tail off the
+            // length would be just as stale as the index. The short read is the only reliable signal.
+            var source = new GrowableByteSource("aaa\nbbb\nccc\nddd\neee\n");
+            var indexer = new LineIndexer(new TextSearcher(source));
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+
+            Assert.Equal(20L, indexer.GetOffsetFromLineNumber(6)); // expands and caches block 0 at full length
+
+            source.Truncate(8); // "aaa\nbbb\n"
+
+            long offset = indexer.GetOffsetFromLineNumber(6);
+            Assert.Equal(20L, offset); // served from the cache: stale, but no longer a crash
+        }
+
         // Counts reads and trips the token once the scan is under way, so cancellation lands between chunks
         // inside a newline-free region — the case where nothing is ever yielded to the indexing loop.
         private sealed class CancelAfterReadsSource : IByteSource

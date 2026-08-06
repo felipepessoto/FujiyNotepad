@@ -79,7 +79,7 @@ namespace FujiyNotepad.Core
         /// </summary>
         /// <exception cref="InvalidOperationException">
         /// Another pass is already running on this indexer. The indexer is the sole writer of the index state,
-        /// so callers must cancel <em>and await</em> the previous pass before starting a new one.
+        /// so a caller must cancel <em>and await</em> the previous pass before starting a new one.
         /// </exception>
         /// <exception cref="OperationCanceledException">
         /// <paramref name="cancelToken"/> was cancelled; the index keeps everything found so far and is
@@ -90,8 +90,8 @@ namespace FujiyNotepad.Core
             if (Interlocked.CompareExchange(ref indexingActive, 1, 0) != 0)
             {
                 throw new InvalidOperationException(
-                    "An indexing pass is already running on this LineIndexer. Cancel and await the previous " +
-                    "pass (StopIndexingAsync) before starting another; the indexer is the sole writer of the index.");
+                    "An indexing pass is already running on this LineIndexer. Cancel the previous pass and await " +
+                    "the task it returned before starting another; the indexer is the sole writer of the index.");
             }
 
             bool reachedEnd = false;
@@ -158,9 +158,14 @@ namespace FujiyNotepad.Core
         /// <summary>
         /// Returns the byte offset of the <paramref name="lineNumber"/>-th index entry, preserving the original
         /// flat-index contract: entry 0 is a dummy (0), and entry n (n ≥ 1) is the start offset of display line
-        /// (n − 1). Out-of-range numbers throw, exactly as the flat list's indexer did. If the source has since
-        /// been truncated so the line no longer exists, the last line start still present is returned (the same
-        /// clamping fallback <see cref="GetLineNumberFromOffset"/> uses) rather than throwing.
+        /// (n − 1). Out-of-range numbers throw, exactly as the flat list's indexer did.
+        /// <para>If the source has shrunk since it was indexed, expanding the block finds fewer line starts than
+        /// the index expects and the last one still present is returned (the same clamping fallback
+        /// <see cref="GetLineNumberFromOffset"/> uses) rather than reading past the end of the array. A block
+        /// still cached from <em>before</em> the shrink is served as-is and can therefore yield an offset past
+        /// the new end of the file; that resolves to empty text rather than failing, and is corrected when the
+        /// shrink is noticed and the file reloaded. Detecting it here is not possible without re-reading — the
+        /// source's cached length is itself stale until something calls <c>RefreshLength</c>.</para>
         /// </summary>
         public long GetOffsetFromLineNumber(int lineNumber)
         {
