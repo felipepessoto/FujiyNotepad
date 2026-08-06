@@ -188,5 +188,220 @@ namespace FujiyNotepad.Core.Tests
 
             Assert.True(indexer.CanResolveOffset(1_000_000_000));
         }
+
+        // ----- Indexing lifecycle: cancellation, single-writer, truncation (issues #165/#166/#167) -----
+
+        [Fact]
+        public async Task StartTaskToIndexLines_CancelledInsideNewlineFreeRegion_StopsPromptlyWithoutCompleting()
+        {
+            // A newline-free source yields nothing, so the in-loop cancellation check never runs: before the
+            // token was forwarded to the scan (#167), the pass ran to EOF and "Stop indexing" was a no-op.
+            // 8 KiB over a 64-byte chunk is 128 chunks; cancelling on the 3rd read must stop within a chunk
+            // or two of that, not scan them all.
+            var source = new CancelAfterReadsSource(size: 8192, cancelAfterReads: 3);
+            using var cts = new CancellationTokenSource();
+            source.Attach(cts);
+            var indexer = new LineIndexer(new TextSearcher(source, chunkSize: 64));
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => indexer.StartTaskToIndexLines(cts.Token, new Progress<int>()));
+
+            Assert.False(indexer.IsCompleted); // a cancelled pass must never publish a partial index as complete
+            Assert.InRange(source.Reads, 1, 10);
+        }
+
+        [Fact]
+        public async Task StartTaskToIndexLines_SecondConcurrentPass_IsRejected()
+        {
+            // Two passes writing the same index interleave their appends: lineStartCount inflates, lastLineStart
+            // can move backwards and checkpoints stop ascending, breaking the binary searches (#166).
+            var source = new GatedByteSource("a\nb\nc\n");
+            var indexer = new LineIndexer(new TextSearcher(source));
+
+            Task first = indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            await source.Entered; // the first pass is now inside the scan, holding the writer slot
+
+            // The guard rejects synchronously, so this is already faulted. The timeout only matters if the
+            // guard ever regresses: without it the second pass would block on the gate and hang the suite
+            // instead of failing.
+            Task second = indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => second.WaitAsync(TimeSpan.FromSeconds(30)));
+
+            source.Release();
+            await first;
+            Assert.True(indexer.IsCompleted);
+            Assert.Equal(5, indexer.GetNumberOfLinesIndexed()); // dummy + starts 0, 2, 4, 6 — no doubled entries
+        }
+
+        [Fact]
+        public async Task StartTaskToIndexLines_SequentialPasses_AreAllowed()
+        {
+            // The writer slot is released when a pass ends, so Follow Tail's resume (grow -> index the appended
+            // region) still works. A one-shot latch here would break tailing outright.
+            var source = new GrowableByteSource("a\nb\n");
+            var indexer = new LineIndexer(new TextSearcher(source));
+
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            Assert.Equal(4, indexer.GetNumberOfLinesIndexed()); // dummy + starts 0, 2, 4
+
+            source.Append("c\nd\n");
+            source.RefreshLength();
+            indexer.IsCompleted = false;
+
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+
+            Assert.True(indexer.IsCompleted);
+            Assert.Equal(6, indexer.GetNumberOfLinesIndexed()); // dummy + starts 0, 2, 4, 6, 8
+        }
+
+        [Fact]
+        public async Task StartTaskToIndexLines_AfterCancellation_CanBeRestarted()
+        {
+            // The slot is released in a finally, so a cancelled pass doesn't wedge the indexer permanently —
+            // this is exactly the Stop-then-Start indexing sequence.
+            var source = new InMemoryByteSource("a\nb\nc\nd\n");
+            var indexer = new LineIndexer(new TextSearcher(source));
+            using (var cts = new CancellationTokenSource())
+            {
+                cts.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                    () => indexer.StartTaskToIndexLines(cts.Token, new Progress<int>()));
+            }
+
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+
+            Assert.True(indexer.IsCompleted);
+            Assert.Equal(6, indexer.GetNumberOfLinesIndexed());
+        }
+
+        [Fact]
+        public async Task GetOffsetFromLineNumber_SourceTruncatedAfterIndexing_ClampsInsteadOfThrowing()
+        {
+            // "aaa\nbbb\nccc\nddd\neee\n" -> line starts 0, 4, 8, 12, 16, 20.
+            var source = new GrowableByteSource("aaa\nbbb\nccc\nddd\neee\n");
+            var indexer = new LineIndexer(new TextSearcher(source));
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            Assert.Equal(7, indexer.GetNumberOfLinesIndexed()); // dummy + 6 starts; no lookup yet, so no cached block
+
+            // An external rotation truncates the file in place (logrotate copytruncate / "> app.log"), which the
+            // viewer supports. The index still describes the old, longer content, so expanding the block now
+            // finds fewer newlines and returns a short array — which used to be indexed unchecked (#165).
+            source.Truncate(8); // "aaa\nbbb\n"
+
+            long offset = indexer.GetOffsetFromLineNumber(6);
+
+            Assert.Equal(8L, offset); // clamped to the last line start that still exists
+        }
+
+        [Fact]
+        public async Task GetOffsetFromLineNumber_SourceTruncatedAfterIndexing_StillResolvesSurvivingLines()
+        {
+            // Lines that still exist after the truncation must keep resolving exactly; only the ones past the
+            // new end clamp. Guards against the clamp masking real lookups.
+            var source = new GrowableByteSource("aaa\nbbb\nccc\nddd\neee\n");
+            var indexer = new LineIndexer(new TextSearcher(source));
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+
+            source.Truncate(8); // "aaa\nbbb\n"
+
+            Assert.Equal(0L, indexer.GetOffsetFromLineNumber(1)); // line 0 — unaffected
+            Assert.Equal(4L, indexer.GetOffsetFromLineNumber(2)); // line 1 — unaffected
+            Assert.Equal(8L, indexer.GetOffsetFromLineNumber(3)); // the new frontier
+        }
+
+        [Fact]
+        public async Task GetOffsetFromLineNumber_OutOfRange_StillThrowsAfterClampWasAdded()
+        {
+            // The clamp only covers a shrunken source; a line number outside the index is still a caller bug.
+            var indexer = await BuildIndexAsync("ab\ncd");
+            Assert.Throws<InvalidOperationException>(() => indexer.GetOffsetFromLineNumber(50));
+        }
+
+        // Counts reads and trips the token once the scan is under way, so cancellation lands between chunks
+        // inside a newline-free region — the case where nothing is ever yielded to the indexing loop.
+        private sealed class CancelAfterReadsSource : IByteSource
+        {
+            private readonly byte[] data;
+            private readonly int cancelAfterReads;
+            private CancellationTokenSource? cts;
+            private int reads;
+
+            public CancelAfterReadsSource(int size, int cancelAfterReads)
+            {
+                data = new byte[size];
+                Array.Fill(data, (byte)'x'); // deliberately no newlines
+                this.cancelAfterReads = cancelAfterReads;
+            }
+
+            public int Reads => Volatile.Read(ref reads);
+
+            public void Attach(CancellationTokenSource tokenSource) => cts = tokenSource;
+
+            public long Length => data.Length;
+
+            public long RefreshLength() => data.Length;
+
+            public int Read(long offset, Span<byte> buffer)
+            {
+                if (Interlocked.Increment(ref reads) >= cancelAfterReads)
+                {
+                    cts?.Cancel();
+                }
+                if (offset < 0 || offset >= data.Length)
+                {
+                    return 0;
+                }
+                int count = (int)Math.Min(buffer.Length, data.Length - offset);
+                data.AsSpan((int)offset, count).CopyTo(buffer);
+                return count;
+            }
+
+            public ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken token = default)
+                => ValueTask.FromResult(Read(offset, buffer.Span));
+
+            public void Dispose() { }
+        }
+
+        // Blocks the first read until released, so a pass can be held mid-scan while a second one is attempted.
+        private sealed class GatedByteSource : IByteSource
+        {
+            private readonly byte[] data;
+            private readonly TaskCompletionSource gate =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource entered =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public GatedByteSource(string ascii) => data = Encoding.ASCII.GetBytes(ascii);
+
+            /// <summary>Completes once the scan has entered its first read.</summary>
+            public Task Entered => entered.Task;
+
+            public void Release() => gate.TrySetResult();
+
+            public long Length => data.Length;
+
+            public long RefreshLength() => data.Length;
+
+            public int Read(long offset, Span<byte> buffer)
+            {
+                if (offset < 0 || offset >= data.Length)
+                {
+                    return 0;
+                }
+                int count = (int)Math.Min(buffer.Length, data.Length - offset);
+                data.AsSpan((int)offset, count).CopyTo(buffer);
+                return count;
+            }
+
+            public async ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken token = default)
+            {
+                entered.TrySetResult();
+                await gate.Task;
+                return Read(offset, buffer.Span);
+            }
+
+            public void Dispose() { }
+        }
     }
 }

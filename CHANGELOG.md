@@ -7,6 +7,21 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+### Fixed
+- **Crash after a log rotation / truncation** — if the open file shrank on disk (`logrotate` copytruncate,
+  `> app.log`) while the app still held the longer index, the next repaint could throw an unhandled
+  `IndexOutOfRangeException` and terminate the app. The line lookup now clamps to the last line that still
+  exists, matching how offset-to-line already behaved (issue #165).
+- **Index corruption from Stop then Start indexing** — *Edit > Start indexing* no longer starts a second
+  indexing pass while the previous one is still stopping. Two passes writing the same index could double the
+  reported line count and leave the index unsorted, which broke line lookups and could in turn trigger the
+  crash above. Starting a pass while one is running is now rejected outright rather than silently corrupting
+  the index (issue #166).
+- **"Stop indexing" did nothing on files with very long lines** — cancellation was only checked once per line
+  found, so on a file with a huge single line (minified JS/JSON, a base64 blob, a one-line SQL dump) stopping
+  the index — and therefore opening another file, reloading, or closing — waited for the scan to reach the next
+  newline, making the app look hung. The scan is now cancelled directly (issue #167).
+
 ### Internal
 - **Diagnostic logging for silent failures** — the deliberately-swallowed exceptions behind three best-effort
   operations (the file-change watcher failing to start, a tail read failing, and indexing teardown) are now

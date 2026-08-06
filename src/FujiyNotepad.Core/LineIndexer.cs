@@ -10,9 +10,11 @@ namespace FujiyNotepad.Core
     /// viewport negligible.
     ///
     /// <para>The background indexer is the sole writer of the index state (<see cref="checkpoints"/>,
-    /// <see cref="lineStartCount"/>, <see cref="lastLineStart"/>); lookups run on the UI thread. All index
-    /// state is guarded by <see cref="indexLock"/>; the per-block expansion reads the source outside the lock
-    /// (the source allows concurrent positional reads), so a lookup never blocks indexing on I/O.</para>
+    /// <see cref="lineStartCount"/>, <see cref="lastLineStart"/>); lookups run on the UI thread. That
+    /// single-writer rule is <b>enforced</b>: <see cref="StartTaskToIndexLines"/> rejects a second
+    /// concurrent pass rather than letting two scans interleave their appends. All index state is guarded
+    /// by <see cref="indexLock"/>; the per-block expansion reads the source outside the lock (the source
+    /// allows concurrent positional reads), so a lookup never blocks indexing on I/O.</para>
     /// </summary>
     public class LineIndexer
     {
@@ -48,6 +50,12 @@ namespace FujiyNotepad.Core
         private readonly TextEncoding encoding;
         private readonly SearchOptions newlineOptions;
 
+        // 0 = no indexing pass in flight, 1 = one is running. Enforces the single-writer invariant in the
+        // class remarks: a second concurrent pass would interleave its appends with the first one's, leaving
+        // lineStartCount inflated, lastLineStart moving backwards and checkpoints non-monotonic (which breaks
+        // the ascending-order precondition of the binary search in GetLineNumberFromOffset).
+        private int indexingActive;
+
         private volatile bool isCompleted;
         public bool IsCompleted
         {
@@ -64,53 +72,95 @@ namespace FujiyNotepad.Core
             newlineOptions = new SearchOptions { UnitAlignment = this.encoding.CodeUnitSize };
         }
 
+        /// <summary>
+        /// Runs one indexing pass, appending line starts from the current frontier to the end of the source.
+        /// The pass is resumable: it continues from the last known line start, so it can be cancelled and
+        /// restarted (Stop/Start indexing, or a Follow Tail grow) without losing what was already indexed.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// Another pass is already running on this indexer. The indexer is the sole writer of the index state,
+        /// so callers must cancel <em>and await</em> the previous pass before starting a new one.
+        /// </exception>
+        /// <exception cref="OperationCanceledException">
+        /// <paramref name="cancelToken"/> was cancelled; the index keeps everything found so far and is
+        /// deliberately <b>not</b> marked completed, so the pass can be resumed later.
+        /// </exception>
         public async Task StartTaskToIndexLines(CancellationToken cancelToken, IProgress<int> progress)
         {
-            long startOffset;
-
-            lock (indexLock)
+            if (Interlocked.CompareExchange(ref indexingActive, 1, 0) != 0)
             {
-                if (lineStartCount == 0)
-                {
-                    // Seed: line 0 starts at offset 0 and is the first checkpoint.
-                    checkpoints.Add(0);
-                    lineStartCount = 1;
-                    lastLineStart = 0;
-                    startOffset = 0;
-                }
-                else
-                {
-                    startOffset = lastLineStart; // resume past the last known line start
-                }
+                throw new InvalidOperationException(
+                    "An indexing pass is already running on this LineIndexer. Cancel and await the previous " +
+                    "pass (StopIndexingAsync) before starting another; the indexer is the sole writer of the index.");
             }
 
-            // Search for the encoding's newline sequence (code-unit aligned). Cancellation is observed here via
-            // ThrowIfCancellationRequested, which signals a stop by throwing OperationCanceledException (caught
-            // by the caller to re-enable resuming and to avoid marking a partial index complete). The next line
-            // starts past the whole newline sequence.
-            await foreach (long result in searcher.Search(startOffset, encoding.NewLineBytes, newlineOptions, progress))
+            bool reachedEnd = false;
+            try
             {
-                cancelToken.ThrowIfCancellationRequested();
-                long lineStart = result + encoding.NewLineBytes.Length;
+                long startOffset;
+
                 lock (indexLock)
                 {
-                    // Keep only a checkpoint at every K-th line start; the rest are reconstructed on demand.
-                    if (lineStartCount % CheckpointInterval == 0)
+                    if (lineStartCount == 0)
                     {
-                        checkpoints.Add(lineStart);
+                        // Seed: line 0 starts at offset 0 and is the first checkpoint.
+                        checkpoints.Add(0);
+                        lineStartCount = 1;
+                        lastLineStart = 0;
+                        startOffset = 0;
                     }
-                    lineStartCount++;
-                    lastLineStart = lineStart;
+                    else
+                    {
+                        startOffset = lastLineStart; // resume past the last known line start
+                    }
                 }
+
+                // Search for the encoding's newline sequence (code-unit aligned). The token is forwarded so the
+                // scan itself stops between chunks; without it cancellation would only be observed once per
+                // newline found, making Stop indexing a no-op across a long newline-free region (issue #167).
+                // The next line starts past the whole newline sequence.
+                await foreach (long result in searcher.Search(startOffset, encoding.NewLineBytes, newlineOptions, progress, cancelToken))
+                {
+                    cancelToken.ThrowIfCancellationRequested();
+                    long lineStart = result + encoding.NewLineBytes.Length;
+                    lock (indexLock)
+                    {
+                        // Keep only a checkpoint at every K-th line start; the rest are reconstructed on demand.
+                        if (lineStartCount % CheckpointInterval == 0)
+                        {
+                            checkpoints.Add(lineStart);
+                        }
+                        lineStartCount++;
+                        lastLineStart = lineStart;
+                    }
+                }
+
+                // Search stops cooperatively on cancellation — a silent `yield break`, not a throw — so the loop
+                // above can end without the in-loop check ever running (exactly the newline-free case the token
+                // was forwarded for). Re-check here: without this, a cancelled pass would fall through and
+                // publish a PARTIAL index as complete, permanently freezing the line count and blocking resume.
+                cancelToken.ThrowIfCancellationRequested();
+                reachedEnd = true;
+            }
+            finally
+            {
+                // Release before publishing completion (below), so a caller that reacts to IsCompleted — the
+                // Follow Tail grow path — can immediately start the next pass without racing this guard.
+                Volatile.Write(ref indexingActive, 0);
             }
 
-            IsCompleted = true;
+            if (reachedEnd)
+            {
+                IsCompleted = true;
+            }
         }
 
         /// <summary>
         /// Returns the byte offset of the <paramref name="lineNumber"/>-th index entry, preserving the original
         /// flat-index contract: entry 0 is a dummy (0), and entry n (n ≥ 1) is the start offset of display line
-        /// (n − 1). Out-of-range numbers throw, exactly as the flat list's indexer did.
+        /// (n − 1). Out-of-range numbers throw, exactly as the flat list's indexer did. If the source has since
+        /// been truncated so the line no longer exists, the last line start still present is returned (the same
+        /// clamping fallback <see cref="GetLineNumberFromOffset"/> uses) rather than throwing.
         /// </summary>
         public long GetOffsetFromLineNumber(int lineNumber)
         {
@@ -137,7 +187,19 @@ namespace FujiyNotepad.Core
             }
 
             long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock);
-            return starts[(lineNumber - 1) - block * CheckpointInterval];
+            int local = (lineNumber - 1) - block * CheckpointInterval;
+
+            // ExpandBlock returns a SHORT array when the source shrank since it was indexed (log rotation /
+            // truncation in place, which this viewer supports on purpose), so the requested line may no longer
+            // exist. Clamp to the last start actually found rather than indexing past the end: this runs on the
+            // render path (TextCanvas.OnDraw has no try/catch), so throwing here terminates the process. Mirrors
+            // the clamping contract GetLineNumberFromOffset already documents. starts is never empty.
+            if (local >= starts.Length)
+            {
+                local = starts.Length - 1;
+            }
+
+            return starts[local];
         }
 
         public int GetNumberOfLinesIndexed()

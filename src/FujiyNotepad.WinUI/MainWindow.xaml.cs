@@ -905,13 +905,30 @@ namespace FujiyNotepad.WinUI
             }
         }
 
-        private void StartIndexing_Click(object sender, RoutedEventArgs e)
+        private async void StartIndexing_Click(object sender, RoutedEventArgs e)
         {
             // Resume indexing from where it was stopped (the index is append-only and continues).
             if (provider is null || LineIndexer.IsCompleted)
             {
                 return;
             }
+
+            // Stop indexing only *requests* cancellation, so the previous pass may still be running. Await it
+            // before starting another: LineIndexer is a single-writer index, and two concurrent passes would
+            // interleave their appends and corrupt it (issue #166). Disable the command up front so a second
+            // click during that await can't get past the guard above and start a competing pass.
+            StartIndexingItem.IsEnabled = false;
+            await StopIndexingAsync();
+
+            // The await yielded to the message loop: the file may have been closed, reloaded or fully indexed
+            // in the meantime, so re-check before starting a pass against what could be a different provider.
+            // Leaving the command disabled is right on both paths — a completed index has nothing to resume,
+            // and closing the file disables the whole Edit menu.
+            if (provider is null || LineIndexer.IsCompleted)
+            {
+                return;
+            }
+
             indexRefreshTimer.Start();
             StartIndexing();
         }
