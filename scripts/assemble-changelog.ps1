@@ -130,7 +130,9 @@ function Format-Section {
 
         $parts.Add("### $($categoryTitles[$category])")
         foreach ($file in $Fragments[$category]) {
-            $text = ([System.IO.File]::ReadAllText($file.FullName) -replace "`r`n", "`n").TrimEnd()
+            # Trim only line breaks, not all trailing whitespace: two trailing spaces are a Markdown hard
+            # line break, and this section promises the fragment is copied verbatim.
+            $text = ([System.IO.File]::ReadAllText($file.FullName) -replace "`r`n", "`n").TrimEnd("`n")
             $parts.Add($text)
         }
         $parts.Add('')
@@ -193,10 +195,13 @@ $nextHeading = $content.IndexOf("`n## [", $afterMarker)
 if ($nextHeading -lt 0) { throw "Could not find the previous release heading after '$marker'." }
 
 $unreleasedBody = $content.Substring($afterMarker, $nextHeading - $afterMarker)
-$strays = ($unreleasedBody -split "`n" | Where-Object { $_.TrimStart().StartsWith('- ') })
+$strays = @($unreleasedBody -split "`n" | Where-Object { $_.TrimStart().StartsWith('- ') })
 if ($strays.Count -gt 0) {
     Write-Warning "[Unreleased] still contains $($strays.Count) inline bullet(s); they will be carried into $Version. Prefer changelog.d/ fragments so concurrent PRs do not conflict."
-    $section = ($unreleasedBody.Trim() + "`n`n" + $section).Trim()
+    # Drop HTML comments first: [Unreleased] always holds the pointer comment, and carrying the body wholesale
+    # would publish that instruction block inside the release notes.
+    $carried = ($unreleasedBody -replace '(?s)<!--.*?-->', '').Trim()
+    if ($carried) { $section = ($carried + "`n`n" + $section).Trim() }
 }
 
 # Built by joining with an explicit "`n" rather than as a here-string: a here-string picks up the line

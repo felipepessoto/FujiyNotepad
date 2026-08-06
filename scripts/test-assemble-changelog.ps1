@@ -4,35 +4,63 @@
 
 .DESCRIPTION
     The assemble script rewrites CHANGELOG.md, so it is worth checking rather than trusting. Each case runs
-    against a throwaway copy of the repository's changelog and fragments.
+    against a throwaway sandbox.
 
-    Every path here is ABSOLUTE on purpose. PowerShell's Push-Location does not change .NET's current
-    directory, so a [System.IO.File] call with a relative path silently hits the real repository instead of
-    the copy under test - which, while this was being written, quietly wrote test data into the real
-    CHANGELOG.md five times before it was noticed. The last case asserts the repository's own changelog was
-    left alone, so that failure mode cannot recur silently.
+    Two rules this file follows, both learned the hard way.
+
+    Every path is ABSOLUTE. PowerShell's Push-Location does not change .NET's current directory, so a
+    [System.IO.File] call with a relative path silently hits the real repository instead of the sandbox -
+    which, while this was being written, quietly wrote test data into the real CHANGELOG.md five times before
+    it was noticed. The last case asserts the repository's own changelog is untouched, so that cannot recur
+    silently.
+
+    Sandboxes SEED their own fragments rather than copying changelog.d/ from the branch. A release pull
+    request has just consumed every fragment, so a suite that copied them would find none, -Version would
+    throw, and CI would fail on the release itself - the worst possible moment. Test data must not depend on
+    what happens to be queued.
 #>
 param([string]$Repo = (Split-Path $PSScriptRoot -Parent))
-
-# Verifies scripts/assemble-changelog.ps1 against throwaway copies.
-# Every path here is absolute: PowerShell's Push-Location does NOT change .NET's current directory, so
-# [IO.File] calls with a relative path silently hit the real repository instead of the copy under test.
 
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $results = @()
 
 function New-Sandbox {
-    param([string]$Repo, [switch]$UseLf)
+    param(
+        [string]$Repo,
+        [switch]$UseLf,
+        [string[]]$Categories = @('fixed', 'internal')
+    )
+
     $dir = Join-Path $env:TEMP ("clog-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
     New-Item -ItemType Directory -Path (Join-Path $dir 'scripts') -Force | Out-Null
-    Copy-Item (Join-Path $Repo 'changelog.d') $dir -Recurse
     Copy-Item (Join-Path $Repo 'scripts\assemble-changelog.ps1') (Join-Path $dir 'scripts')
 
+    $fragmentRoot = Join-Path $dir 'changelog.d'
+    New-Item -ItemType Directory -Path $fragmentRoot -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $fragmentRoot 'README.md'), "# Changelog fragments`r`n", $utf8)
+    foreach ($c in $Categories) {
+        $sub = Join-Path $fragmentRoot $c
+        New-Item -ItemType Directory -Path $sub -Force | Out-Null
+        [IO.File]::WriteAllText(
+            (Join-Path $sub "100-$c-sample.md"),
+            "- **Sample $c entry** first line of the body.`r`n  and a continuation line (issue #100).`r`n",
+            $utf8)
+    }
+
+    # The changelog itself comes from the repository: its real structure is what is being edited.
     $text = [IO.File]::ReadAllText((Join-Path $Repo 'CHANGELOG.md'))
     if ($UseLf) { $text = $text -replace "`r`n", "`n" }
     [IO.File]::WriteAllText((Join-Path $dir 'CHANGELOG.md'), $text, $utf8)
+
     return $dir
+}
+
+function Invoke-Assemble {
+    param([string]$Sandbox, [hashtable]$Params)
+    # Hashtable splatting: array splatting would pass these positionally, and the script takes named parameters.
+    & (Join-Path $Sandbox 'scripts\assemble-changelog.ps1') @Params *>&1 | Out-Null
+    return $LASTEXITCODE
 }
 
 function Get-Endings([string]$path) {
@@ -49,46 +77,49 @@ function Add-Result([string]$name, [bool]$ok, [string]$detail) {
     $script:results += [pscustomobject]@{ Test = $name; Ok = $ok; Detail = $detail }
 }
 
-# 1. A CRLF changelog must stay CRLF, with no CR CR LF.
+# 1. A CRLF changelog stays CRLF, with no CR CR LF.
 $s = New-Sandbox -Repo $Repo
-& (Join-Path $s 'scripts\assemble-changelog.ps1') -Version 4.13.0 -Date 2026-08-06 *>&1 | Out-Null
+Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
 $e = Get-Endings (Join-Path $s 'CHANGELOG.md')
 Add-Result 'CRLF file stays CRLF' ($e.Lf -eq 0 -and $e.DoubleCr -eq 0) "CRLF=$($e.CrLf) LF=$($e.Lf) CRCR=$($e.DoubleCr)"
 Remove-Item $s -Recurse -Force
 
-# 2. An LF changelog must stay LF.
+# 2. An LF changelog stays LF.
 $s = New-Sandbox -Repo $Repo -UseLf
-& (Join-Path $s 'scripts\assemble-changelog.ps1') -Version 4.13.0 -Date 2026-08-06 *>&1 | Out-Null
+Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
 $e = Get-Endings (Join-Path $s 'CHANGELOG.md')
 Add-Result 'LF file stays LF' ($e.CrLf -eq 0 -and $e.DoubleCr -eq 0) "CRLF=$($e.CrLf) LF=$($e.Lf) CRCR=$($e.DoubleCr)"
 Remove-Item $s -Recurse -Force
 
-# 3. Release consumes fragments and writes the section.
+# 3. Release consumes the fragments, writes the section, and keeps the pointer.
 $s = New-Sandbox -Repo $Repo
-$before = (Get-ChildItem (Join-Path $s 'changelog.d') -Recurse -File -Filter *.md | Where-Object Name -ne 'README.md').Count
-& (Join-Path $s 'scripts\assemble-changelog.ps1') -Version 4.13.0 -Date 2026-08-06 *>&1 | Out-Null
-$after = (Get-ChildItem (Join-Path $s 'changelog.d') -Recurse -File -Filter *.md | Where-Object Name -ne 'README.md').Count
+$before = @(Get-ChildItem (Join-Path $s 'changelog.d') -Recurse -File -Filter *.md | Where-Object Name -ne 'README.md').Count
+$exit = Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' }
+$after = @(Get-ChildItem (Join-Path $s 'changelog.d') -Recurse -File -Filter *.md | Where-Object Name -ne 'README.md').Count
 $text = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
-$ok = ($after -eq 0) -and ($text -match '## \[4\.13\.0\] - 2026-08-06') -and ($text -match 'changelog\.d/<category>/')
-Add-Result 'Release consumes fragments' $ok "fragments $before -> $after; section written; [Unreleased] pointer kept"
+$ok = ($exit -eq 0) -and ($after -eq 0) -and ($text -match '## \[4\.13\.0\] - 2026-08-06') -and ($text -match 'changelog\.d/<category>/')
+Add-Result 'Release consumes fragments' $ok "exit=$exit fragments $before -> $after"
 Remove-Item $s -Recurse -Force
 
-# 4. No stray warning when [Unreleased] holds only the pointer.
+# 4. No stray-bullet warning when [Unreleased] holds only the pointer comment.
 $s = New-Sandbox -Repo $Repo
 $warn = & (Join-Path $s 'scripts\assemble-changelog.ps1') -Version 4.13.0 -Date 2026-08-06 3>&1 2>$null |
     Where-Object { $_ -is [System.Management.Automation.WarningRecord] }
 Add-Result 'No false stray-bullet warning' ($null -eq $warn) "warnings: $(($warn | ForEach-Object { $_.Message }) -join '; ')"
 Remove-Item $s -Recurse -Force
 
-# 5. A hand-written inline bullet is carried into the release, not dropped.
+# 5. A hand-written inline bullet is carried into the release - and the pointer comment is NOT.
 $s = New-Sandbox -Repo $Repo
 $p = Join-Path $s 'CHANGELOG.md'
 $t = [IO.File]::ReadAllText($p) -replace '(?s)(## \[Unreleased\])', "`$1`r`n`r`n### Added`r`n- **Hand-written note** left here out of habit (issue #999)."
 [IO.File]::WriteAllText($p, $t, $utf8)
 $injected = ([IO.File]::ReadAllText($p)) -match 'Hand-written note'
-& (Join-Path $s 'scripts\assemble-changelog.ps1') -Version 4.13.0 -Date 2026-08-06 *>&1 | Out-Null
-$carried = ([IO.File]::ReadAllText($p)) -match 'Hand-written note'
-Add-Result 'Inline bullet carried, not dropped' ($injected -and $carried) "injected=$injected carried=$carried"
+Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
+$afterText = [IO.File]::ReadAllText($p)
+$carried = $afterText -match 'Hand-written note'
+$releaseBody = $afterText.Substring($afterText.IndexOf('## [4.13.0]'))
+$commentLeaked = $releaseBody -match 'Release notes are not written here'
+Add-Result 'Inline bullet carried, comment not leaked' ($injected -and $carried -and -not $commentLeaked) "carried=$carried commentLeaked=$commentLeaked"
 Remove-Item $s -Recurse -Force
 
 # 6. Malformed fragments are rejected and the changelog is left alone.
@@ -99,44 +130,45 @@ New-Item -ItemType Directory -Path (Join-Path $s 'changelog.d\bogus') | Out-Null
 [IO.File]::WriteAllText((Join-Path $s 'changelog.d\fixed\900-empty.md'), "", $utf8)
 [IO.File]::WriteAllText((Join-Path $s 'changelog.d\fixed\901-prose.md'), "no bullet here", $utf8)
 $snapshot = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
-& (Join-Path $s 'scripts\assemble-changelog.ps1') -Check *>&1 | Out-Null
-$checkExit = $LASTEXITCODE
-& (Join-Path $s 'scripts\assemble-changelog.ps1') -Version 4.13.0 *>&1 | Out-Null
-$relExit = $LASTEXITCODE
+$checkExit = Invoke-Assemble $s @{ Check = $true }
+$relExit = Invoke-Assemble $s @{ Version = '4.13.0' }
 $untouched = ([IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md')) -eq $snapshot)
-Add-Result 'Malformed rejected, changelog untouched' (($checkExit -ne 0) -and ($relExit -ne 0) -and $untouched) "check exit=$checkExit release exit=$relExit untouched=$untouched"
+Add-Result 'Malformed rejected, changelog untouched' (($checkExit -ne 0) -and ($relExit -ne 0) -and $untouched) "check=$checkExit release=$relExit untouched=$untouched"
 Remove-Item $s -Recurse -Force
 
-# 7. Sections are emitted in the documented order, and only for non-empty categories.
+# 7. Sections come out in the documented order, and empty categories are omitted. The sandbox seeds exactly
+#    the categories asserted here, so the expectation cannot drift with whatever the branch has queued.
+$s = New-Sandbox -Repo $Repo -Categories @('internal', 'added', 'security', 'changed')
+Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
+$afterText = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
+$releaseBody = $afterText.Substring($afterText.IndexOf('## [4.13.0]'))
+$releaseBody = $releaseBody.Substring(0, $releaseBody.IndexOf('## [4.12.0]'))
+$headings = @($releaseBody -split "`r?`n" | Where-Object { $_ -match '^### ' })
+$expected = @('### Added', '### Changed', '### Security', '### Internal')
+$ok = ("$($headings -join '|')" -eq "$($expected -join '|')")
+Add-Result 'Sections ordered, empty ones omitted' $ok "got: $($headings -join ' ')"
+Remove-Item $s -Recurse -Force
+
+# 8. Fragment text is copied verbatim, including a Markdown hard line break (two trailing spaces).
 $s = New-Sandbox -Repo $Repo
-foreach ($c in 'added', 'changed', 'security') {
-    $d = Join-Path $s "changelog.d\$c"
-    if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
-    [IO.File]::WriteAllText((Join-Path $d '500-x.md'), "- **$c entry** body.", $utf8)
-}
-& (Join-Path $s 'scripts\assemble-changelog.ps1') -Version 4.13.0 -Date 2026-08-06 *>&1 | Out-Null
-$headings = ([IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md')) -split "`r?`n" |
-    Select-Object -Skip 0 | Where-Object { $_ -match '^### ' })
-# Only the new section's headings matter; earlier releases follow, so take the leading run.
-$newSection = @()
-foreach ($h in $headings) { if ($newSection -contains $h) { break }; $newSection += $h }
-$expected = @('### Added', '### Changed', '### Fixed', '### Security', '### Internal')
-$ok = ("$($newSection -join '|')" -eq "$($expected -join '|')")
-Add-Result 'Sections ordered, empty ones omitted' $ok "got: $($newSection -join ' ')"
+[IO.File]::WriteAllText((Join-Path $s 'changelog.d\fixed\200-hardbreak.md'), "- **Hard break** first line.  `r`n  second line (issue #200).`r`n", $utf8)
+Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
+$afterText = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
+Add-Result 'Trailing hard break preserved' ($afterText -match 'Hard break\*\* first line\.  \r?\n') "two trailing spaces survive"
 Remove-Item $s -Recurse -Force
 
-# 8. -Check passes on the real repository.
+# 9. -Check passes on the real repository, including when nothing is queued.
 & (Join-Path $Repo 'scripts\assemble-changelog.ps1') -Check *>&1 | Out-Null
 Add-Result '-Check passes on this repo' ($LASTEXITCODE -eq 0) "exit=$LASTEXITCODE"
 
-# 9. The repository's own changelog was not touched by any of the above.
+# 10. Nothing above touched the repository's own changelog.
 $repoText = [IO.File]::ReadAllText((Join-Path $Repo 'CHANGELOG.md'))
-$clean = ($repoText -notmatch 'Hand-written note') -and ($repoText -notmatch 'hand-written entry') -and ($repoText -notmatch '4\.13\.0')
+$clean = ($repoText -notmatch 'Hand-written note') -and ($repoText -notmatch 'Sample fixed entry') -and ($repoText -notmatch '4\.13\.0')
 Add-Result 'Real repo changelog untouched by tests' $clean "no test strings, no 4.13.0 section"
 
 $results | ForEach-Object { "{0}  {1,-42} {2}" -f $(if ($_.Ok) { 'PASS' } else { 'FAIL' }), $_.Test, $_.Detail }
 $failed = @($results | Where-Object { -not $_.Ok }).Count
 "`n$($results.Count - $failed)/$($results.Count) passed"
 if ($failed -gt 0) { exit 1 }
-
+exit 0
 
