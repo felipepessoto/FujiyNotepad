@@ -210,5 +210,31 @@ namespace FujiyNotepad.Core.Tests
 
             Assert.Equal(new[] { 0 }, lines); // only the match below the frontier; nothing clamped onto line 2
         }
+
+        [Fact]
+        public async Task MatchLinesByPattern_IndexRanAheadOfTheCachedLength_OmitsRatherThanMisattributes()
+        {
+            // Documents a deliberate conservative edge. Indexing reads to the LIVE end of file, but the source's
+            // cached length only moves on an explicit RefreshLength — which the app issues only while Follow Tail
+            // is on. So a file that grows while indexing runs can end up indexed past its cached length.
+            //
+            // The bound is the cached length, so those matches are omitted rather than shown. That is the safe
+            // direction: the alternative is reading past the bound, which is exactly what lets a growing file
+            // contribute matches the index cannot place. If this is ever tightened, tighten it knowingly.
+            var source = new GrowableByteSource("ERROR one\n");
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+
+            source.Append("ERROR two\n"); // present on disk before indexing, but Length still reports 10
+            Assert.Equal(10, source.Length);
+
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            Assert.True(indexer.IsCompleted);
+            Assert.Equal(4, indexer.GetNumberOfLinesIndexed()); // the index DID see both lines (starts 0, 10, 20)
+
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default);
+
+            Assert.Equal(new[] { 0 }, lines); // line 1 is indexed, but sits past the cached length
+        }
     }
 }

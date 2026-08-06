@@ -77,6 +77,14 @@ namespace FujiyNotepad.Core
         /// <see cref="Match"/> has by capturing <c>LineCount</c> once.
         /// </para>
         /// <para>
+        /// The bound is deliberately the <em>cached</em> length rather than a fresh one. That makes it a
+        /// conservative snapshot: indexing reads to the live end of file, so on a file that grew while it ran
+        /// the index can cover a little past the cached length, and matches there are omitted rather than
+        /// included. Omitting is the safe direction — the alternative is re-reading a region the bound exists
+        /// to exclude — and it matches the rest of the viewer, which only re-reads the length while Follow Tail
+        /// is on.
+        /// </para>
+        /// <para>
         /// This bound is what keeps the result honest, because two things move underneath the scan.
         /// <see cref="TextSearcher.Search"/> reads to the <em>live</em> end of file (its loop stops on a short
         /// read, not at a captured length), so a file that grows during the scan yields matches in a region no

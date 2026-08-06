@@ -623,6 +623,91 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(new long[] { 4 }, hits);
         }
 
+        [Theory]
+        [InlineData(7)]
+        [InlineData(8)]
+        [InlineData(16)]
+        [InlineData(64)]
+        [InlineData(1024)]
+        public async Task Search_Bounded_IsExactlyTheUnboundedResultTruncatedAtTheBound(int chunkSize)
+        {
+            // The bound must not perturb matching itself. Sweeping the bound across every offset, for patterns
+            // that stress the chunking (self-overlapping, longer than a chunk boundary, single byte), pins that
+            // a bounded scan equals the unbounded scan filtered to the bound — so the carry/overlap handling
+            // cannot be silently dropping or inventing a match near the boundary.
+            string[] contents =
+            {
+                "aaaaaaaaaaaaaaaaaaaa",
+                "abcabcabcabcabcabcabc",
+                "..needle....needle..needle",
+                "xx",
+                new string('.', 40) + "needle" + new string('.', 40),
+            };
+            string[] patterns = { "a", "aa", "abc", "needle", "x" };
+
+            foreach (string content in contents)
+            {
+                var source = new InMemoryByteSource(content);
+                var searcher = new TextSearcher(source, chunkSize);
+
+                foreach (string pattern in patterns)
+                {
+                    byte[] pat = Ascii(pattern);
+
+                    var unbounded = new List<long>();
+                    await foreach (long offset in searcher.Search(0, pat, default(SearchOptions)))
+                    {
+                        unbounded.Add(offset);
+                    }
+
+                    for (long bound = 0; bound <= content.Length + 2; bound++)
+                    {
+                        var bounded = new List<long>();
+                        await foreach (long offset in searcher.Search(0, pat, default, null, default, bound))
+                        {
+                            bounded.Add(offset);
+                        }
+
+                        long b = bound;
+                        Assert.Equal(unbounded.Where(o => o < b).ToList(), bounded);
+                    }
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(7)]
+        [InlineData(64)]
+        public async Task Search_Bounded_WithOptions_IsExactlyTheUnboundedResultTruncatedAtTheBound(int chunkSize)
+        {
+            // Same property with the option flags on, so the bound cannot interact with the whole-word
+            // neighbour reads (which peek outside the buffer) or the case folding.
+            const string content = "Error err ERROR error_x erroring ERR error";
+            var source = new InMemoryByteSource(content);
+            var searcher = new TextSearcher(source, chunkSize);
+            var options = new SearchOptions { IgnoreCase = true, WholeWord = true };
+            byte[] pat = Ascii("error");
+
+            var unbounded = new List<long>();
+            await foreach (long offset in searcher.Search(0, pat, options))
+            {
+                unbounded.Add(offset);
+            }
+            Assert.NotEmpty(unbounded); // the property would be vacuous otherwise
+
+            for (long bound = 0; bound <= content.Length + 2; bound++)
+            {
+                var bounded = new List<long>();
+                await foreach (long offset in searcher.Search(0, pat, options, null, default, bound))
+                {
+                    bounded.Add(offset);
+                }
+
+                long b = bound;
+                Assert.Equal(unbounded.Where(o => o < b).ToList(), bounded);
+            }
+        }
+
         // Counts positional reads so a test can assert a bounded scan stops early.
         private sealed class CountingByteSource : IByteSource
         {
