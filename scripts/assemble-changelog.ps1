@@ -94,6 +94,10 @@ function Test-Fragments {
             continue
         }
 
+        foreach ($nested in Get-ChildItem -Path $dir.FullName -Directory) {
+            $problems += "changelog.d/$($dir.Name)/$($nested.Name)/: fragments must sit directly in the category folder. Nested folders are not collected, so anything in here would be silently dropped from the release."
+        }
+
         foreach ($file in Get-ChildItem -Path $dir.FullName -File) {
             $rel = "changelog.d/$($dir.Name)/$($file.Name)"
             if ($file.Extension -ne '.md') {
@@ -137,7 +141,9 @@ function Format-Section {
         }
         $parts.Add('')
     }
-    return ($parts -join "`n").TrimEnd()
+    # TrimEnd("`n"), not TrimEnd(): the latter would eat trailing spaces on the last fragment's final line,
+    # and two trailing spaces are a Markdown hard line break. This section is copied verbatim.
+    return ($parts -join "`n").TrimEnd("`n")
 }
 
 # ---------------------------------------------------------------------------------------------------------
@@ -199,9 +205,10 @@ $strays = @($unreleasedBody -split "`n" | Where-Object { $_.TrimStart().StartsWi
 if ($strays.Count -gt 0) {
     Write-Warning "[Unreleased] still contains $($strays.Count) inline bullet(s); they will be carried into $Version. Prefer changelog.d/ fragments so concurrent PRs do not conflict."
     # Drop HTML comments first: [Unreleased] always holds the pointer comment, and carrying the body wholesale
-    # would publish that instruction block inside the release notes.
-    $carried = ($unreleasedBody -replace '(?s)<!--.*?-->', '').Trim()
-    if ($carried) { $section = ($carried + "`n`n" + $section).Trim() }
+    # would publish that instruction block inside the release notes. Trimming line breaks only, for the same
+    # verbatim reason as Format-Section.
+    $carried = ($unreleasedBody -replace '(?s)<!--.*?-->', '').Trim("`n", "`r")
+    if ($carried.Trim()) { $section = ($carried + "`n`n" + $section).Trim("`n", "`r") }
 }
 
 # Built by joining with an explicit "`n" rather than as a here-string: a here-string picks up the line

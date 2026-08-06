@@ -168,11 +168,28 @@ $afterText = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
 Add-Result 'Trailing hard break preserved' ($afterText -match 'Hard break\*\* first line\.  \r?\n') "two trailing spaces survive"
 Remove-Item $s -Recurse -Force
 
-# 9. -Check passes on the real repository, including when nothing is queued.
+# 9. A fragment hidden in a nested folder is reported, not silently dropped. Collection is deliberately
+#    non-recursive, so without this check such a note would vanish from the release without a word.
+$s = New-Sandbox -Repo $Repo
+New-Item -ItemType Directory -Path (Join-Path $s 'changelog.d\fixed\drafts') -Force | Out-Null
+[IO.File]::WriteAllText((Join-Path $s 'changelog.d\fixed\drafts\300-buried.md'), "- **Buried note** would be lost (issue #300).`r`n", $utf8)
+$checkExit = Invoke-Assemble $s @{ Check = $true }
+Add-Result 'Nested folder reported, not dropped' ($checkExit -ne 0) "check exit=$checkExit"
+Remove-Item $s -Recurse -Force
+
+# 10. A hard line break at the very END of the section survives (the last fragment's last line).
+$s = New-Sandbox -Repo $Repo -Categories @('internal')
+[IO.File]::WriteAllText((Join-Path $s 'changelog.d\internal\999-last.md'), "- **Last entry** ends with a hard break.  `r`n", $utf8)
+Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
+$afterText = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
+Add-Result 'Hard break at end of section survives' ($afterText -match 'hard break\.  \r?\n') "trailing spaces kept at section end"
+Remove-Item $s -Recurse -Force
+
+# 11. -Check passes on the real repository, including when nothing is queued.
 & (Join-Path $Repo 'scripts\assemble-changelog.ps1') -Check *>&1 | Out-Null
 Add-Result '-Check passes on this repo' ($LASTEXITCODE -eq 0) "exit=$LASTEXITCODE"
 
-# 10. Nothing above touched the repository's own changelog. Detected via the sentinel strings the sandboxes
+# 12. Nothing above touched the repository's own changelog. Detected via the sentinel strings the sandboxes
 #     inject - deliberately NOT by looking for the test's version number, which would start failing for real
 #     the day the project legitimately ships that version.
 $repoText = [IO.File]::ReadAllText((Join-Path $Repo 'CHANGELOG.md'))
@@ -185,4 +202,5 @@ $failed = @($results | Where-Object { -not $_.Ok }).Count
 "`n$($results.Count - $failed)/$($results.Count) passed"
 if ($failed -gt 0) { exit 1 }
 exit 0
+
 
