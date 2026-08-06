@@ -201,14 +201,20 @@ $nextHeading = $content.IndexOf("`n## [", $afterMarker)
 if ($nextHeading -lt 0) { throw "Could not find the previous release heading after '$marker'." }
 
 $unreleasedBody = $content.Substring($afterMarker, $nextHeading - $afterMarker)
-$strays = @($unreleasedBody -split "`n" | Where-Object { $_.TrimStart().StartsWith('- ') })
-if ($strays.Count -gt 0) {
-    Write-Warning "[Unreleased] still contains $($strays.Count) inline bullet(s); they will be carried into $Version. Prefer changelog.d/ fragments so concurrent PRs do not conflict."
-    # Drop HTML comments first: [Unreleased] always holds the pointer comment, and carrying the body wholesale
-    # would publish that instruction block inside the release notes. Trimming line breaks only, for the same
-    # verbatim reason as Format-Section.
-    $carried = ($unreleasedBody -replace '(?s)<!--.*?-->', '').Trim("`n", "`r")
-    if ($carried.Trim()) { $section = ($carried + "`n`n" + $section).Trim("`n", "`r") }
+
+# Drop HTML comments first: [Unreleased] always holds the pointer comment, and carrying the body wholesale
+# would publish that instruction block inside the release notes. Detecting leftovers in the STRIPPED text
+# also means a comment that happens to contain a "- " line cannot look like a stray entry.
+# Trimming line breaks only, for the same verbatim reason as Format-Section.
+$carried = ($unreleasedBody -replace '(?s)<!--.*?-->', '').Trim("`n", "`r")
+
+# ANY leftover content is carried, not only bullets. Someone who typed a heading, or a paragraph without a
+# bullet marker, still meant to say something - and dropping it silently is the single outcome this whole
+# mechanism exists to prevent.
+if ($carried.Trim()) {
+    $lines = @($carried -split "`n" | Where-Object { $_.Trim() })
+    Write-Warning "[Unreleased] still contains $($lines.Count) line(s) written by hand; they will be carried into $Version. Prefer changelog.d/ fragments so concurrent PRs do not conflict."
+    $section = ($carried + "`n`n" + $section).Trim("`n", "`r")
 }
 
 # Built by joining with an explicit "`n" rather than as a here-string: a here-string picks up the line

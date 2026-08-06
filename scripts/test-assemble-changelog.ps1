@@ -134,7 +134,19 @@ $commentLeaked = $releaseBody -match 'Release notes are not written here'
 Add-Result 'Inline bullet carried, comment not leaked' ($injected -and $carried -and -not $commentLeaked) "carried=$carried commentLeaked=$commentLeaked"
 Remove-Item $s -Recurse -Force
 
-# 6. Malformed fragments are rejected and the changelog is left alone.
+# 6. Leftover prose with no bullet marker is carried too - not just bullets. Someone who typed a heading or a
+#    paragraph still meant to say something, and dropping it silently is what this mechanism exists to avoid.
+$s = New-Sandbox -Repo $Repo
+$p = Join-Path $s 'CHANGELOG.md'
+$t = [IO.File]::ReadAllText($p) -replace '(?s)(## \[Unreleased\])', "`$1`r`n`r`nNote to self: remember to mention the migration steps."
+[IO.File]::WriteAllText($p, $t, $utf8)
+Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
+$afterText = [IO.File]::ReadAllText($p)
+$releaseBody = Get-ReleaseSection -Text $afterText -Version '4.13.0'
+Add-Result 'Leftover prose carried, not dropped' ($releaseBody -match 'Note to self') "prose without a bullet marker survives"
+Remove-Item $s -Recurse -Force
+
+# 7. Malformed fragments are rejected and the changelog is left alone.
 $s = New-Sandbox -Repo $Repo
 [IO.File]::WriteAllText((Join-Path $s 'changelog.d\stray.md'), "- misplaced", $utf8)
 New-Item -ItemType Directory -Path (Join-Path $s 'changelog.d\bogus') | Out-Null
@@ -148,7 +160,7 @@ $untouched = ([IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md')) -eq $snapsho
 Add-Result 'Malformed rejected, changelog untouched' (($checkExit -ne 0) -and ($relExit -ne 0) -and $untouched) "check=$checkExit release=$relExit untouched=$untouched"
 Remove-Item $s -Recurse -Force
 
-# 7. Sections come out in the documented order, and empty categories are omitted. The sandbox seeds exactly
+# 8. Sections come out in the documented order, and empty categories are omitted. The sandbox seeds exactly
 #    the categories asserted here, so the expectation cannot drift with whatever the branch has queued.
 $s = New-Sandbox -Repo $Repo -Categories @('internal', 'added', 'security', 'changed')
 Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
@@ -160,7 +172,7 @@ $ok = ("$($headings -join '|')" -eq "$($expected -join '|')")
 Add-Result 'Sections ordered, empty ones omitted' $ok "got: $($headings -join ' ')"
 Remove-Item $s -Recurse -Force
 
-# 8. Fragment text is copied verbatim, including a Markdown hard line break (two trailing spaces).
+# 9. Fragment text is copied verbatim, including a Markdown hard line break (two trailing spaces).
 $s = New-Sandbox -Repo $Repo
 [IO.File]::WriteAllText((Join-Path $s 'changelog.d\fixed\200-hardbreak.md'), "- **Hard break** first line.  `r`n  second line (issue #200).`r`n", $utf8)
 Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
@@ -168,7 +180,7 @@ $afterText = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
 Add-Result 'Trailing hard break preserved' ($afterText -match 'Hard break\*\* first line\.  \r?\n') "two trailing spaces survive"
 Remove-Item $s -Recurse -Force
 
-# 9. A fragment hidden in a nested folder is reported, not silently dropped. Collection is deliberately
+# 10. A fragment hidden in a nested folder is reported, not silently dropped. Collection is deliberately
 #    non-recursive, so without this check such a note would vanish from the release without a word.
 $s = New-Sandbox -Repo $Repo
 New-Item -ItemType Directory -Path (Join-Path $s 'changelog.d\fixed\drafts') -Force | Out-Null
@@ -177,7 +189,7 @@ $checkExit = Invoke-Assemble $s @{ Check = $true }
 Add-Result 'Nested folder reported, not dropped' ($checkExit -ne 0) "check exit=$checkExit"
 Remove-Item $s -Recurse -Force
 
-# 10. A hard line break at the very END of the section survives (the last fragment's last line).
+# 11. A hard line break at the very END of the section survives (the last fragment's last line).
 $s = New-Sandbox -Repo $Repo -Categories @('internal')
 [IO.File]::WriteAllText((Join-Path $s 'changelog.d\internal\999-last.md'), "- **Last entry** ends with a hard break.  `r`n", $utf8)
 Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
@@ -185,15 +197,15 @@ $afterText = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
 Add-Result 'Hard break at end of section survives' ($afterText -match 'hard break\.  \r?\n') "trailing spaces kept at section end"
 Remove-Item $s -Recurse -Force
 
-# 11. -Check passes on the real repository, including when nothing is queued.
+# 12. -Check passes on the real repository, including when nothing is queued.
 & (Join-Path $Repo 'scripts\assemble-changelog.ps1') -Check *>&1 | Out-Null
 Add-Result '-Check passes on this repo' ($LASTEXITCODE -eq 0) "exit=$LASTEXITCODE"
 
-# 12. Nothing above touched the repository's own changelog. Detected via the sentinel strings the sandboxes
+# 13. Nothing above touched the repository's own changelog. Detected via the sentinel strings the sandboxes
 #     inject - deliberately NOT by looking for the test's version number, which would start failing for real
 #     the day the project legitimately ships that version.
 $repoText = [IO.File]::ReadAllText((Join-Path $Repo 'CHANGELOG.md'))
-$sentinels = @('Hand-written note', 'Sample fixed entry', 'Sample internal entry', 'Sample security entry', 'Hard break')
+$sentinels = @('Hand-written note', 'Note to self', 'Sample fixed entry', 'Sample internal entry', 'Sample security entry', 'Hard break', 'Buried note')
 $hit = @($sentinels | Where-Object { $repoText -match [regex]::Escape($_) })
 Add-Result 'Real repo changelog untouched by tests' ($hit.Count -eq 0) "sentinels found: $(if ($hit) { $hit -join ', ' } else { 'none' })"
 
@@ -202,5 +214,6 @@ $failed = @($results | Where-Object { -not $_.Ok }).Count
 "`n$($results.Count - $failed)/$($results.Count) passed"
 if ($failed -gt 0) { exit 1 }
 exit 0
+
 
 
