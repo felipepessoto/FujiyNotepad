@@ -115,7 +115,11 @@ function Test-Fragments {
 }
 
 function Format-Section {
-    param([hashtable]$Fragments)
+    # IDictionary, not hashtable: Get-Fragments returns an ordered dictionary, and PowerShell will happily
+    # coerce that to [hashtable] — silently discarding the ordering. It is masked here because the loop below
+    # walks $categoryOrder rather than the dictionary's keys, but anyone who later iterated .Keys would get
+    # scrambled sections. Accepting IDictionary keeps the ordered dictionary intact instead.
+    param([System.Collections.IDictionary]$Fragments)
 
     # Built with explicit "`n" rather than AppendLine: AppendLine emits Environment.NewLine, which is CRLF on
     # Windows, so the section would carry a different line ending from the rest of the pipeline and the final
@@ -226,3 +230,6 @@ foreach ($category in $fragments.Keys) {
 }
 
 Write-Host "Wrote [$Version] - $releaseDate to CHANGELOG.md and removed $removed fragment(s)." -ForegroundColor Green
+# Explicit, so a caller (or CI) can rely on the exit code rather than reading whatever the last command left
+# in $LASTEXITCODE - a stale 1 from an earlier failure would otherwise look like this run failed.
+exit 0

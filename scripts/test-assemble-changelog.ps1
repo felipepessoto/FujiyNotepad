@@ -107,11 +107,29 @@ $untouched = ([IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md')) -eq $snapsho
 Add-Result 'Malformed rejected, changelog untouched' (($checkExit -ne 0) -and ($relExit -ne 0) -and $untouched) "check exit=$checkExit release exit=$relExit untouched=$untouched"
 Remove-Item $s -Recurse -Force
 
-# 7. -Check passes on the real repository.
+# 7. Sections are emitted in the documented order, and only for non-empty categories.
+$s = New-Sandbox -Repo $Repo
+foreach ($c in 'added', 'changed', 'security') {
+    $d = Join-Path $s "changelog.d\$c"
+    if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
+    [IO.File]::WriteAllText((Join-Path $d '500-x.md'), "- **$c entry** body.", $utf8)
+}
+& (Join-Path $s 'scripts\assemble-changelog.ps1') -Version 4.13.0 -Date 2026-08-06 *>&1 | Out-Null
+$headings = ([IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md')) -split "`r?`n" |
+    Select-Object -Skip 0 | Where-Object { $_ -match '^### ' })
+# Only the new section's headings matter; earlier releases follow, so take the leading run.
+$newSection = @()
+foreach ($h in $headings) { if ($newSection -contains $h) { break }; $newSection += $h }
+$expected = @('### Added', '### Changed', '### Fixed', '### Security', '### Internal')
+$ok = ("$($newSection -join '|')" -eq "$($expected -join '|')")
+Add-Result 'Sections ordered, empty ones omitted' $ok "got: $($newSection -join ' ')"
+Remove-Item $s -Recurse -Force
+
+# 8. -Check passes on the real repository.
 & (Join-Path $Repo 'scripts\assemble-changelog.ps1') -Check *>&1 | Out-Null
 Add-Result '-Check passes on this repo' ($LASTEXITCODE -eq 0) "exit=$LASTEXITCODE"
 
-# 8. The repository's own changelog was not touched by any of the above.
+# 9. The repository's own changelog was not touched by any of the above.
 $repoText = [IO.File]::ReadAllText((Join-Path $Repo 'CHANGELOG.md'))
 $clean = ($repoText -notmatch 'Hand-written note') -and ($repoText -notmatch 'hand-written entry') -and ($repoText -notmatch '4\.13\.0')
 Add-Result 'Real repo changelog untouched by tests' $clean "no test strings, no 4.13.0 section"
@@ -120,4 +138,5 @@ $results | ForEach-Object { "{0}  {1,-42} {2}" -f $(if ($_.Ok) { 'PASS' } else {
 $failed = @($results | Where-Object { -not $_.Ok }).Count
 "`n$($results.Count - $failed)/$($results.Count) passed"
 if ($failed -gt 0) { exit 1 }
+
 
