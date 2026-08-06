@@ -49,7 +49,8 @@ namespace FujiyNotepad.Core
         /// <paramref name="endOffsetExclusive"/> bounds the scan: no match starting at or after it is yielded,
         /// and — more importantly — the read loop stops there instead of following a file that is still being
         /// appended to. Reads extend just far enough past the bound to complete a match that <em>starts</em>
-        /// before it, so the bound never truncates a straddling match.
+        /// before it, but never past the source length captured when the scan began, so a bounded scan can only
+        /// ever report matches that existed in that snapshot.
         /// </summary>
         public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, SearchOptions options, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default, long endOffsetExclusive = long.MaxValue)
         {
@@ -73,9 +74,19 @@ namespace FujiyNotepad.Core
 
             int overlap = pattern.Length - 1;
             // Stop reading at the caller's bound, plus the overlap needed to finish a match that starts just
-            // before it. Unbounded (the default) this is long.MaxValue, so the loop behaves exactly as before —
-            // it runs until a short read signals end of file.
-            long readLimit = endOffsetExclusive == long.MaxValue ? long.MaxValue : endOffsetExclusive + overlap;
+            // before it — but never past the length captured above. Reading that overlap tail beyond the
+            // snapshot could pick up bytes appended mid-scan and assemble a match that did not exist in the
+            // snapshot at all (a pattern prefix at the old end of file, its suffix appended afterwards), which
+            // would then be yielded because the match START is inside the bound.
+            //
+            // Unbounded (the default) deliberately stays long.MaxValue so the loop still runs to the LIVE end
+            // of file: the cached length goes stale as a file is appended to, and indexing depends on reading
+            // past it. The comparison also keeps the addition below from overflowing.
+            long readLimit = long.MaxValue;
+            if (endOffsetExclusive < long.MaxValue - overlap)
+            {
+                readLimit = Math.Min(length, endOffsetExclusive + overlap);
+            }
             // Pool the ~1 MiB scan buffer (a Large Object Heap allocation): Search runs on every find, index
             // pass and block expansion, so renting instead of allocating avoids per-call LOH churn and Gen2 GCs.
             byte[] buffer = ArrayPool<byte>.Shared.Rent(chunkSize + overlap);

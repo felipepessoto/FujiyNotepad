@@ -582,6 +582,47 @@ namespace FujiyNotepad.Core.Tests
             Assert.Empty(hits);
         }
 
+        [Fact]
+        public async Task Search_EndOffsetExclusive_DoesNotReadPastTheSnapshotToCompleteAMatch()
+        {
+            // The overlap tail must not reach beyond the captured length. Here "nee" is all that existed when
+            // the length was captured (7); "dle" arrived afterwards without a RefreshLength, exactly like a file
+            // being appended to mid-scan. Reading the overlap past the snapshot would assemble a "needle" that
+            // never existed in it and yield it, because the match START (4) is inside the bound.
+            var source = new GrowableByteSource("....nee");
+            Assert.Equal(7, source.Length);
+            source.Append("dle"); // data is now "....needle", but Length still reports 7
+
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("needle"), default, null, default, endOffsetExclusive: 7))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Empty(hits);
+        }
+
+        [Fact]
+        public async Task Search_WithoutABound_StillFollowsAGrowingFilePastItsCachedLength()
+        {
+            // The clamp above must not leak into the unbounded default: indexing relies on the read loop running
+            // to the LIVE end of file, since the cached length goes stale as a file is appended to.
+            var source = new GrowableByteSource("....nee");
+            source.Append("dle"); // Length still reports 7
+
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("needle"), default(SearchOptions)))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Equal(new long[] { 4 }, hits);
+        }
+
         // Counts positional reads so a test can assert a bounded scan stops early.
         private sealed class CountingByteSource : IByteSource
         {
