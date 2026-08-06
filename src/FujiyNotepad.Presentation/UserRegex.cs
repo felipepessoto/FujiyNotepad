@@ -27,7 +27,11 @@ namespace FujiyNotepad.Presentation
         /// A <see cref="Regex"/> over a user-supplied <paramref name="pattern"/>, carrying the shared
         /// <see cref="MatchTimeout"/>. Throws <see cref="ArgumentException"/> for a malformed pattern, exactly
         /// as the plain constructor does, so existing "Invalid regex" handling is unaffected.
+        /// <para><see cref="RegexOptions.Compiled"/> is stripped rather than trusted: it emits IL at runtime,
+        /// which a Native-AOT build cannot do. Enforcing it here means the invariant holds for every present and
+        /// future caller instead of relying on each one remembering.</para>
         /// </summary>
-        public static Regex Create(string pattern, RegexOptions options) => new Regex(pattern, options, MatchTimeout);
+        public static Regex Create(string pattern, RegexOptions options)
+            => new Regex(pattern, options & ~RegexOptions.Compiled, MatchTimeout);
     }
 }

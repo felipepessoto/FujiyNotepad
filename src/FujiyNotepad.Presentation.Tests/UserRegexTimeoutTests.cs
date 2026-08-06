@@ -40,17 +40,45 @@ namespace FujiyNotepad.Presentation.Tests
         }
 
         [Fact]
-        public void CatastrophicPattern_TimesOutInsteadOfHanging()
+        public async Task CatastrophicPattern_TimesOutInsteadOfHanging()
         {
             Regex r = UserRegex.Create(CatastrophicPattern, RegexOptions.None);
             var sw = Stopwatch.StartNew();
 
-            Assert.Throws<RegexMatchTimeoutException>(() => r.IsMatch(EvilInput));
+            // Run the match on a worker and hard-bound the wait. If the timeout is ever lost, the match becomes
+            // effectively infinite (2^40 partitions) and asserting on it directly would hang the whole test run
+            // rather than failing it.
+            Exception? thrown = null;
+            Task match = Task.Run(() =>
+            {
+                try
+                {
+                    r.IsMatch(EvilInput);
+                }
+                catch (Exception ex)
+                {
+                    thrown = ex;
+                }
+            });
 
+            Task completed = await Task.WhenAny(match, Task.Delay(TimeSpan.FromSeconds(30)));
             sw.Stop();
-            // Generous headroom over the budget: the point is that it is bounded at all, not that it is exact.
+
+            Assert.Same(match, completed); // the match never returned - the per-match timeout is not applied
+            Assert.IsType<RegexMatchTimeoutException>(thrown);
             Assert.True(sw.Elapsed < UserRegex.MatchTimeout + TimeSpan.FromSeconds(5),
                 $"expected the match to be abandoned near the budget, took {sw.Elapsed}");
+        }
+
+        [Fact]
+        public void Create_StripsCompiled_SoTheAotInvariantCannotBeBrokenByACaller()
+        {
+            // RegexOptions.Compiled emits IL at runtime, which a Native-AOT build cannot do.
+            Regex r = UserRegex.Create("abc", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+            Assert.Equal(RegexOptions.IgnoreCase, r.Options); // Compiled dropped, everything else preserved
+            Assert.Equal(UserRegex.MatchTimeout, r.MatchTimeout);
+            Assert.Matches(r, "ABC");
         }
 
         [Fact]
@@ -75,6 +103,11 @@ namespace FujiyNotepad.Presentation.Tests
             for (int i = 0; i < 200; i++)
             {
                 Assert.Empty(highlighter.Find(EvilInput));
+
+                // Bail out as soon as it is clearly not "immediate". Without this, a regressed latch would pay
+                // the budget on every iteration and take ~200 x MatchTimeout to fail.
+                Assert.True(sw.Elapsed < UserRegex.MatchTimeout,
+                    $"a disabled rule must cost nothing, but {i + 1} lines already took {sw.Elapsed}");
             }
             sw.Stop();
 
