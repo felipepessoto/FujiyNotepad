@@ -1633,8 +1633,9 @@ namespace FujiyNotepad.WinUI
 
             if (wholeWord)
             {
-                // Literal whole-word: escape the term, then \b-anchor it the same way the Find bar does.
-                Regex regex = FindRegexBuilder.Build(Regex.Escape(term), matchCase, wholeWord: true);
+                // Literal whole-word. Uses the same ASCII word-character definition as the byte-scan fast path
+                // below, so both routes return the same lines (see FindRegexBuilder.BuildLiteralWholeWord).
+                Regex regex = FindRegexBuilder.BuildLiteralWholeWord(term, matchCase);
                 return line => regex.IsMatch(line);
             }
 
