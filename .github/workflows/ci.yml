@@ -22,6 +22,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Fails on a malformed changelog fragment (unknown category, empty file, missing bullet marker) here,
+      # on the pull request that added it, rather than at release time when the fragments are assembled.
+      # The self-test guards the assemble script itself, which rewrites CHANGELOG.md.
+      - name: Check changelog fragments
+        shell: pwsh
+        run: |
+          ./scripts/assemble-changelog.ps1 -Check
+          ./scripts/test-assemble-changelog.ps1
+
       # No actions/setup-dotnet: the windows runner image already ships a .NET 10 SDK, which global.json
       # (10.0.100, rollForward latestMinor) accepts. setup-dotnet always re-downloads the ~300 MB SDK, so
       # relying on the preinstalled one saves ~35s per job. (Re-add it if the image ever drops .NET 10.)
