@@ -15,6 +15,14 @@ namespace FujiyNotepad.Core
         private readonly IByteSource source;
         private readonly int chunkSize;
 
+        /// <summary>
+        /// The source's currently-known byte length. This is the source's <em>cached</em> length (it only moves
+        /// when something calls <c>RefreshLength</c>), not a fresh stat of the file, which is what makes it
+        /// usable as a stable snapshot bound: <see cref="Search"/> itself scans to the live end of file, because
+        /// its read loop stops on a short read rather than at this length.
+        /// </summary>
+        public long SourceLength => source.Length;
+
         public TextSearcher(IByteSource source) : this(source, DefaultChunkSize)
         {
         }

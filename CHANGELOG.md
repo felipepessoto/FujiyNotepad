@@ -40,6 +40,10 @@ tag per published build. Each release also has downloadable builds and notes on 
   was invalidated, leaving the view showing a truncated last line until the file next changed size (and
   indefinitely if it stopped growing). The decode is now discarded if the file changed while it was in flight
   (issue #168).
+- **Filter could show a row that doesn't contain the search term** — when the file grew while a Filter scan was
+  running (or Follow Tail restarted indexing underneath it), matches in the not-yet-indexed region were all
+  attributed to the last known line, producing a bogus row — sometimes one past the end of the file — and hiding
+  the real matches. The scan is now limited to the region the line index actually covers (issue #169).
 
 ### Internal
 - **Diagnostic logging for silent failures** — the deliberately-swallowed exceptions behind three best-effort

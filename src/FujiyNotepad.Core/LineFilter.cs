@@ -71,12 +71,26 @@ namespace FujiyNotepad.Core
         /// <see cref="LineIndexer.GetLineNumberFromOffset"/>, so its cost scales with the number of matches
         /// rather than the total line count — the fast equivalent of <see cref="Match"/> for a literal term.
         /// <para>
-        /// The caller must ensure <paramref name="indexer"/> is fully built (<see cref="LineIndexer.IsCompleted"/>):
-        /// past the indexed frontier <see cref="LineIndexer.GetLineNumberFromOffset"/> clamps to the last indexed
-        /// line, which would map later matches onto the wrong line. Scanning stops once <paramref name="maxMatches"/>
-        /// distinct lines are collected (then the returned <c>Capped</c> is true). Cancellation is cooperative,
-        /// mirroring <see cref="TextSearcher.Search"/>: a cancelled <paramref name="token"/> ends the scan and
-        /// returns the lines found so far rather than throwing, so the caller decides whether to keep or discard them.
+        /// Only offsets the index actually covers are mapped. The bound is taken once, up front: the source's
+        /// cached length, further limited to the indexed frontier if the index is not yet complete. Matches
+        /// beyond it end the scan, so the result is a snapshot of the file as indexed — the same semantics
+        /// <see cref="Match"/> has by capturing <c>LineCount</c> once.
+        /// </para>
+        /// <para>
+        /// This bound is what keeps the result honest, because two things move underneath the scan.
+        /// <see cref="TextSearcher.Search"/> reads to the <em>live</em> end of file (its loop stops on a short
+        /// read, not at a captured length), so a file that grows during the scan yields matches in a region no
+        /// line index covers; and Follow Tail can clear <see cref="LineIndexer.IsCompleted"/> and resume
+        /// indexing mid-scan. Unbounded, every such offset clamps onto the last indexed line — collapsing into
+        /// one row that does not contain the term, and that can even sit past the provider's line count.
+        /// Because the index is strictly append-only, an offset below the bound keeps mapping to the same line
+        /// no matter what indexing does afterwards, so the bound alone makes both cases safe.
+        /// </para>
+        /// <para>
+        /// Scanning stops once <paramref name="maxMatches"/> distinct lines are collected (then the returned
+        /// <c>Capped</c> is true). Cancellation is cooperative, mirroring <see cref="TextSearcher.Search"/>: a
+        /// cancelled <paramref name="token"/> ends the scan and returns the lines found so far rather than
+        /// throwing, so the caller decides whether to keep or discard them.
         /// </para>
         /// </summary>
         public static async Task<(List<int> Lines, bool Capped)> MatchLinesByPatternAsync(
@@ -91,8 +105,22 @@ namespace FujiyNotepad.Core
             var lines = new List<int>();
             int lastLine = -1;
 
+            // Capture the covered region before scanning. Reading IsCompleted first is deliberate: if it flips
+            // to false immediately afterwards the frontier can only have grown, so the bound stays conservative.
+            long limit = searcher.SourceLength;
+            if (!indexer.IsCompleted)
+            {
+                limit = Math.Min(limit, indexer.IndexedFrontier);
+            }
+
             await foreach (long offset in searcher.Search(0, pattern, options, progress, token))
             {
+                if (offset >= limit)
+                {
+                    // Past what the index covers; mapping from here on would clamp onto the last indexed line.
+                    break;
+                }
+
                 int line = indexer.GetLineNumberFromOffset(offset);
 
                 // Matches arrive in ascending offset order, so their line numbers are non-decreasing: a match on

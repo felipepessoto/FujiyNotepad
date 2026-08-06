@@ -1698,7 +1698,10 @@ namespace FujiyNotepad.WinUI
             // every line, so its cost scales with the number of matches rather than the total line count. It is
             // limited to a case-sensitive or ASCII term, where the scanner's ASCII case-folding is identical to
             // the decode path's Ordinal / OrdinalIgnoreCase Contains; a regex, a non-ASCII case-insensitive term,
-            // or a still-building index falls back to the per-line decode scan.
+            // or a still-building index falls back to the per-line decode scan. The IsCompleted check here is a
+            // choice of route, not a safety precondition: it can be stale by the time the scan runs (Follow Tail
+            // re-arms indexing, or the file simply grows), so MatchLinesByPatternAsync bounds itself to the
+            // region the index actually covers rather than trusting it.
             bool literalByteScan = FilterRegex.IsChecked != true
                 && activeIndexer.IsCompleted
                 && (FilterMatchCase.IsChecked == true || System.Text.Ascii.IsValid(FilterBox.Text));
