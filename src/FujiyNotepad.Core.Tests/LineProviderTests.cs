@@ -331,10 +331,13 @@ namespace FujiyNotepad.Core.Tests
             Task<string> background = Task.Run(() => provider.GetLine(2)); // the final, unterminated line
             await source.Entered;                                          // decode is inside the source read
 
-            source.Append("XYZ");                 // the writer appends to that same last line
-            Assert.True(provider.RefreshLength()); // UI thread: new size + drop the cache
+            source.Append("XYZ");                  // the writer appends to that same last line
+            bool sizeChanged = provider.RefreshLength(); // UI thread: new size + drop the cache
             source.Release();
 
+            // Assert only after releasing the gate: a failure between the two would strand the blocked
+            // background read on a thread-pool thread for the rest of the run.
+            Assert.True(sizeChanged);
             Assert.Equal("ccc", await background); // the caller still gets what it asked for...
             Assert.Equal("cccXYZ", provider.GetLine(2)); // ...but the cache was not poisoned with it
         }
