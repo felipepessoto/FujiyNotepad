@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -308,6 +309,68 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(cached, counting.Reads);
         }
 
+        // ----- Cache invalidation while a decode is in flight (issue #168) -----
+
+        [Fact]
+        public async Task GetLine_DecodeRacingRefreshLength_DoesNotResurrectTheStaleTailLine()
+        {
+            // Follow Tail interleaving: a background regex count decodes the final (unterminated) line while the
+            // UI thread observes growth and calls RefreshLength. The background decode holds the PRE-append text;
+            // if it writes that back after the cache was dropped, the viewport renders a truncated tail line
+            // until the next size change — or forever, if the log stops growing.
+            var source = new GatedReadSource("aaa\nbbb\nccc");
+            LineProvider provider = await BuildAsync(source);
+            Assert.Equal(3, provider.LineCount);
+
+            // Warm the indexer's block cache first: the very first lookup expands a checkpoint block, which
+            // itself reads the source. Without this the gate below would catch that expansion instead of the
+            // line decode, and the decode would then run after the append — testing nothing.
+            Assert.Equal("bbb", provider.GetLine(1));
+
+            source.ArmNextRead();
+            Task<string> background = Task.Run(() => provider.GetLine(2)); // the final, unterminated line
+            await source.Entered;                                          // decode is inside the source read
+
+            source.Append("XYZ");                  // the writer appends to that same last line
+            bool sizeChanged = provider.RefreshLength(); // UI thread: new size + drop the cache
+            source.Release();
+
+            // Assert only after releasing the gate: a failure between the two would strand the blocked
+            // background read on a thread-pool thread for the rest of the run.
+            Assert.True(sizeChanged);
+            Assert.Equal("ccc", await background); // the caller still gets what it asked for...
+            Assert.Equal("cccXYZ", provider.GetLine(2)); // ...but the cache was not poisoned with it
+        }
+
+        [Fact]
+        public async Task GetLine_DecodeWithNoConcurrentRefresh_StillCaches()
+        {
+            // The generation check must not defeat ordinary caching.
+            var counting = new CountingByteSource(new InMemoryByteSource("alpha\nbeta\ngamma"));
+            LineProvider provider = await BuildAsync(counting);
+
+            Assert.Equal("beta", provider.GetLine(1));
+            int afterFirst = counting.Reads;
+            Assert.Equal("beta", provider.GetLine(1));
+
+            Assert.Equal(afterFirst, counting.Reads); // served from the cache, no second read
+        }
+
+        [Fact]
+        public async Task GetLine_AfterRefreshLength_RereadsInsteadOfServingTheOldText()
+        {
+            // The plain (unraced) invalidation path still works: a cached tail line is re-read after growth.
+            var source = new GrowableByteSource("aaa\nbbb\nccc");
+            LineProvider provider = await BuildAsync(source);
+            Assert.Equal("ccc", provider.GetLine(2)); // now cached
+
+            source.Append("XYZ");
+            source.RefreshLength();
+            Assert.True(provider.RefreshLength());
+
+            Assert.Equal("cccXYZ", provider.GetLine(2));
+        }
+
         // Wraps a byte source to count positional reads, so a test can observe whether a line was cached.
         private sealed class CountingByteSource : IByteSource
         {
@@ -333,6 +396,57 @@ namespace FujiyNotepad.Core.Tests
             }
 
             public void Dispose() => inner.Dispose();
+        }
+
+        // Lets a test hold a decode inside the source read, so RefreshLength can be made to land in the middle
+        // of it. Only the armed read blocks — RefreshLength itself reads (for the trailing-newline probe) and
+        // must not deadlock.
+        private sealed class GatedReadSource : IByteSource
+        {
+            private readonly List<byte> data = new();
+            private readonly TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private int armed;
+
+            public GatedReadSource(string ascii) => Append(ascii);
+
+            /// <summary>Completes once a decode has entered the armed read.</summary>
+            public Task Entered => entered.Task;
+
+            public void ArmNextRead() => Volatile.Write(ref armed, 1);
+
+            public void Release() => release.TrySetResult();
+
+            public void Append(string ascii) => data.AddRange(Encoding.ASCII.GetBytes(ascii));
+
+            public long Length => data.Count;
+
+            public long RefreshLength() => data.Count;
+
+            public int Read(long offset, Span<byte> buffer)
+            {
+                if (Interlocked.Exchange(ref armed, 0) == 1)
+                {
+                    entered.TrySetResult();
+                    release.Task.GetAwaiter().GetResult(); // blocks this background thread only
+                }
+
+                if (offset < 0 || offset >= data.Count)
+                {
+                    return 0;
+                }
+                int count = (int)Math.Min(buffer.Length, data.Count - offset);
+                for (int i = 0; i < count; i++)
+                {
+                    buffer[i] = data[(int)offset + i];
+                }
+                return count;
+            }
+
+            public ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken token = default)
+                => ValueTask.FromResult(Read(offset, buffer.Span));
+
+            public void Dispose() { }
         }
     }
 }
