@@ -15,6 +15,13 @@ namespace FujiyNotepad.Presentation.Tests
 
         private static string EvilInput => new string('a', 40) + "b";
 
+        // Bound for the "a latched-off rule is free" checks. The gap being distinguished is enormous — a working
+        // latch costs microseconds per line, a broken one costs the full 250 ms budget, so 200 lines would take
+        // ~50 s. The bound is therefore deliberately loose: still fast enough to fail within seconds if the latch
+        // regresses, but far outside anything CI jitter, scheduling or a GC pause could produce on its own.
+        // Asserting near MatchTimeout itself would buy no detection power and only invite flakes.
+        private static readonly TimeSpan LatchedLineBudget = TimeSpan.FromSeconds(5);
+
         [Fact]
         public void Create_CarriesTheMatchTimeout()
         {
@@ -47,25 +54,28 @@ namespace FujiyNotepad.Presentation.Tests
 
             // Run the match on a worker and hard-bound the wait. If the timeout is ever lost, the match becomes
             // effectively infinite (2^40 partitions) and asserting on it directly would hang the whole test run
-            // rather than failing it.
-            Exception? thrown = null;
-            Task match = Task.Run(() =>
+            // rather than failing it. The task returns the exception rather than assigning it across threads,
+            // so the result is read from the awaited task and needs no reasoning about visibility.
+            Task<Exception?> match = Task.Run<Exception?>(() =>
             {
                 try
                 {
                     r.IsMatch(EvilInput);
+                    return null;
                 }
                 catch (Exception ex)
                 {
-                    thrown = ex;
+                    return ex;
                 }
             });
 
             Task completed = await Task.WhenAny(match, Task.Delay(TimeSpan.FromSeconds(30)));
             sw.Stop();
 
-            Assert.Same(match, completed); // the match never returned - the per-match timeout is not applied
-            Assert.IsType<RegexMatchTimeoutException>(thrown);
+            // If the budget were lost, the Delay would win this race instead of the match.
+            Assert.True(ReferenceEquals(completed, match),
+                "the match never returned within 30s - the per-match timeout is not being applied");
+            Assert.IsType<RegexMatchTimeoutException>(await match);
             Assert.True(sw.Elapsed < UserRegex.MatchTimeout + TimeSpan.FromSeconds(5),
                 $"expected the match to be abandoned near the budget, took {sw.Elapsed}");
         }
@@ -104,15 +114,15 @@ namespace FujiyNotepad.Presentation.Tests
             {
                 Assert.Empty(highlighter.Find(EvilInput));
 
-                // Bail out as soon as it is clearly not "immediate". Without this, a regressed latch would pay
-                // the budget on every iteration and take ~200 x MatchTimeout to fail.
-                Assert.True(sw.Elapsed < UserRegex.MatchTimeout,
+                // Bail out as soon as the cost is clearly not "latched off". Without this, a regressed latch
+                // would pay the budget on every iteration and take ~200 x MatchTimeout to report.
+                Assert.True(sw.Elapsed < LatchedLineBudget,
                     $"a disabled rule must cost nothing, but {i + 1} lines already took {sw.Elapsed}");
             }
             sw.Stop();
 
-            // 200 lines is ~4 screens' worth. Un-latched this would cost 200 x the timeout.
-            Assert.True(sw.Elapsed < UserRegex.MatchTimeout,
+            // 200 lines is ~4 screens' worth. Un-latched this would cost 200 x the timeout (~50 s).
+            Assert.True(sw.Elapsed < LatchedLineBudget,
                 $"a disabled rule must cost nothing, took {sw.Elapsed} for 200 lines");
         }
 
