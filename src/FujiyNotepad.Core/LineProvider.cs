@@ -7,7 +7,9 @@ namespace FujiyNotepad.Core
     /// from the underlying <see cref="IByteSource"/> using line boundaries from <see cref="LineIndexer"/>.
     /// A bounded cache keeps recently read lines so repeated rendering of the visible window does not
     /// re-read the disk. Line text never changes once its line is indexed (the index is append-only and
-    /// only fully-terminated lines are exposed), so cached values stay valid.
+    /// only fully-terminated lines are exposed), so cached values stay valid — with one exception: while
+    /// following a growing file the previously-final, unterminated line can gain text, which is why
+    /// <see cref="RefreshLength"/> drops the cache and stamps a new generation.
     /// </summary>
     public sealed class LineProvider : ILineSource, ILineEndingSource
     {
@@ -22,6 +24,10 @@ namespace FujiyNotepad.Core
         private long fileSize;
         private bool endsWithNewline;
         private readonly Dictionary<int, string> cache = new();
+        // Bumped whenever RefreshLength drops the cache. A decode that began before that drop carries the old
+        // stamp, so it can be recognised as describing the pre-change file and discarded instead of being
+        // written back — otherwise it resurrects exactly the stale line the clear existed to purge.
+        private int cacheGeneration;
         // The cache is the only mutable shared state: viewport rendering (UI thread) and the filter scan /
         // matching-line export (background threads) all call GetLine concurrently, and the underlying
         // positional byte reads are thread-safe, so this lock just keeps the dictionary itself consistent.
@@ -70,6 +76,9 @@ namespace FujiyNotepad.Core
             lock (cacheLock)
             {
                 cache.Clear();
+                // Invalidate decodes already in flight; an eviction-driven Clear (in GetLine) deliberately does
+                // not bump this, because those entries are still valid — they are merely being made room for.
+                cacheGeneration++;
             }
             return true;
         }
@@ -105,12 +114,14 @@ namespace FujiyNotepad.Core
         /// <summary>Returns the decoded text of line <paramref name="lineIndex"/> (0-based), without its terminator.</summary>
         public string GetLine(int lineIndex)
         {
+            int generation;
             lock (cacheLock)
             {
                 if (cache.TryGetValue(lineIndex, out string? cached))
                 {
                     return cached;
                 }
+                generation = cacheGeneration;
             }
 
             // Decode outside the lock: ReadLine only does positional (thread-safe) reads and touches no
@@ -119,11 +130,19 @@ namespace FujiyNotepad.Core
 
             lock (cacheLock)
             {
-                if (cache.Count >= MaxCachedLines)
+                // Drop the result if the file changed while we were decoding (RefreshLength cleared the cache).
+                // The text describes the old file — for the previously-final line of a growing log that means
+                // the pre-append, truncated version — so caching it would serve stale text to the viewport
+                // until the next size change. This caller still gets what it asked for; only the cache is
+                // protected, which is what outlives the call.
+                if (generation == cacheGeneration)
                 {
-                    cache.Clear();
+                    if (cache.Count >= MaxCachedLines)
+                    {
+                        cache.Clear();
+                    }
+                    cache[lineIndex] = text;
                 }
-                cache[lineIndex] = text;
             }
             return text;
         }

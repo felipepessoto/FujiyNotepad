@@ -27,6 +27,11 @@ tag per published build. Each release also has downloadable builds and notes on 
   budget switches itself off rather than stalling every repaint. This mattered most for highlight rules: they
   are saved, so a bad one used to make the app unusable on every launch with no way to fix it from inside the
   app (issue #163).
+- **Stale last line while following a growing file** — with Follow Tail on, a background Find/count running at
+  the moment the file grew could write the pre-append text of the final line back into the cache just after it
+  was invalidated, leaving the view showing a truncated last line until the file next changed size (and
+  indefinitely if it stopped growing). The decode is now discarded if the file changed while it was in flight
+  (issue #168).
 
 ### Internal
 - **Diagnostic logging for silent failures** — the deliberately-swallowed exceptions behind three best-effort
