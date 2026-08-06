@@ -400,5 +400,47 @@ namespace FujiyNotepad.Core.Tests
             // What a Unicode \b would have said, for contrast — it must NOT be what the app uses.
             Assert.DoesNotMatch(new Regex(@"\b(?:ERROR)\b"), "\u6363ERROR\u6363");
         }
+
+        [Theory]
+        [MemberData(nameof(MultiByteEncodings))]
+        public async Task Filter_WholeWord_ByteScannerAndTheAsciiRegex_AgreeOnEveryNeighbourClass(TextEncoding encoding)
+        {
+            // The whole-word rule is implemented twice — once over raw bytes, once over decoded text — so the
+            // two must agree for every KIND of neighbouring character, not just the CJK example that first
+            // exposed the divergence. Several of these are cases where Unicode word semantics (\b) would have
+            // disagreed, which is precisely why the app's literal builder does not use it.
+            (string Neighbour, string Why)[] neighbours =
+            {
+                ("", "start/end of line"),
+                (" ", "space"),
+                (".", "punctuation"),
+                ("-", "hyphen"),
+                ("\u6363", "CJK ideograph - \\w would call this a word char"),
+                ("\u00E9", "accented Latin - \\w would call this a word char"),
+                ("\u0430", "Cyrillic - \\w would call this a word char"),
+                ("a", "ASCII letter - a word char to both"),
+                ("Z", "ASCII letter - a word char to both"),
+                ("7", "ASCII digit - a word char to both"),
+                ("_", "underscore - a word char to both"),
+            };
+
+            var asciiRegex = new Regex(@"(?<![A-Za-z0-9_])ERROR(?![A-Za-z0-9_])", RegexOptions.CultureInvariant);
+
+            foreach ((string neighbour, string why) in neighbours)
+            {
+                string line = neighbour + "ERROR" + neighbour;
+                using var source = Source(encoding, line + "\n");
+                var (searcher, indexer, _) = await BuildAsync(source, encoding);
+
+                var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                    searcher, indexer, encoding.Encode("ERROR"), OptionsFor(encoding, wholeWord: true));
+
+                bool scannerMatched = lines.Count > 0;
+                bool regexMatched = asciiRegex.IsMatch(line);
+
+                Assert.True(scannerMatched == regexMatched,
+                    $"byte scanner and the app's regex disagree for neighbour '{why}': scanner={scannerMatched}, regex={regexMatched}");
+            }
+        }
     }
 }
