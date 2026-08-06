@@ -284,6 +284,22 @@ namespace FujiyNotepad.Core
         }
 
         /// <summary>
+        /// The offset of the most recently discovered line start — the indexed frontier. Offsets below it
+        /// resolve to an exact line; at or beyond it <see cref="GetLineNumberFromOffset"/> clamps. The index is
+        /// append-only, so this only ever increases for a given instance.
+        /// </summary>
+        public long IndexedFrontier
+        {
+            get
+            {
+                lock (indexLock)
+                {
+                    return lastLineStart;
+                }
+            }
+        }
+
+        /// <summary>
         /// True if a match at <paramref name="offset"/> can be resolved to its exact line without reading
         /// past the indexed region: either indexing has completed, or the offset lies before the last
         /// indexed line start (so the line containing it has a known end). When this is false the offset is

@@ -496,5 +496,245 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(list, dest[..n].ToArray());
             Assert.Equal(new long[] { 1, 3, 5, 7, 9 }, dest[..n].ToArray());
         }
+
+        // ----- Bounded scan (endOffsetExclusive) -----
+
+        [Fact]
+        public async Task Search_EndOffsetExclusive_YieldsOnlyMatchesStartingBeforeTheBound()
+        {
+            var source = new InMemoryByteSource("ab..ab..ab..ab");
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("ab"), default, null, default, endOffsetExclusive: 8))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Equal(new long[] { 0, 4 }, hits); // the matches at 8 and 12 are at/after the bound
+        }
+
+        [Fact]
+        public async Task Search_EndOffsetExclusive_StopsReadingInsteadOfFollowingAGrowingFile()
+        {
+            // The point of the bound: without it the read loop terminates only on a short read, so a file being
+            // appended to keeps the scan going. Nothing after the bound matches here, so only the reads prove it.
+            var source = new GrowableByteSource(new string('.', 4096) + "needle");
+            var counting = new CountingByteSource(source);
+            var searcher = new TextSearcher(counting, chunkSize: 64);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("needle"), default, null, default, endOffsetExclusive: 128))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Empty(hits);
+            // 128 bytes over a 64-byte chunk is ~2-3 reads (plus the overlap tail), not the ~64 a full scan takes.
+            Assert.InRange(counting.Reads, 1, 8);
+        }
+
+        [Fact]
+        public async Task Search_EndOffsetExclusive_StillCompletesAMatchStraddlingTheBound()
+        {
+            // A match that STARTS before the bound must be found in full, so reads extend by the pattern
+            // overlap. "needle" starts at 6 and runs to 12; the bound at 8 sits inside it.
+            var source = new InMemoryByteSource("......needle......");
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("needle"), default, null, default, endOffsetExclusive: 8))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Equal(new long[] { 6 }, hits);
+        }
+
+        [Fact]
+        public async Task Search_WithoutABound_IsUnchanged()
+        {
+            // The default must behave exactly as before: scan to end of file.
+            var source = new InMemoryByteSource("ab..ab..ab..ab");
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("ab"), default(SearchOptions)))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Equal(new long[] { 0, 4, 8, 12 }, hits);
+        }
+
+        [Fact]
+        public async Task Search_BoundAtOrBeforeStart_YieldsNothing()
+        {
+            var source = new InMemoryByteSource("abcabc");
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(2, Ascii("abc"), default, null, default, endOffsetExclusive: 2))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Empty(hits);
+        }
+
+        [Fact]
+        public async Task Search_EndOffsetExclusive_DoesNotReadPastTheSnapshotToCompleteAMatch()
+        {
+            // The overlap tail must not reach beyond the captured length. Here "nee" is all that existed when
+            // the length was captured (7); "dle" arrived afterwards without a RefreshLength, exactly like a file
+            // being appended to mid-scan. Reading the overlap past the snapshot would assemble a "needle" that
+            // never existed in it and yield it, because the match START (4) is inside the bound.
+            var source = new GrowableByteSource("....nee");
+            Assert.Equal(7, source.Length);
+            source.Append("dle"); // data is now "....needle", but Length still reports 7
+
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("needle"), default, null, default, endOffsetExclusive: 7))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Empty(hits);
+        }
+
+        [Fact]
+        public async Task Search_WithoutABound_StillFollowsAGrowingFilePastItsCachedLength()
+        {
+            // The clamp above must not leak into the unbounded default: indexing relies on the read loop running
+            // to the LIVE end of file, since the cached length goes stale as a file is appended to.
+            var source = new GrowableByteSource("....nee");
+            source.Append("dle"); // Length still reports 7
+
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("needle"), default(SearchOptions)))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Equal(new long[] { 4 }, hits);
+        }
+
+        [Theory]
+        [InlineData(7)]
+        [InlineData(8)]
+        [InlineData(16)]
+        [InlineData(64)]
+        [InlineData(1024)]
+        public async Task Search_Bounded_IsExactlyTheUnboundedResultTruncatedAtTheBound(int chunkSize)
+        {
+            // The bound must not perturb matching itself. Sweeping the bound across every offset, for patterns
+            // that stress the chunking (self-overlapping, longer than a chunk boundary, single byte), pins that
+            // a bounded scan equals the unbounded scan filtered to the bound — so the carry/overlap handling
+            // cannot be silently dropping or inventing a match near the boundary.
+            string[] contents =
+            {
+                "aaaaaaaaaaaaaaaaaaaa",
+                "abcabcabcabcabcabcabc",
+                "..needle....needle..needle",
+                "xx",
+                new string('.', 40) + "needle" + new string('.', 40),
+            };
+            string[] patterns = { "a", "aa", "abc", "needle", "x" };
+
+            foreach (string content in contents)
+            {
+                var source = new InMemoryByteSource(content);
+                var searcher = new TextSearcher(source, chunkSize);
+
+                foreach (string pattern in patterns)
+                {
+                    byte[] pat = Ascii(pattern);
+
+                    var unbounded = new List<long>();
+                    await foreach (long offset in searcher.Search(0, pat, default(SearchOptions)))
+                    {
+                        unbounded.Add(offset);
+                    }
+
+                    for (long bound = 0; bound <= content.Length + 2; bound++)
+                    {
+                        var bounded = new List<long>();
+                        await foreach (long offset in searcher.Search(0, pat, default, null, default, bound))
+                        {
+                            bounded.Add(offset);
+                        }
+
+                        long b = bound;
+                        Assert.Equal(unbounded.Where(o => o < b).ToList(), bounded);
+                    }
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(7)]
+        [InlineData(64)]
+        public async Task Search_Bounded_WithOptions_IsExactlyTheUnboundedResultTruncatedAtTheBound(int chunkSize)
+        {
+            // Same property with the option flags on, so the bound cannot interact with the whole-word
+            // neighbour reads (which peek outside the buffer) or the case folding.
+            const string content = "Error err ERROR error_x erroring ERR error";
+            var source = new InMemoryByteSource(content);
+            var searcher = new TextSearcher(source, chunkSize);
+            var options = new SearchOptions { IgnoreCase = true, WholeWord = true };
+            byte[] pat = Ascii("error");
+
+            var unbounded = new List<long>();
+            await foreach (long offset in searcher.Search(0, pat, options))
+            {
+                unbounded.Add(offset);
+            }
+            Assert.NotEmpty(unbounded); // the property would be vacuous otherwise
+
+            for (long bound = 0; bound <= content.Length + 2; bound++)
+            {
+                var bounded = new List<long>();
+                await foreach (long offset in searcher.Search(0, pat, options, null, default, bound))
+                {
+                    bounded.Add(offset);
+                }
+
+                long b = bound;
+                Assert.Equal(unbounded.Where(o => o < b).ToList(), bounded);
+            }
+        }
+
+        // Counts positional reads so a test can assert a bounded scan stops early.
+        private sealed class CountingByteSource : IByteSource
+        {
+            private readonly IByteSource inner;
+            private int reads;
+
+            public CountingByteSource(IByteSource inner) => this.inner = inner;
+
+            public int Reads => Volatile.Read(ref reads);
+
+            public long Length => inner.Length;
+
+            public long RefreshLength() => inner.RefreshLength();
+
+            public int Read(long offset, Span<byte> buffer)
+            {
+                Interlocked.Increment(ref reads);
+                return inner.Read(offset, buffer);
+            }
+
+            public ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken token = default)
+            {
+                Interlocked.Increment(ref reads);
+                return inner.ReadAsync(offset, buffer, token);
+            }
+
+            public void Dispose() => inner.Dispose();
+        }
     }
 }

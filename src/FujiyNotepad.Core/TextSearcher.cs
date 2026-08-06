@@ -15,6 +15,14 @@ namespace FujiyNotepad.Core
         private readonly IByteSource source;
         private readonly int chunkSize;
 
+        /// <summary>
+        /// The source's currently-known byte length. This is the source's <em>cached</em> length (it only moves
+        /// when something calls <c>RefreshLength</c>), not a fresh stat of the file, which is what makes it
+        /// usable as a stable snapshot bound: <see cref="Search"/> itself scans to the live end of file, because
+        /// its read loop stops on a short read rather than at this length.
+        /// </summary>
+        public long SourceLength => source.Length;
+
         public TextSearcher(IByteSource source) : this(source, DefaultChunkSize)
         {
         }
@@ -38,8 +46,13 @@ namespace FujiyNotepad.Core
         /// <summary>
         /// As <see cref="Search(long, byte[], IProgress{int}?, CancellationToken)"/>, additionally honouring
         /// <paramref name="options"/>: ASCII case-insensitive matching and/or whole-word filtering.
+        /// <paramref name="endOffsetExclusive"/> bounds the scan: no match starting at or after it is yielded,
+        /// and — more importantly — the read loop stops there instead of following a file that is still being
+        /// appended to. Reads extend just far enough past the bound to complete a match that <em>starts</em>
+        /// before it, but never past the source length captured when the scan began, so a bounded scan can only
+        /// ever report matches that existed in that snapshot.
         /// </summary>
-        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, SearchOptions options, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default)
+        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, SearchOptions options, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default, long endOffsetExclusive = long.MaxValue)
         {
             if (pattern.Length == 0)
             {
@@ -53,13 +66,27 @@ namespace FujiyNotepad.Core
             {
                 startOffset = 0;
             }
-            if (startOffset >= length)
+            if (startOffset >= length || startOffset >= endOffsetExclusive)
             {
                 progress?.Report(100);
                 yield break;
             }
 
             int overlap = pattern.Length - 1;
+            // Stop reading at the caller's bound, plus the overlap needed to finish a match that starts just
+            // before it — but never past the length captured above. Reading that overlap tail beyond the
+            // snapshot could pick up bytes appended mid-scan and assemble a match that did not exist in the
+            // snapshot at all (a pattern prefix at the old end of file, its suffix appended afterwards), which
+            // would then be yielded because the match START is inside the bound.
+            //
+            // Unbounded (the default) deliberately stays long.MaxValue so the loop still runs to the LIVE end
+            // of file: the cached length goes stale as a file is appended to, and indexing depends on reading
+            // past it. The comparison also keeps the addition below from overflowing.
+            long readLimit = long.MaxValue;
+            if (endOffsetExclusive < long.MaxValue - overlap)
+            {
+                readLimit = Math.Min(length, endOffsetExclusive + overlap);
+            }
             // Pool the ~1 MiB scan buffer (a Large Object Heap allocation): Search runs on every find, index
             // pass and block expansion, so renting instead of allocating avoids per-call LOH churn and Gen2 GCs.
             byte[] buffer = ArrayPool<byte>.Shared.Rent(chunkSize + overlap);
@@ -70,7 +97,7 @@ namespace FujiyNotepad.Core
             int carry = 0;                  // bytes retained at the front of the buffer
             long bufferBase = startOffset;  // absolute offset of buffer[0]
             long nextAllowedStart = startOffset; // non-overlapping guard: never yield a match before this
-            long total = length - startOffset;
+            long total = Math.Min(length, endOffsetExclusive) - startOffset;
             int lastPercent = -1;
             progress?.Report(0);
 
@@ -81,9 +108,15 @@ namespace FujiyNotepad.Core
                     yield break;
                 }
 
+                if (readPos >= readLimit)
+                {
+                    break;
+                }
+
                 // The token is intentionally NOT forwarded to the read: cancellation stays cooperative
                 // (checked above) so the read never throws OperationCanceledException on the caller.
-                int read = await ReadFullAsync(readPos, buffer.AsMemory(carry, chunkSize));
+                int want = (int)Math.Min(chunkSize, readLimit - readPos);
+                int read = await ReadFullAsync(readPos, buffer.AsMemory(carry, want));
                 int available = carry + read;
                 if (available == 0)
                 {
@@ -93,6 +126,7 @@ namespace FujiyNotepad.Core
                 // Yield each match as it is found. The span is a short-lived temporary (never a local
                 // held across the yield), so callers like Find can stop without scanning the whole chunk.
                 int from = 0;
+                bool pastBound = false;
                 while (from < available)
                 {
                     int idx = IndexOf(buffer.AsSpan(from, available - from), pattern, foldedPattern);
@@ -102,6 +136,13 @@ namespace FujiyNotepad.Core
                     }
                     int matchAt = from + idx;
                     long matchOffset = bufferBase + matchAt;
+
+                    if (matchOffset >= endOffsetExclusive)
+                    {
+                        // Matches arrive in ascending order, so everything after this is out of bounds too.
+                        pastBound = true;
+                        break;
+                    }
 
                     // A real match resumes scanning past its end so matches never overlap. Skip a candidate
                     // that overlaps one already yielded (this can recur at a chunk boundary, where the carry
@@ -123,9 +164,14 @@ namespace FujiyNotepad.Core
                     }
                 }
 
+                if (pastBound)
+                {
+                    break;
+                }
+
                 readPos += read;
 
-                bool eof = read < chunkSize;
+                bool eof = read < want;
                 int newCarry = eof ? 0 : Math.Min(overlap, available);
                 if (newCarry > 0)
                 {
@@ -138,7 +184,7 @@ namespace FujiyNotepad.Core
 
                 if (progress != null)
                 {
-                    int percent = (int)((readPos - startOffset) * 100 / total);
+                    int percent = (int)Math.Min(100, (readPos - startOffset) * 100 / total);
                     if (percent != lastPercent)
                     {
                         lastPercent = percent;
