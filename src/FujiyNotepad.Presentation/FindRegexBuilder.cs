@@ -7,7 +7,8 @@ namespace FujiyNotepad.Presentation
     /// match-case / whole-word toggles. Whole-word wraps the term in <c>\b(?:…)\b</c> so the user's pattern
     /// still groups correctly, and match-case off adds <see cref="RegexOptions.IgnoreCase"/>. Always
     /// <see cref="RegexOptions.CultureInvariant"/>, and interpreted (no compilation) so it stays Native-AOT
-    /// safe. A malformed term throws <see cref="ArgumentException"/>, which the caller surfaces as
+    /// safe. Carries <see cref="UserRegex.MatchTimeout"/> so a catastrophically backtracking term cannot hang
+    /// the search. A malformed term throws <see cref="ArgumentException"/>, which the caller surfaces as
     /// "Invalid regex". Pure and unit-testable.
     /// </summary>
     public static class FindRegexBuilder
@@ -21,7 +22,7 @@ namespace FujiyNotepad.Presentation
             }
 
             string pattern = wholeWord ? $@"\b(?:{text})\b" : text;
-            return new Regex(pattern, options);
+            return UserRegex.Create(pattern, options);
         }
     }
 }

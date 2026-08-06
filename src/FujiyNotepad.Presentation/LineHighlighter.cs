@@ -112,6 +112,11 @@ namespace FujiyNotepad.Presentation
     /// <summary>
     /// Regex highlighter mirroring <c>RegexLineSearcher</c>: every non-empty (non-overlapping) match of the
     /// supplied <see cref="Regex"/> on the line. The regex already carries the case/whole-word options.
+    ///
+    /// <para>Highlight rules run against every visible line on every paint, so a pattern that blows its match
+    /// timeout <b>latches the rule off</b> instead of being retried. Retrying would cost the whole timeout budget
+    /// per line per frame — a frozen UI, which is exactly what the timeout exists to prevent — and because rules
+    /// are persisted, it would come back on every launch with no in-app way to recover.</para>
     /// </summary>
     public sealed class RegexLineHighlighter : ILineHighlighter
     {
@@ -119,18 +124,44 @@ namespace FujiyNotepad.Presentation
 
         private readonly Regex regex;
 
+        // Set once the pattern exceeds its per-line budget; never reset, so the cost is paid at most once.
+        // Volatile because highlighting can be requested from the render thread and a background bulk scan.
+        private volatile bool timedOut;
+
         public RegexLineHighlighter(Regex regex) => this.regex = regex;
+
+        /// <summary>
+        /// True once this rule exceeded its match timeout and was disabled. It contributes no highlights from
+        /// that point on.
+        /// </summary>
+        public bool TimedOut => timedOut;
 
         public IReadOnlyList<(int Start, int Length)> Find(string line)
         {
-            List<(int, int)>? result = null;
-            foreach (Match m in regex.Matches(line))
+            if (timedOut)
             {
-                if (m.Length > 0)
+                return None;
+            }
+
+            List<(int, int)>? result = null;
+            try
+            {
+                foreach (Match m in regex.Matches(line))
                 {
-                    (result ??= new List<(int, int)>()).Add((m.Index, m.Length));
+                    if (m.Length > 0)
+                    {
+                        (result ??= new List<(int, int)>()).Add((m.Index, m.Length));
+                    }
                 }
             }
+            catch (RegexMatchTimeoutException)
+            {
+                // Catastrophic backtracking on this line. Drop the partial result too: a rule that highlights
+                // only the spans it happened to reach before giving up is more misleading than one that is off.
+                timedOut = true;
+                return None;
+            }
+
             return (IReadOnlyList<(int, int)>?)result ?? None;
         }
     }
