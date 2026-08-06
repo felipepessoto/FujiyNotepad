@@ -105,15 +105,20 @@ namespace FujiyNotepad.Core
             var lines = new List<int>();
             int lastLine = -1;
 
-            // Capture the covered region before scanning. Reading IsCompleted first is deliberate: if it flips
-            // to false immediately afterwards the frontier can only have grown, so the bound stays conservative.
+            // Capture the covered region once, before scanning. Snapshot IsCompleted into a local first: if it
+            // flips to false right afterwards, indexing has only appended, so this bound stays conservative
+            // rather than stale.
+            bool completeAtStart = indexer.IsCompleted;
             long limit = searcher.SourceLength;
-            if (!indexer.IsCompleted)
+            if (!completeAtStart)
             {
                 limit = Math.Min(limit, indexer.IndexedFrontier);
             }
 
-            await foreach (long offset in searcher.Search(0, pattern, options, progress, token))
+            // Bound the scan itself, not just the mapping: Search otherwise reads to the live end of file, so on
+            // a file being appended to quickly it would keep reading well past the snapshot even when nothing
+            // there matches. The per-match check below still guards the mapping.
+            await foreach (long offset in searcher.Search(0, pattern, options, progress, token, limit))
             {
                 if (offset >= limit)
                 {

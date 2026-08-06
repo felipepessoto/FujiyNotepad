@@ -496,5 +496,119 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(list, dest[..n].ToArray());
             Assert.Equal(new long[] { 1, 3, 5, 7, 9 }, dest[..n].ToArray());
         }
+
+        // ----- Bounded scan (endOffsetExclusive) -----
+
+        [Fact]
+        public async Task Search_EndOffsetExclusive_YieldsOnlyMatchesStartingBeforeTheBound()
+        {
+            var source = new InMemoryByteSource("ab..ab..ab..ab");
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("ab"), default, null, default, endOffsetExclusive: 8))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Equal(new long[] { 0, 4 }, hits); // the matches at 8 and 12 are at/after the bound
+        }
+
+        [Fact]
+        public async Task Search_EndOffsetExclusive_StopsReadingInsteadOfFollowingAGrowingFile()
+        {
+            // The point of the bound: without it the read loop terminates only on a short read, so a file being
+            // appended to keeps the scan going. Nothing after the bound matches here, so only the reads prove it.
+            var source = new GrowableByteSource(new string('.', 4096) + "needle");
+            var counting = new CountingByteSource(source);
+            var searcher = new TextSearcher(counting, chunkSize: 64);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("needle"), default, null, default, endOffsetExclusive: 128))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Empty(hits);
+            // 128 bytes over a 64-byte chunk is ~2-3 reads (plus the overlap tail), not the ~64 a full scan takes.
+            Assert.InRange(counting.Reads, 1, 8);
+        }
+
+        [Fact]
+        public async Task Search_EndOffsetExclusive_StillCompletesAMatchStraddlingTheBound()
+        {
+            // A match that STARTS before the bound must be found in full, so reads extend by the pattern
+            // overlap. "needle" starts at 6 and runs to 12; the bound at 8 sits inside it.
+            var source = new InMemoryByteSource("......needle......");
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("needle"), default, null, default, endOffsetExclusive: 8))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Equal(new long[] { 6 }, hits);
+        }
+
+        [Fact]
+        public async Task Search_WithoutABound_IsUnchanged()
+        {
+            // The default must behave exactly as before: scan to end of file.
+            var source = new InMemoryByteSource("ab..ab..ab..ab");
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(0, Ascii("ab"), default(SearchOptions)))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Equal(new long[] { 0, 4, 8, 12 }, hits);
+        }
+
+        [Fact]
+        public async Task Search_BoundAtOrBeforeStart_YieldsNothing()
+        {
+            var source = new InMemoryByteSource("abcabc");
+            var searcher = new TextSearcher(source);
+
+            var hits = new List<long>();
+            await foreach (long offset in searcher.Search(2, Ascii("abc"), default, null, default, endOffsetExclusive: 2))
+            {
+                hits.Add(offset);
+            }
+
+            Assert.Empty(hits);
+        }
+
+        // Counts positional reads so a test can assert a bounded scan stops early.
+        private sealed class CountingByteSource : IByteSource
+        {
+            private readonly IByteSource inner;
+            private int reads;
+
+            public CountingByteSource(IByteSource inner) => this.inner = inner;
+
+            public int Reads => Volatile.Read(ref reads);
+
+            public long Length => inner.Length;
+
+            public long RefreshLength() => inner.RefreshLength();
+
+            public int Read(long offset, Span<byte> buffer)
+            {
+                Interlocked.Increment(ref reads);
+                return inner.Read(offset, buffer);
+            }
+
+            public ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken token = default)
+            {
+                Interlocked.Increment(ref reads);
+                return inner.ReadAsync(offset, buffer, token);
+            }
+
+            public void Dispose() => inner.Dispose();
+        }
     }
 }
