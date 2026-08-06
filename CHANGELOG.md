@@ -7,6 +7,14 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
+<!-- Keep the four headings below in place even when empty: concurrent PRs then only ever add bullets to an
+     existing heading, which the union merge driver in .gitattributes merges cleanly instead of duplicating
+     the heading. Drop any section that is still empty when rolling the release. -->
+
+### Added
+
+### Changed
+
 ### Fixed
 - **Crash after a log rotation / truncation** — if the open file shrank on disk (`logrotate` copytruncate,
   `> app.log`) while the app still held the longer index, the next repaint could throw an unhandled

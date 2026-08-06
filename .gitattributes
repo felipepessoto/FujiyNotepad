@@ -1,0 +1,13 @@
+# Concurrent pull requests almost always append to the same CHANGELOG section, which git treats as a
+# conflict even though the two edits are independent. The built-in "union" merge driver keeps BOTH sides
+# instead of stopping, so rebasing a branch after a sibling PR lands resolves itself and nobody has to
+# hand-merge a list of bullets (and risk dropping one).
+#
+# Two things to know:
+#   * Keep the "### Added / ### Changed / ### Fixed / ### Internal" headings permanently present under
+#     [Unreleased]. Union merges lines, so if two branches each ADD the same heading you get it twice;
+#     if the heading is already there, only the new bullets merge and the result is clean.
+#   * GitHub does not apply this driver when it computes a pull request's mergeability, so a PR can still
+#     be shown as conflicting. Rebasing locally is what resolves it - this makes that rebase automatic.
+#     See https://github.com/orgs/community/discussions/9288
+CHANGELOG.md merge=union
