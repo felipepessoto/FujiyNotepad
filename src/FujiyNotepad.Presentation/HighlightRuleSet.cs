@@ -59,7 +59,7 @@ namespace FujiyNotepad.Presentation
                 try
                 {
                     RegexOptions options = rule.MatchCase ? RegexOptions.None : RegexOptions.IgnoreCase;
-                    return new RegexLineHighlighter(new Regex(rule.Pattern, options));
+                    return new RegexLineHighlighter(UserRegex.Create(rule.Pattern, options));
                 }
                 catch (ArgumentException)
                 {

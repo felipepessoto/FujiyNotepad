@@ -1621,7 +1621,7 @@ namespace FujiyNotepad.WinUI
                     // Whole-word wraps the user's pattern in \b(?:…)\b (FindRegexBuilder), mirroring the Find bar.
                     Regex regex = wholeWord
                         ? FindRegexBuilder.Build(term, matchCase, wholeWord: true)
-                        : new Regex(term, matchCase ? RegexOptions.None : RegexOptions.IgnoreCase);
+                        : UserRegex.Create(term, matchCase ? RegexOptions.None : RegexOptions.IgnoreCase);
                     return line => regex.IsMatch(line);
                 }
                 catch (ArgumentException)
@@ -1735,6 +1735,14 @@ namespace FujiyNotepad.WinUI
             {
                 SetStatusProgress(false);
                 return; // superseded by a newer filter or a clear
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // A catastrophically backtracking pattern blew its per-line budget. Abort rather than silently
+                // returning a partial set: the user needs to know the pattern, not the file, is the problem.
+                SetStatusProgress(false);
+                FilterStatus.Text = "Regex too slow";
+                return;
             }
             catch (Exception)
             {
@@ -2271,6 +2279,7 @@ namespace FujiyNotepad.WinUI
             CancellationToken token = cts.Token;
             SetFindBusy(true, indeterminate: true);
 
+            bool regexTimedOut = false;
             RegexLineSearcher.LineMatch? match = await Task.Run(() =>
             {
                 try
@@ -2279,6 +2288,12 @@ namespace FujiyNotepad.WinUI
                 }
                 catch (ObjectDisposedException)
                 {
+                    return (RegexLineSearcher.LineMatch?)null;
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    // A single line blew the per-match budget; report it instead of faulting the awaited task.
+                    regexTimedOut = true;
                     return (RegexLineSearcher.LineMatch?)null;
                 }
             });
@@ -2294,6 +2309,12 @@ namespace FujiyNotepad.WinUI
             if (token.IsCancellationRequested)
             {
                 FindStatus.Text = "Cancelled";
+                return;
+            }
+
+            if (regexTimedOut)
+            {
+                FindStatus.Text = "Regex too slow";
                 return;
             }
 
@@ -2392,6 +2413,7 @@ namespace FujiyNotepad.WinUI
             CancellationToken token = cts.Token;
             SetFindBusy(true, indeterminate: true);
 
+            bool regexTimedOut = false;
             RegexLineSearcher.LineMatch? match = await Task.Run(() =>
             {
                 try
@@ -2400,6 +2422,12 @@ namespace FujiyNotepad.WinUI
                 }
                 catch (ObjectDisposedException)
                 {
+                    return (RegexLineSearcher.LineMatch?)null;
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    // A single line blew the per-match budget; report it instead of faulting the awaited task.
+                    regexTimedOut = true;
                     return (RegexLineSearcher.LineMatch?)null;
                 }
             });
@@ -2415,6 +2443,12 @@ namespace FujiyNotepad.WinUI
             if (token.IsCancellationRequested)
             {
                 FindStatus.Text = "Cancelled";
+                return;
+            }
+
+            if (regexTimedOut)
+            {
+                FindStatus.Text = "Regex too slow";
                 return;
             }
 
