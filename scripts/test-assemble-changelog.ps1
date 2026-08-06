@@ -77,6 +77,18 @@ function Add-Result([string]$name, [bool]$ok, [string]$detail) {
     $script:results += [pscustomobject]@{ Test = $name; Ok = $ok; Detail = $detail }
 }
 
+# Returns just the section for $Version: from its heading to the NEXT "## [" heading. Deliberately does not
+# name the following release - hard-coding "## [4.12.0]" would silently start swallowing extra sections as
+# soon as the project ships another release.
+function Get-ReleaseSection {
+    param([string]$Text, [string]$Version)
+    $start = $Text.IndexOf("## [$Version]")
+    if ($start -lt 0) { return '' }
+    $next = $Text.IndexOf("`n## [", $start + 1)
+    if ($next -lt 0) { return $Text.Substring($start) }
+    return $Text.Substring($start, $next - $start)
+}
+
 # 1. A CRLF changelog stays CRLF, with no CR CR LF.
 $s = New-Sandbox -Repo $Repo
 Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
@@ -117,7 +129,7 @@ $injected = ([IO.File]::ReadAllText($p)) -match 'Hand-written note'
 Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
 $afterText = [IO.File]::ReadAllText($p)
 $carried = $afterText -match 'Hand-written note'
-$releaseBody = $afterText.Substring($afterText.IndexOf('## [4.13.0]'))
+$releaseBody = Get-ReleaseSection -Text $afterText -Version '4.13.0'
 $commentLeaked = $releaseBody -match 'Release notes are not written here'
 Add-Result 'Inline bullet carried, comment not leaked' ($injected -and $carried -and -not $commentLeaked) "carried=$carried commentLeaked=$commentLeaked"
 Remove-Item $s -Recurse -Force
@@ -141,8 +153,7 @@ Remove-Item $s -Recurse -Force
 $s = New-Sandbox -Repo $Repo -Categories @('internal', 'added', 'security', 'changed')
 Invoke-Assemble $s @{ Version = '4.13.0'; Date = '2026-08-06' } | Out-Null
 $afterText = [IO.File]::ReadAllText((Join-Path $s 'CHANGELOG.md'))
-$releaseBody = $afterText.Substring($afterText.IndexOf('## [4.13.0]'))
-$releaseBody = $releaseBody.Substring(0, $releaseBody.IndexOf('## [4.12.0]'))
+$releaseBody = Get-ReleaseSection -Text $afterText -Version '4.13.0'
 $headings = @($releaseBody -split "`r?`n" | Where-Object { $_ -match '^### ' })
 $expected = @('### Added', '### Changed', '### Security', '### Internal')
 $ok = ("$($headings -join '|')" -eq "$($expected -join '|')")
@@ -161,10 +172,13 @@ Remove-Item $s -Recurse -Force
 & (Join-Path $Repo 'scripts\assemble-changelog.ps1') -Check *>&1 | Out-Null
 Add-Result '-Check passes on this repo' ($LASTEXITCODE -eq 0) "exit=$LASTEXITCODE"
 
-# 10. Nothing above touched the repository's own changelog.
+# 10. Nothing above touched the repository's own changelog. Detected via the sentinel strings the sandboxes
+#     inject - deliberately NOT by looking for the test's version number, which would start failing for real
+#     the day the project legitimately ships that version.
 $repoText = [IO.File]::ReadAllText((Join-Path $Repo 'CHANGELOG.md'))
-$clean = ($repoText -notmatch 'Hand-written note') -and ($repoText -notmatch 'Sample fixed entry') -and ($repoText -notmatch '4\.13\.0')
-Add-Result 'Real repo changelog untouched by tests' $clean "no test strings, no 4.13.0 section"
+$sentinels = @('Hand-written note', 'Sample fixed entry', 'Sample internal entry', 'Sample security entry', 'Hard break')
+$hit = @($sentinels | Where-Object { $repoText -match [regex]::Escape($_) })
+Add-Result 'Real repo changelog untouched by tests' ($hit.Count -eq 0) "sentinels found: $(if ($hit) { $hit -join ', ' } else { 'none' })"
 
 $results | ForEach-Object { "{0}  {1,-42} {2}" -f $(if ($_.Ok) { 'PASS' } else { 'FAIL' }), $_.Test, $_.Detail }
 $failed = @($results | Where-Object { -not $_.Ok }).Count
