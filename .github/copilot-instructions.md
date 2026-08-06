@@ -113,10 +113,11 @@ adding a channel + a `VisibleLine` list + a paint pass, mirroring the existing o
   tests + 85% coverage gate) and **UI tests** (AOT publish + UI Automation).
 - Merge with **Squash and merge** (not a merge commit or rebase).
 - When cutting a release, update the GitHub Release notes with user-friendly notes (not just the
-  auto-generated commit list); add the change under `CHANGELOG.md` `[Unreleased]` in each PR. Add bullets
-  under the existing `### Added / ### Changed / ### Fixed / ### Internal` headings and **leave those headings
-  in place even when empty** — `CHANGELOG.md` is marked `merge=union` in `.gitattributes`, so concurrent PRs
-  that only add bullets rebase without a hand-merge, whereas adding a heading twice duplicates it. Drop any
-  still-empty section when rolling the release. Note GitHub does not apply that driver when it decides whether
-  a PR is conflicting, so a sibling PR merging still means `git rebase origin/master` — it just resolves itself.
+  auto-generated commit list). **Each PR adds its release note as a new file under
+  `changelog.d/<category>/<issue>-<slug>.md`** rather than editing `CHANGELOG.md` — two PRs then never touch
+  the same file, which is what stops every merge leaving its siblings conflicting. The file holds the finished
+  Markdown bullet and is copied verbatim; see `changelog.d/README.md`. Use
+  `./scripts/assemble-changelog.ps1 -Preview` to see what is queued, and
+  `./scripts/assemble-changelog.ps1 -Version X.Y.0` in the release PR to fold the fragments into `CHANGELOG.md`
+  and delete them.
 - Crash diagnostics for unexpected closes: `%LOCALAPPDATA%\FujiyNotepad\crash.log`.

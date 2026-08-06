@@ -1,13 +1,13 @@
-# Concurrent pull requests almost always append to the same CHANGELOG section, which git treats as a
-# conflict even though the two edits are independent. The built-in "union" merge driver keeps BOTH sides
-# instead of stopping, so rebasing a branch after a sibling PR lands resolves itself and nobody has to
-# hand-merge a list of bullets (and risk dropping one).
+# CHANGELOG.md is normally only edited when a release is cut - individual changes each add their own file
+# under changelog.d/ instead (see changelog.d/README.md), which is what stops concurrent pull requests
+# conflicting over release notes.
 #
-# Two things to know:
-#   * Keep the "### Added / ### Changed / ### Fixed / ### Internal" headings permanently present under
-#     [Unreleased]. Union merges lines, so if two branches each ADD the same heading you get it twice;
-#     if the heading is already there, only the new bullets merge and the result is clean.
-#   * GitHub does not apply this driver when it computes a pull request's mergeability, so a PR can still
-#     be shown as conflicting. Rebasing locally is what resolves it - this makes that rebase automatic.
-#     See https://github.com/orgs/community/discussions/9288
+# The union merge driver stays as a safety net for the cases that still touch this file directly: two
+# release pull requests overlapping, or a contributor adding a note here out of habit (which the assemble
+# script deliberately tolerates and folds into the release rather than dropping). Union keeps BOTH sides
+# instead of stopping, so such a rebase resolves itself rather than needing a hand-merge of a bullet list.
+#
+# Note GitHub does not apply this driver when it computes a pull request's mergeability, so a PR touching
+# this file can still be shown as conflicting; rebasing locally is what resolves it.
+# See https://github.com/orgs/community/discussions/9288
 CHANGELOG.md merge=union

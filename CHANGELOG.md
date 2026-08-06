@@ -7,60 +7,9 @@ tag per published build. Each release also has downloadable builds and notes on 
 
 ## [Unreleased]
 
-<!-- Keep the four headings below in place even when empty: concurrent PRs then only ever add bullets to an
-     existing heading, which the union merge driver in .gitattributes merges cleanly instead of duplicating
-     the heading. Drop any section that is still empty when rolling the release. -->
-
-### Added
-
-### Changed
-
-### Fixed
-- **Filter's whole-word option gave different results on non-English text depending on timing** — with the
-  whole-word toggle on, a term surrounded by non-Latin characters (e.g. CJK) matched or didn't depending on
-  whether the line index had finished building, because the two code paths that implement the filter disagreed
-  about what counts as a word character. Both now use the same rule (issue #164).
-- **Crash after a log rotation / truncation** — if the open file shrank on disk (`logrotate` copytruncate,
-  `> app.log`) while the app still held the longer index, the next repaint could throw an unhandled
-  `IndexOutOfRangeException` and terminate the app. The line lookup now clamps to the last line that still
-  exists, matching how offset-to-line already behaved (issue #165).
-- **Index corruption from Stop then Start indexing** — *Edit > Start indexing* no longer starts a second
-  indexing pass while the previous one is still stopping. Two passes writing the same index could double the
-  reported line count and leave the index unsorted, which broke line lookups and could in turn trigger the
-  crash above. Starting a pass while one is running is now rejected outright rather than silently corrupting
-  the index (issue #166).
-- **"Stop indexing" did nothing on files with very long lines** — cancellation was only checked once per line
-  found, so on a file with a huge single line (minified JS/JSON, a base64 blob, a one-line SQL dump) stopping
-  the index — and therefore opening another file, reloading, or closing — waited for the scan to reach the next
-  newline, making the app look hung. The scan is now cancelled directly (issue #167).
-- **A slow regular expression can no longer freeze the app** — Find, Filter and highlight-rule patterns now
-  carry a per-line time limit, so a pattern with catastrophic backtracking (e.g. `(a+)+$` meeting a long line)
-  is abandoned instead of hanging. Find and Filter report *"Regex too slow"*; a highlight rule that exceeds the
-  budget switches itself off rather than stalling every repaint. This mattered most for highlight rules: they
-  are saved, so a bad one used to make the app unusable on every launch with no way to fix it from inside the
-  app (issue #163).
-- **Stale last line while following a growing file** — with Follow Tail on, a background Find/count running at
-  the moment the file grew could write the pre-append text of the final line back into the cache just after it
-  was invalidated, leaving the view showing a truncated last line until the file next changed size (and
-  indefinitely if it stopped growing). The decode is now discarded if the file changed while it was in flight
-  (issue #168).
-- **Filter could show a row that doesn't contain the search term** — when the file grew while a Filter scan was
-  running (or Follow Tail restarted indexing underneath it), matches in the not-yet-indexed region were all
-  attributed to the last known line, producing a bogus row — sometimes one past the end of the file — and hiding
-  the real matches. The scan is now limited to the region the line index actually covers (issue #169).
-
-### Internal
-- **Multi-byte encoding hardening** — systematic Core coverage for UTF-16 LE/BE and UTF-32 across the whole
-  chain that has to agree about code-unit boundaries: match alignment, whole-word neighbours, surrogate pairs
-  through line decoding and byte→char column mapping, BOM handling, truncated/misaligned input, multi-byte line
-  terminators, and the literal-filter fast path cross-checked against the per-line decode path. Uncovered the
-  whole-word inconsistency fixed above (issue #164).
-- **Diagnostic logging for silent failures** — the deliberately-swallowed exceptions behind three best-effort
-  operations (the file-change watcher failing to start, a tail read failing, and indexing teardown) are now
-  recorded to `%LOCALAPPDATA%\FujiyNotepad\diagnostics.log` (separate from `crash.log`, which stays reserved for
-  real crashes) so a persistently-failing watcher or an unexpected fault is diagnosable instead of invisible.
-  Reports are de-duplicated per site, so a per-tick failure logs once rather than every tick. No behaviour change
-  (issue #143).
+<!-- Release notes are not written here. Each change adds its own file under changelog.d/<category>/, so
+     concurrent pull requests never touch the same file. See changelog.d/README.md, and run
+     ./scripts/assemble-changelog.ps1 -Preview to see what is queued for the next release. -->
 
 ## [4.12.0] - 2026-07-14
 
