@@ -98,5 +98,17 @@ namespace FujiyNotepad.Presentation.Tests
         {
             Assert.Equal(UserRegex.MatchTimeout, FindRegexBuilder.BuildLiteralWholeWord("cat", matchCase: true).MatchTimeout);
         }
+
+        [Fact]
+        public void BuildLiteralWholeWord_IsAlwaysCultureInvariant()
+        {
+            // Case folding must not depend on the machine's locale (the Turkish dotless 'i' is the classic
+            // trap). This is also pinned because the Core cross-check test that compares the byte-scan filter
+            // against the decode path rebuilds this predicate by hand — if these options change, that
+            // reference silently stops matching the real one and the cross-check compares two different things.
+            Assert.Equal(RegexOptions.CultureInvariant, FindRegexBuilder.BuildLiteralWholeWord("cat", matchCase: true).Options);
+            Assert.Equal(RegexOptions.CultureInvariant | RegexOptions.IgnoreCase,
+                FindRegexBuilder.BuildLiteralWholeWord("cat", matchCase: false).Options);
+        }
     }
 }

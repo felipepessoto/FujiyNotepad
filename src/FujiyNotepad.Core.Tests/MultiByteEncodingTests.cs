@@ -313,14 +313,22 @@ namespace FujiyNotepad.Core.Tests
             var (fast, _) = await LineFilter.MatchLinesByPatternAsync(
                 searcher, indexer, encoding.Encode(term), OptionsFor(encoding, ignoreCase, wholeWord));
 
-            // The decode path's predicate, mirroring how the app builds it for a literal term.
+            // The decode path's predicate. This must mirror what the app actually builds, option for option —
+            // a reference side that only approximates the real one turns the cross-check into a comparison of
+            // two guesses. In particular CultureInvariant is not optional: FindRegexBuilder.BuildLiteralWholeWord
+            // always sets it, and without it IgnoreCase folds per the ambient culture (the Turkish dotless 'i'
+            // being the classic example), so this could agree or disagree depending on the machine's locale.
             StringComparison comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             Func<string, bool> predicate;
             if (wholeWord)
             {
+                RegexOptions options = RegexOptions.CultureInvariant;
+                if (ignoreCase)
+                {
+                    options |= RegexOptions.IgnoreCase;
+                }
                 var regex = new Regex(
-                    @"(?<![A-Za-z0-9_])" + Regex.Escape(term) + @"(?![A-Za-z0-9_])",
-                    ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None);
+                    @"(?<![A-Za-z0-9_])" + Regex.Escape(term) + @"(?![A-Za-z0-9_])", options);
                 predicate = line => regex.IsMatch(line);
             }
             else
