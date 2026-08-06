@@ -16,6 +16,10 @@ tag per published build. Each release also has downloadable builds and notes on 
 ### Changed
 
 ### Fixed
+- **Filter's whole-word option gave different results on non-English text depending on timing** — with the
+  whole-word toggle on, a term surrounded by non-Latin characters (e.g. CJK) matched or didn't depending on
+  whether the line index had finished building, because the two code paths that implement the filter disagreed
+  about what counts as a word character. Both now use the same rule (issue #164).
 - **Crash after a log rotation / truncation** — if the open file shrank on disk (`logrotate` copytruncate,
   `> app.log`) while the app still held the longer index, the next repaint could throw an unhandled
   `IndexOutOfRangeException` and terminate the app. The line lookup now clamps to the last line that still
@@ -46,6 +50,11 @@ tag per published build. Each release also has downloadable builds and notes on 
   the real matches. The scan is now limited to the region the line index actually covers (issue #169).
 
 ### Internal
+- **Multi-byte encoding hardening** — systematic Core coverage for UTF-16 LE/BE and UTF-32 across the whole
+  chain that has to agree about code-unit boundaries: match alignment, whole-word neighbours, surrogate pairs
+  through line decoding and byte→char column mapping, BOM handling, truncated/misaligned input, multi-byte line
+  terminators, and the literal-filter fast path cross-checked against the per-line decode path. Uncovered the
+  whole-word inconsistency fixed above (issue #164).
 - **Diagnostic logging for silent failures** — the deliberately-swallowed exceptions behind three best-effort
   operations (the file-change watcher failing to start, a tail read failing, and indexing teardown) are now
   recorded to `%LOCALAPPDATA%\FujiyNotepad\diagnostics.log` (separate from `crash.log`, which stays reserved for

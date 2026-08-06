@@ -24,5 +24,26 @@ namespace FujiyNotepad.Presentation
             string pattern = wholeWord ? $@"\b(?:{text})\b" : text;
             return UserRegex.Create(pattern, options);
         }
+
+        /// <summary>
+        /// The regex for a <b>literal</b> whole-word match. Deliberately does <em>not</em> use <c>\b</c>: .NET's
+        /// <c>\w</c> is Unicode-aware, so a letter from any script counts as a word character, whereas the byte
+        /// scanner that backs the same feature (<c>TextSearcher</c>'s whole-word check) uses an ASCII-only
+        /// definition. With <c>\b</c> the two disagree — e.g. <c>ERROR</c> between two CJK ideographs is a
+        /// whole-word match to the scanner but not to the regex — so the Filter would return different lines
+        /// depending on whether its byte-scan fast path or its per-line decode path ran, which is decided by
+        /// something the user cannot see (whether indexing has finished). Mirroring the ASCII definition here
+        /// keeps the two paths in agreement.
+        /// </summary>
+        public static Regex BuildLiteralWholeWord(string text, bool matchCase)
+        {
+            RegexOptions options = RegexOptions.CultureInvariant;
+            if (!matchCase)
+            {
+                options |= RegexOptions.IgnoreCase;
+            }
+
+            return UserRegex.Create($@"(?<![A-Za-z0-9_]){Regex.Escape(text)}(?![A-Za-z0-9_])", options);
+        }
     }
 }
