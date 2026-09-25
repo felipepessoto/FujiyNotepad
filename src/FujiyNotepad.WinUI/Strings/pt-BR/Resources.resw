@@ -153,6 +153,15 @@
   <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Coincidir palavra inteira</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Usar expressão regular</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Usar expressão regular</value></data>
+  <data name="FilterSeverity.Content" xml:space="preserve"><value>Severidade</value></data>
+  <data name="FilterSeverity.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Filtrar por severidade mínima</value></data>
+  <data name="FilterSeverity.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Substituir o filtro por uma predefinição de severidade e aplicar imediatamente</value></data>
+  <data name="SeverityTrace.Text" xml:space="preserve"><value>Trace+</value></data>
+  <data name="SeverityDebug.Text" xml:space="preserve"><value>Debug+</value></data>
+  <data name="SeverityInfo.Text" xml:space="preserve"><value>Info+</value></data>
+  <data name="SeverityWarn.Text" xml:space="preserve"><value>Warn+</value></data>
+  <data name="SeverityError.Text" xml:space="preserve"><value>Error+</value></data>
+  <data name="SeverityFatal.Text" xml:space="preserve"><value>Fatal / Crítico</value></data>
   <data name="FilterApplyButton.Content" xml:space="preserve"><value>Aplicar</value></data>
   <data name="FilterApplyButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Mostrar apenas linhas correspondentes (Enter)</value></data>
   <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Limpar filtro e fechar</value></data>

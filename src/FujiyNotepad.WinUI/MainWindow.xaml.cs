@@ -1596,6 +1596,19 @@ namespace FujiyNotepad.WinUI
 
         private async void FilterApply_Click(object sender, RoutedEventArgs e) => await ApplyFilter();
 
+        private async void FilterSeverity_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuFlyoutItem { Tag: string tag } &&
+                Enum.TryParse(tag, out LogSeverity severity))
+            {
+                FilterBox.Text = SeverityFilter.GetPattern(severity);
+                FilterRegex.IsChecked = true;
+                FilterMatchCase.IsChecked = false;
+                FilterWholeWord.IsChecked = false;
+                await ApplyFilter();
+            }
+        }
+
         private void FilterClose_Click(object sender, RoutedEventArgs e)
         {
             ExitFilterToFullView();

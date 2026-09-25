@@ -250,6 +250,27 @@
             <TextBox x:Uid="FilterBox" x:Name="FilterBox" Grid.Column="0" PlaceholderText="Filter — show only lines that match"
                      VerticalAlignment="Center" KeyDown="FilterBox_KeyDown" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                <DropDownButton x:Uid="FilterSeverity" Content="Severity" Margin="0,0,4,0"
+                                AutomationProperties.AutomationId="FilterSeverity"
+                                AutomationProperties.Name="Filter by minimum severity"
+                                ToolTipService.ToolTip="Replace the filter with a severity preset and apply immediately">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem x:Uid="SeverityTrace" Text="Trace+" Tag="Trace" Click="FilterSeverity_Click"
+                                            AutomationProperties.AutomationId="SeverityTrace" />
+                            <MenuFlyoutItem x:Uid="SeverityDebug" Text="Debug+" Tag="Debug" Click="FilterSeverity_Click"
+                                            AutomationProperties.AutomationId="SeverityDebug" />
+                            <MenuFlyoutItem x:Uid="SeverityInfo" Text="Info+" Tag="Info" Click="FilterSeverity_Click"
+                                            AutomationProperties.AutomationId="SeverityInfo" />
+                            <MenuFlyoutItem x:Uid="SeverityWarn" Text="Warn+" Tag="Warn" Click="FilterSeverity_Click"
+                                            AutomationProperties.AutomationId="SeverityWarn" />
+                            <MenuFlyoutItem x:Uid="SeverityError" Text="Error+" Tag="Error" Click="FilterSeverity_Click"
+                                            AutomationProperties.AutomationId="SeverityError" />
+                            <MenuFlyoutItem x:Uid="SeverityFatal" Text="Fatal / Critical" Tag="Fatal" Click="FilterSeverity_Click"
+                                            AutomationProperties.AutomationId="SeverityFatal" />
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
                 <ToggleButton x:Uid="FilterMatchCase" x:Name="FilterMatchCase" Content="Aa" Style="{StaticResource OptionToggleStyle}"
                               ToolTipService.ToolTip="Match case"
                               AutomationProperties.Name="Match case" />
