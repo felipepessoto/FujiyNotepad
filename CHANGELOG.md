@@ -11,6 +11,13 @@ tag per published build. Each release also has downloadable builds and notes on 
      concurrent pull requests never touch the same file. See changelog.d/README.md, and run
      ./scripts/assemble-changelog.ps1 -Preview to see what is queued for the next release. -->
 
+## [4.14.0] - 2026-09-25
+
+### Added
+- **One-click severity filtering** — choose a minimum level from the Filter bar's Severity menu to hide
+  lower-severity noise immediately, such as showing only WARN / ERROR / FATAL lines. The generated filter
+  stays editable and works with Copy / Save Matching Lines and highlight rules (issue #126).
+
 ## [4.13.0] - 2026-08-06
 
 ### Fixed
