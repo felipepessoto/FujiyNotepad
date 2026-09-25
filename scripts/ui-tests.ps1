@@ -264,6 +264,15 @@ try {
     $filtered = UiValue 'LblStatus'
     Assert ($filtered -match 'Filtered:\s*1\s+of\s+5') "Filter shows 1 of 5 matching lines" "LblStatus: '$filtered'"
 
+    # Severity presets replace the term and immediately reapply, including from an empty filtered view.
+    UiInvoke 'FilterSeverity'
+    UiInvoke 'SeverityFatal' 1200
+    Assert ((UiValue 'LblStatus') -match 'Filtered:\s*0\s+of\s+5') "Fatal preset immediately filters out the ERROR line"
+    UiInvoke 'FilterSeverity'
+    UiInvoke 'SeverityWarn' 1200
+    Assert ((UiValue 'LblStatus') -match 'Filtered:\s*1\s+of\s+5') "Warn preset immediately restores the ERROR line"
+    Assert ((UiValue 'FilterBox') -match 'WARN.*ERROR.*FATAL') "Severity preset exposes its editable regex"
+
     # 12b) Clear Search History runs without crashing (sections 11-12 above populated the Find/Filter history).
     UiMenu 'Edit' 'Clear Search History'; Assert (-not $proc.HasExited) "Clear Search History did not crash"
 

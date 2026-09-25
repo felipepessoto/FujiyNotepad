@@ -158,6 +158,15 @@
 
   <!-- ===== Filter bar ===== -->
   <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filter — show only lines that match</value></data>
+  <data name="FilterSeverity.Content" xml:space="preserve"><value>Severity</value></data>
+  <data name="FilterSeverity.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Filter by minimum severity</value></data>
+  <data name="FilterSeverity.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Replace the filter with a severity preset and apply immediately</value></data>
+  <data name="SeverityTrace.Text" xml:space="preserve"><value>Trace+</value></data>
+  <data name="SeverityDebug.Text" xml:space="preserve"><value>Debug+</value></data>
+  <data name="SeverityInfo.Text" xml:space="preserve"><value>Info+</value></data>
+  <data name="SeverityWarn.Text" xml:space="preserve"><value>Warn+</value></data>
+  <data name="SeverityError.Text" xml:space="preserve"><value>Error+</value></data>
+  <data name="SeverityFatal.Text" xml:space="preserve"><value>Fatal / Critical</value></data>
   <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match case</value></data>
   <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match case</value></data>
   <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Match whole word</value></data>
@@ -208,5 +217,4 @@ Flags: /regex and/or /case (e.g. blue/regex,case).  Lines starting with # are co
   <data name="SampleCancelButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Cancel generating the sample file</value></data>
   <data name="SampleCancelButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Cancel sample generation</value></data>
 </root>
-
 

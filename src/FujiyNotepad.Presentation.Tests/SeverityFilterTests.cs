@@ -87,5 +87,25 @@ namespace FujiyNotepad.Presentation.Tests
                 Assert.NotEmpty(highlights.Find(filtered.GetLine(row)));
             }
         }
+
+        [Fact]
+        public void SeverityFilteredLines_CanBeCopiedAndSaved_WithOriginalEndings()
+        {
+            var source = new FakeLinesWithEndings(
+                new[] { "INFO start", "WARN retry", "DEBUG detail", "ERROR failed", "CRITICAL stop" },
+                new[] { LineEnding.CrLf, LineEnding.CrLf, LineEnding.CrLf, LineEnding.Lf, LineEnding.None });
+            Regex regex = UserRegex.Create(SeverityFilter.GetPattern(LogSeverity.Warn), RegexOptions.None);
+            var filtered = new FilteredLineSource(source, LineFilter.Match(source, line => regex.IsMatch(line), out _));
+            const string expected = "WARN retry\r\nERROR failed\nCRITICAL stop";
+
+            var clipboard = MatchingLinesExporter.BuildClipboardText(filtered);
+            using var writer = new StringWriter();
+            MatchingLinesExporter.Write(filtered, writer);
+
+            Assert.Equal(expected, clipboard.Text);
+            Assert.Equal(3, clipboard.LineCount);
+            Assert.False(clipboard.Truncated);
+            Assert.Equal(expected, writer.ToString());
+        }
     }
 }
