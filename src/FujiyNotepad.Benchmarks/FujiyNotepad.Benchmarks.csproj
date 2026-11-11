@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="NativeWorkloads\**\*.cs" />
     <ProjectReference Include="..\FujiyNotepad.Core\FujiyNotepad.Core.csproj" />
     <ProjectReference Include="..\FujiyNotepad.TestSupport\FujiyNotepad.TestSupport.csproj" />
   </ItemGroup>
