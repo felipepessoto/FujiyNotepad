@@ -9,7 +9,8 @@ param(
     [long]$WorkloadBytes = 2GB,
     [ValidateRange(1, 20)][int]$Rounds = 2,
     [ValidateRange(1, 100)][int]$DiskIterations = 3,
-    [switch]$MeasurementApproved
+    [switch]$MeasurementApproved,
+    [switch]$Resume
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,6 +74,21 @@ function Assert-MicroResults([string]$Root, $Side, [int]$Iterations) {
             $benchmark[0].DisplayInfo -notlike '*Runtime=NativeAOT*') {
             throw "Missing Native AOT measurements or unexpected iteration count: $method"
         }
+    }
+}
+
+function Assert-MeasurementSlot {
+    if (Test-Path -LiteralPath (Join-Path $ArtifactRoot 'pause-measurements.json')) {
+        throw 'Measurements paused by the coordinator. Completed results are preserved; obtain a new slot before removing pause-measurements.json.'
+    }
+}
+
+function Preserve-Interrupted([string]$Path) {
+    if (Test-Path -LiteralPath $Path) {
+        $destination = Join-Path $ArtifactRoot ("interrupted\" + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fffffff'))
+        New-Item -ItemType Directory -Path $destination -Force | Out-Null
+        Move-Item -LiteralPath $Path -Destination $destination
+        Write-Warning "Preserved interrupted output in $destination; the incomplete batch will be rerun."
     }
 }
 
@@ -180,36 +196,70 @@ if ($Phase -eq 'Prepare') {
 }
 
 if (!$MeasurementApproved) { throw 'Obtain a quiet measurement slot, then pass -MeasurementApproved. Do not measure alongside builds/UI sweeps.' }
+Assert-MeasurementSlot
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 $resultsRoot = Join-Path $ArtifactRoot $Phase.ToLowerInvariant()
-if (Test-Path -LiteralPath $resultsRoot) { throw "Result directory already exists: $resultsRoot" }
-New-Item -ItemType Directory -Path $resultsRoot | Out-Null
-Save-Json ([ordered]@{ phase = $Phase; rounds = $Rounds; diskIterations = $DiskIterations; measurementApproved = $true }) `
-    (Join-Path $resultsRoot 'configuration.json')
-Record-Host (Join-Path $resultsRoot 'host-before.json')
+if (Test-Path -LiteralPath $resultsRoot) {
+    if (!$Resume) { throw "Result directory already exists: $resultsRoot. Use -Resume to preserve completed batches." }
+    $configuration = Get-Content -LiteralPath (Join-Path $resultsRoot 'configuration.json') -Raw | ConvertFrom-Json
+    if ($configuration.phase -ne $Phase -or $configuration.rounds -ne $Rounds -or $configuration.diskIterations -ne $DiskIterations) {
+        throw 'Resume must use the original phase, round count and disk iteration count.'
+    }
+}
+else {
+    New-Item -ItemType Directory -Path $resultsRoot | Out-Null
+    Save-Json ([ordered]@{ phase = $Phase; rounds = $Rounds; diskIterations = $DiskIterations; measurementApproved = $true }) `
+        (Join-Path $resultsRoot 'configuration.json')
+}
+$hostPrefix = if ($Resume) { 'host-resume-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') } else { 'host' }
+Record-Host (Join-Path $resultsRoot "$hostPrefix-before.json")
 for ($round = 0; $round -lt $Rounds; $round++) {
     # AB/BA ordering controls drift better than collecting all .NET 10 samples first.
     $orderedSides = if ($round % 2 -eq 0) { @($manifest.sides[0], $manifest.sides[1]) } else { @($manifest.sides[1], $manifest.sides[0]) }
     foreach ($side in $orderedSides) {
+        Assert-MeasurementSlot
         if ($Phase -eq 'Micro') {
+            $batchRoot = Join-Path $resultsRoot "$round-$($side.name)"
+            if ($Resume -and (Test-Path -LiteralPath (Join-Path $batchRoot 'results\FujiyNotepad.Benchmarks.EngineBenchmarks-report-full.json'))) {
+                Assert-MicroResults $batchRoot $side 10
+                Write-Host "Keeping completed micro batch $round-$($side.name)."
+                continue
+            }
+            if ($Resume) {
+                Preserve-Interrupted $batchRoot
+                Preserve-Interrupted (Join-Path $resultsRoot "$round-$($side.name).log")
+            }
             Invoke-DotNet $side @('run', '-c', 'Release', '--no-build', '--project', $benchmarkRelative, '--',
                 '--filter', '*EngineBenchmarks*', '--runtimes', "nativeaot$($side.runtime.Substring(0, 4))",
                 '--ilCompilerVersion', $side.runtime, '--cli', $side.dotnet,
                 '--launchCount', '1', '--warmupCount', '5', '--iterationCount', '10', '--iterationTime', '250',
                 '--outliers', 'DontRemove', '--exporters', 'FullJSON', 'CSVMeasurements', '--keepFiles',
                 '--generateBinLog', '--wakeLock', 'None', '--stopOnFirstError', '--buildTimeout', '600',
-                '--artifacts', (Join-Path $resultsRoot "$round-$($side.name)")) `
+                '--artifacts', $batchRoot) `
                 (Join-Path $resultsRoot "$round-$($side.name).log")
             Assert-MicroResults (Join-Path $resultsRoot "$round-$($side.name)") $side 10
         }
         else {
             foreach ($id in @('ascii', 'utf8', 'utf16le', 'utf32le')) {
+                Assert-MeasurementSlot
+                $resultPath = Join-Path $resultsRoot "$round-$($side.name)-$id.json"
+                if ($Resume -and (Test-Path -LiteralPath $resultPath)) {
+                    $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+                    if ($result.Runtime -ne $side.runtime -or $result.DynamicCodeSupported -or $result.Workload.Id -ne $id -or
+                        $result.Samples.Count -ne 11 * $DiskIterations -or
+                        @($result.Samples | Group-Object Operation | Where-Object Count -ne $DiskIterations).Count -ne 0) {
+                        throw "Cannot resume from an invalid disk result: $resultPath"
+                    }
+                    Write-Host "Keeping completed disk batch $round-$($side.name)-$id."
+                    continue
+                }
+                if ($Resume) { Preserve-Interrupted (Join-Path $resultsRoot "$round-$($side.name)-$id.log") }
                 Invoke-Checked (Join-Path $side.native 'NativeWorkloads.exe') @('run',
-                    (Join-Path $ArtifactRoot 'data'), $id, (Join-Path $resultsRoot "$round-$($side.name)-$id.json"),
+                    (Join-Path $ArtifactRoot 'data'), $id, $resultPath,
                     $DiskIterations.ToString([Globalization.CultureInfo]::InvariantCulture)) `
                     (Join-Path $resultsRoot "$round-$($side.name)-$id.log")
             }
         }
     }
 }
-Record-Host (Join-Path $resultsRoot 'host-after.json')
+Record-Host (Join-Path $resultsRoot "$hostPrefix-after.json")

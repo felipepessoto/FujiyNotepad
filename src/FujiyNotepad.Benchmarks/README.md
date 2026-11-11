@@ -86,6 +86,14 @@ iteration time, two process launches per runtime (separate rounds), and no outli
 order alternates **AB / BA**. Keep the full JSON and measurement CSVs, not just the summary means.
 Preparation's Dry jobs establish compiler/runner compatibility only; **none of their timings is evidence**.
 
+For a coordinated pause, create `pause-measurements.json` in the evidence directory. New measurement
+invocations and batch boundaries check for that marker and stop explicitly without deleting completed
+results. It cannot interrupt an already running native benchmark. After obtaining a new quiet slot, remove
+only that marker and repeat the measurement command with `-Resume`. Completed, validated batches are kept;
+incomplete output is moved under `interrupted` before that batch is rerun. Original host snapshots remain
+alongside timestamped resume snapshots. Record interruptions and the separation between paired runs when
+interpreting variance.
+
 ### On-disk scenarios
 
 `NativeWorkloads` is a separate, dependency-free, self-contained Native AOT console driver referencing the
