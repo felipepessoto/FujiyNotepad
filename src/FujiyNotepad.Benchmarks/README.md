@@ -10,6 +10,12 @@ numbers are noisy on shared CI runners). A separate, non-gating **Benchmarks** w
 `FujiyNotepad.Core` or the benchmarks themselves change on `master`, and weekly — saving the numbers as a
 downloadable artifact (and a job summary) so a regression can be spotted and bisected over time.
 
+The harness requires **BenchmarkDotNet 0.16.0-preview.2** for .NET 11 runtime support. The latest stable
+0.15.8 can compile this project but fails before executing benchmarks because it does not recognize
+`net11.0`. This prerelease dependency is confined to the non-shipping benchmark project; it does not
+enable preview C# or Runtime Async in the app. Use the same harness version on both sides of a runtime
+comparison, and do not treat Dry-job smoke checks or runs alongside other builds as performance evidence.
+
 ## Run
 
 ```powershell

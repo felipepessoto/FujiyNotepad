@@ -5,13 +5,14 @@ files (WinUI 3 + Native AOT).
 
 ## Prerequisites
 
-- The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (the repo pins `10.0.100` with
-  `latestMinor` roll-forward in [`global.json`](global.json)).
+- The [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) (the repo pins `11.0.100` with
+  `latestMinor` roll-forward and excludes prerelease SDKs in [`global.json`](global.json)).
 - Windows 10 (1809 / build 17763) or Windows 11.
 - For running an unpackaged **dev** build: the
   [Windows App SDK runtime](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads) (already on
   most dev machines). Released self-contained builds bundle it.
-- Optional, for the AOT publish: the **Desktop development with C++** workload (the ILC linker uses it).
+- For the AOT publish: Visual Studio 2022 or later with the **Desktop development with C++** workload
+  and its default Windows SDK and compiler/linker components. ARM64 publishing also needs the ARM64 C++ tools.
 
 ## Build, test, run
 
@@ -26,7 +27,8 @@ dotnet run --project src/FujiyNotepad.WinUI -c Release
 dotnet test src/FujiyNotepad.slnx -c Release -p:Platform=x64
 ```
 
-Or open `src/FujiyNotepad.slnx` in Visual Studio 2022 (17.13+, for the `.slnx` solution format) and press F5.
+Or open `src/FujiyNotepad.slnx` in Visual Studio 2026 (18.12+ for .NET 11) and press F5.
+CLI builds use the MSBuild bundled with the selected .NET SDK.
 
 ### Native-AOT publish
 
@@ -36,8 +38,24 @@ Released builds are self-contained Native AOT. To reproduce locally:
 dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj -c Release -p:Platform=x64 -p:PublishProfile=win-x64 -o publish/app
 ```
 
-The app's nastiest bugs (CsWinRT picker marshalling, missing `resources.pri`) only reproduce in the published
-AOT build, so test UI-affecting changes against a publish, not just the managed run.
+Use `-p:Platform=x86 -p:PublishProfile=win-x86` or
+`-p:Platform=ARM64 -p:PublishProfile=win-arm64` for the other architectures. The release workflow builds
+ARM64 natively on `windows-11-arm` and installs the SDK selected by `global.json` on every build runner.
+
+For SDK or native-dependency upgrades, publish from a clean checkout **without a preceding managed build**.
+Check the generated app PRI (`FujiyNotepad.WinUI.pri`, as selected by `ProjectPriFileName`) alongside the
+native executable, then exercise the published app. Missing XAML resources and CsWinRT picker/callback
+marshalling failures are not ruled out by a successful managed build.
+
+The released 11.0.100 SDK leaves `UseOptimizedPublish` **false by default** (the optimized pipeline is opt-in).
+Keep that default; an optimized-publish opt-in needs separate clean XAML/PRI validation. Do not add a
+fallback or alter target ordering just because older migration guidance describes a different default.
+
+Keep the standard Native AOT instruction-set baseline, not `IlcInstructionSet=native`: x86/x64 require
+x86-64-v2-class features (including SSE4.2 and POPCNT), while ARM64 retains Armv8.0-A. The
+[GA compiler's baseline selection](https://github.com/dotnet/runtime/blob/v11.0.0/src/coreclr/tools/Common/InstructionSetHelpers.cs#L23-L92)
+distinguishes Native AOT from the higher ReadyToRun targets. The Windows version floor and all three RIDs
+are unchanged.
 
 ### UI tests
 
