@@ -36,8 +36,28 @@ Released builds are self-contained Native AOT. To reproduce locally:
 dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj -c Release -p:Platform=x64 -p:PublishProfile=win-x64 -o publish/app
 ```
 
-The app's nastiest bugs (CsWinRT picker marshalling, missing `resources.pri`) only reproduce in the published
+The app's nastiest bugs (CsWinRT picker marshalling, a missing app PRI) only reproduce in the published
 AOT build, so test UI-affecting changes against a publish, not just the managed run.
+
+Before testing the release layout, remove unused SDK components with the same script that CI and releases use:
+
+```powershell
+.\scripts\prepare-release.ps1 -PublishDir publish\app
+.\scripts\test-prepare-release.ps1
+```
+
+The generated app PRI is currently `FujiyNotepad.WinUI.pri`; keep it beside the executable along with the
+framework PRIs, native runtime DLLs, `Assets\FujiyNotepad.ico`, and the framework's `en-US` MUI fallback.
+The app's English and Portuguese strings are compiled into its PRI, independently of framework MUI pruning.
+The release workflow runs the UI sweep against the extracted, pruned ZIP on x64, x86, and native ARM64.
+
+Windows App SDK servicing is independent of .NET: the app uses stable **2.6.5** on **.NET 10**, with
+**Win2D 1.4.0** unchanged. No `XamlOptionalChanges` style optimizations or experimental System Composition
+Engine are enabled. When updating the SDK, review its
+[release notes](https://learn.microsoft.com/windows/apps/windows-app-sdk/release-notes/windows-app-sdk-2-0?pivots=stable),
+recheck the pruning list against the actual native package layout, and test picker focus, clipboard, themes,
+localization, and rendering on the published executable. Record Windows/CPU/display coverage gaps; shared-runner
+timings are observations, not performance benchmarks.
 
 ### UI tests
 

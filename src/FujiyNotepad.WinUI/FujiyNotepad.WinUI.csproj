@@ -47,7 +47,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
   </ItemGroup>
 
@@ -74,10 +74,10 @@
   </ItemGroup>
 
   <!--
-    The Windows App SDK generates the app's resources.pri (which contains the compiled XAML)
+    The Windows App SDK generates the app's PRI (FujiyNotepad.WinUI.pri, containing the compiled XAML)
     into the build output, but for an unpackaged app `dotnet publish` does not copy it into the
     publish folder: the SDK's Publish override only runs for MSIX-packaged apps (AppxPackage=true).
-    Without resources.pri next to the exe, ms-appx:///*.xaml resources fail to resolve at runtime
+    Without the app's PRI next to the exe, ms-appx:///*.xaml resources fail to resolve at runtime
     (XamlParseException), which is a hard crash under Native AOT. Add the generated PRI to the
     publish file set explicitly so it ships alongside the executable.
   -->
