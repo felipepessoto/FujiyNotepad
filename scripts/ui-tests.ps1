@@ -79,8 +79,8 @@ Write-Host "Launching $Exe on $sampleName"
 $proc = Start-Process -FilePath $Exe -ArgumentList "`"$sample`"" -PassThru
 
 function Cleanup {
-    if (-not $script:proc.HasExited) {
-        Stop-Process -Id $script:proc.Id -Force
+    Get-Process FujiyNotepad* -ErrorAction SilentlyContinue | ForEach-Object {
+        try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch { }
     }
     Remove-Item $sample -Force -ErrorAction SilentlyContinue
 

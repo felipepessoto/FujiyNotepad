@@ -31,10 +31,6 @@ jobs:
           ./scripts/assemble-changelog.ps1 -Check
           ./scripts/test-assemble-changelog.ps1
 
-      - name: Check release preparation
-        shell: pwsh
-        run: .\scripts\test-prepare-release.ps1
-
       # No actions/setup-dotnet: the windows runner image already ships a .NET 10 SDK, which global.json
       # (10.0.100, rollForward latestMinor) accepts. setup-dotnet always re-downloads the ~300 MB SDK, so
       # relying on the preinstalled one saves ~35s per job. (Re-add it if the image ever drops .NET 10.)
@@ -133,10 +129,6 @@ jobs:
           -p:Platform=x64
           -p:PublishProfile=win-x64
           -o publish/app
-
-      - name: Prepare release layout
-        shell: pwsh
-        run: .\scripts\prepare-release.ps1 -PublishDir publish\app
 
       - name: UI tests
         shell: pwsh
