@@ -3,12 +3,14 @@
 .SYNOPSIS
     Dependency-free, headless regression tests for the UI harness lifecycle.
 .DESCRIPTION
-    Process creation, enumeration, stopping and waiting are fakes. Every filesystem operation is confined
-    to an absolute, disposable test directory, including LOCALAPPDATA, TEMP and TMP for CLI checks.
+    Process operations and CLI settings-path resolution are fakes. Every filesystem operation is confined
+    to an absolute, disposable test directory. LOCALAPPDATA deliberately differs from the mocked known
+    folder; TEMP and TMP are isolated too. The default resolver test checks paths without opening settings.
     No viewer, winapp command, clipboard operation or real process termination is allowed.
 #>
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'ui-test-lifecycle.ps1')
+$lifecycle = Join-Path $PSScriptRoot 'ui-test-lifecycle.ps1'
+. $lifecycle
 $harness = Join-Path $PSScriptRoot 'ui-tests.ps1'
 $results = [System.Collections.Generic.List[object]]::new()
 $root = [System.IO.Directory]::CreateDirectory(
@@ -144,10 +146,10 @@ function Remove-Item {
 
 function Invoke-Case([string]$Name, [scriptblock]$Test) {
     $directory = [System.IO.Directory]::CreateDirectory((Join-Path $root ([guid]::NewGuid().ToString('N')))).FullName
-    $env:LOCALAPPDATA = Join-Path $directory 'local'
+    $env:LOCALAPPDATA = Join-Path $directory 'overridden-local'
     $env:TEMP = $directory
     $env:TMP = $directory
-    $settings = Join-Path $env:LOCALAPPDATA 'FujiyNotepad\settings.json'
+    $settings = Join-Path $directory 'known-folder\FujiyNotepad\settings.json'
     [System.IO.Directory]::CreateDirectory((Split-Path $settings -Parent)) | Out-Null
     $original = [byte[]](239, 187, 191) + [System.Text.Encoding]::UTF8.GetBytes("{`r`n  `"Theme`": `"Dark`"`r`n}`r`n")
     [System.IO.File]::WriteAllBytes($settings, $original)
@@ -196,6 +198,25 @@ function Invoke-TestRun {
     }
     return @{ SetupError = $setupError; CleanupError = $cleanupError }
 }
+
+function Invoke-TestHarness {
+    $scripts = [System.IO.Directory]::CreateDirectory((Join-Path $case.Directory 'cli-harness')).FullName
+    $entryPoint = Join-Path $scripts 'ui-tests.ps1'
+    [System.IO.File]::Copy($harness, $entryPoint, $true)
+    # Keep the entry point unchanged, but replace its default known-folder lookup with the fixture.
+    # Reject an explicit unexpected path before any guard/directory acquisition, even on regression.
+    $mock = ". '$($lifecycle.Replace("'", "''"))'`n" + @'
+$realNewUiTestRun = ${function:New-UiTestRun}
+function New-UiTestRun([string]$SettingsPath = $case.SettingsPath) {
+    Check ($SettingsPath -ceq $case.SettingsPath) 'CLI settings path bypassed the mocked Windows known folder.'
+    & $realNewUiTestRun -SettingsPath $SettingsPath
+}
+'@
+    [System.IO.File]::WriteAllText((Join-Path $scripts 'ui-test-lifecycle.ps1'), $mock)
+    $output = (& $entryPoint -Exe $case.Exe -ArtifactDir $case.Directory *>&1 | Out-String)
+    return @{ Output = $output; ExitCode = $LASTEXITCODE }
+}
+
 function Check-Original {
     Check (([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($case.SettingsPath))) -ceq $case.Original) 'Original settings bytes were not preserved.'
 }
@@ -234,6 +255,24 @@ function Check-Recovery([string]$ErrorText) {
 }
 
 try {
+    Invoke-Case 'Default settings and guard paths ignore LOCALAPPDATA overrides' {
+        $expected = [System.IO.Path]::Combine(
+            [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData),
+            'FujiyNotepad', 'settings.json')
+        foreach ($override in 'override-one', 'override-two') {
+            $env:LOCALAPPDATA = Join-Path $case.Directory $override
+            $resolved = New-UiTestRun
+            Check ($resolved.SettingsPath -ceq $expected) 'Settings path differs from the viewer Windows known folder.'
+            Check ($resolved.GuardPath -ceq "$expected.ui-tests.lock") 'Settings guard changed with an environment override.'
+        }
+    }
+    Invoke-Case 'Unresolved or relative settings paths fail before resource acquisition' {
+        foreach ($invalidPath in '', 'settings.json') {
+            $errorText = ''
+            try { $null = New-UiTestRun -SettingsPath $invalidPath } catch { $errorText = "$_" }
+            Check ($errorText -match 'settings path must be absolute') 'An unresolved settings path was accepted.'
+        }
+    }
     Invoke-Case 'Existing settings restored byte-for-byte, only owned PID stopped' {
         $case.OtherProcesses = @([pscustomobject]@{ Id = 987654321; ProcessName = 'FujiyNotepad.Other'; Exited = $false })
         $result = Invoke-TestRun
@@ -413,25 +452,33 @@ try {
             Check-Cleaned
         }
     }
-    Invoke-Case 'CLI occupied guard fails before acquiring or changing settings' {
+    Invoke-Case 'CLI runs with different LOCALAPPDATA overrides reject the same occupied guard' {
         [System.IO.File]::WriteAllText($case.Run.GuardPath, 'another run or pending recovery')
-        $output = (& $harness -Exe $case.Exe -ArtifactDir $case.Directory *>&1 | Out-String)
-        Check ($LASTEXITCODE -eq 1 -and $output -match 'Cannot acquire UI-test settings guard') "Unexpected CLI result: $output"
-        Check ($case.Backups.Count -eq 0 -and $case.StopIds.Count -eq 0 -and -not $case.Process.Started) 'Refused CLI run acquired app resources.'
-        Check ([System.IO.File]::ReadAllText($case.Run.GuardPath) -eq 'another run or pending recovery') 'Refused CLI run changed the existing guard.'
-        Check-Original
+        foreach ($override in 'override-one', 'override-two') {
+            $env:LOCALAPPDATA = Join-Path $case.Directory $override
+            $result = Invoke-TestHarness
+            $output = $result.Output
+            Check ($result.ExitCode -eq 1 -and $output -match 'Cannot acquire UI-test settings guard') "Unexpected CLI result: $output"
+            Check ($case.Backups.Count -eq 0 -and $case.StopIds.Count -eq 0 -and -not $case.Process.Started) 'Refused CLI run acquired app resources.'
+            Check ([System.IO.File]::ReadAllText($case.Run.GuardPath) -eq 'another run or pending recovery') 'Refused CLI run changed the existing guard.'
+            Check (-not (Test-Path -LiteralPath $env:LOCALAPPDATA)) 'CLI created state in the environment override.'
+            Check-Original
+        }
     }
     Invoke-Case 'CLI launch failure is nonzero and runs cleanup' {
         $case.Process.StartMode = 'throw'
-        $output = (& $harness -Exe $case.Exe -ArtifactDir $case.Directory *>&1 | Out-String)
-        Check ($LASTEXITCODE -eq 1 -and $output -match 'mock launch failure' -and $output -match 'UI tests FAILED') "Unexpected CLI result: $output"
+        $result = Invoke-TestHarness
+        $output = $result.Output
+        Check ($result.ExitCode -eq 1 -and $output -match 'mock launch failure' -and $output -match 'UI tests FAILED') "Unexpected CLI result: $output"
+        Check ($case.Backups.Count -eq 1) 'CLI did not back up the mocked known-folder settings.'
         Check-Original
         Check-Cleaned
     }
     Invoke-Case 'CLI preserves both UI failure and cleanup failure, with recovery details' {
         $case.Process.WaitMode = 'throw'
-        $output = (& $harness -Exe $case.Exe -ArtifactDir $case.Directory *>&1 | Out-String)
-        Check ($LASTEXITCODE -eq 1 -and $output -match 'mock UI failure' -and $output -match 'mock wait failure') "CLI lost a failure: $output"
+        $result = Invoke-TestHarness
+        $output = $result.Output
+        Check ($result.ExitCode -eq 1 -and $output -match 'mock UI failure' -and $output -match 'mock wait failure') "CLI lost a failure: $output"
         Check ($output -match 'CLEANUP ERROR' -and $output -notmatch 'UI tests PASSED') 'CLI reported false success.'
         Check ($case.RestoreAttempts -eq 0 -and $case.Backups.Count -eq 1) 'CLI did not preserve the snapshot.'
         Check (Test-Path -LiteralPath $case.Backups[0]) 'CLI destroyed the recovery backup.'

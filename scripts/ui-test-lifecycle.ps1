@@ -1,6 +1,15 @@
 #requires -Version 7.0
 
-function New-UiTestRun([string]$SettingsPath) {
+# Match SettingsStore.Default: LOCALAPPDATA overrides do not redirect the Windows known folder.
+function New-UiTestRun {
+    param(
+        [string]$SettingsPath = [System.IO.Path]::Combine(
+            [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData),
+            'FujiyNotepad', 'settings.json')
+    )
+    if (-not [System.IO.Path]::IsPathFullyQualified($SettingsPath)) {
+        throw "UI-test settings path must be absolute. Got: '$SettingsPath'."
+    }
     return @{
         SettingsPath = $SettingsPath
         SettingsCaptured = $false

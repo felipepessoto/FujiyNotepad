@@ -75,6 +75,9 @@ executable's name). This is only a preflight check: renamed viewers or ones star
 `%LOCALAPPDATA%\FujiyNotepad\settings.json`. Use a disposable Windows user/profile if you cannot keep other
 instances closed. The harness stops only its own launched process; it never closes unrelated viewers.
 
+Settings and guard paths use the Windows `LocalApplicationData` known folder, matching the viewer.
+Overriding the `LOCALAPPDATA` environment variable does **not** isolate a UI-test run.
+
 An exclusive `settings.json.ui-tests.lock` beside the settings file rejects overlapping harness runs before
 they back up or modify settings. Setup and teardown failures still attempt cleanup. Settings are restored
 byte-for-byte (or removed if originally absent) only after the owned process is confirmed exited.

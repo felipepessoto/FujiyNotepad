@@ -42,7 +42,7 @@ if ([string]::IsNullOrWhiteSpace($Exe) -or -not (Test-Path -LiteralPath $Exe)) {
 }
 
 . (Join-Path $PSScriptRoot 'ui-test-lifecycle.ps1')
-$run = New-UiTestRun -SettingsPath (Join-Path $env:LOCALAPPDATA 'FujiyNotepad\settings.json')
+$run = New-UiTestRun
 
 $script:failures = 0
 $script:proc = $null
