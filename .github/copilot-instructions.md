@@ -33,7 +33,7 @@ There is no separate lint step; the build runs with warnings-as-signal — keep 
 dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj -c Release -p:Platform=x64 -p:PublishProfile=win-x64 -o publish/app
 ```
 
-The app's worst bugs (CsWinRT picker marshalling, missing `resources.pri`) **only reproduce in the published
+The app's worst bugs (CsWinRT picker marshalling, missing `FujiyNotepad.WinUI.pri`) **only reproduce in the published
 AOT build**, not in `dotnet run`. Two practical gotchas:
 
 - The ILC link step needs the C++ toolchain and `vswhere.exe`. If publish fails with `'vswhere.exe' is not
@@ -51,8 +51,10 @@ x86/x64 CPU baseline requires SSE4.2/POPCNT (x86-64-v2-class features); ARM64 re
 
 ### UI tests
 
-The WinUI app can't start headlessly, so it's covered by an app-layer UI-Automation sweep over the
-**published** exe (needs `winapp` CLI: `winget install Microsoft.winappcli`):
+The WinUI app can't start headlessly, so CI runs its UI-Automation sweep against the **extracted final ZIP**
+using `scripts/prepare-release.ps1` and `scripts/test-release-package.ps1`. See `CONTRIBUTING.md` for packaging
+and desktop/settings safety. A direct published-build diagnostic run needs `winapp` CLI
+(`winget install Microsoft.winappcli`):
 
 ```powershell
 ./scripts/ui-tests.ps1 -Exe publish/app/FujiyNotepad.WinUI.exe

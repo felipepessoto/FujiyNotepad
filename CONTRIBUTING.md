@@ -42,6 +42,41 @@ Use `-p:Platform=x86 -p:PublishProfile=win-x86` or
 `-p:Platform=ARM64 -p:PublishProfile=win-arm64` for the other architectures. The release workflow builds
 ARM64 natively on `windows-11-arm` and installs the SDK selected by `global.json` on every build runner.
 
+### Release-package checks (no release required)
+
+CI and the release matrix use the same conservative pruning/ZIP helper. It checks the generated
+`FujiyNotepad.WinUI.pri` (not a literal `resources.pri`), framework PRIs, Win2D/runtime DLLs, the icon and the
+en-US framework MUI fallback **before changing any files**. Only known-unused SDK components, debug symbols
+and non-en-US framework MUI files are removed. Unknown/new runtime files, non-MUI app localization and all
+en-US MUI files survive; language directories are removed only when empty. Use an explicit staging folder:
+repository/filesystem roots and reparse points are rejected.
+
+```powershell
+pwsh -NoProfile -File .\scripts\test-prepare-release.ps1
+.\scripts\prepare-release.ps1 -PublishDir publish\app -ZipPath dist\FujiyNotepad-local-win-x64.zip
+```
+
+The regression tests use disposable fixtures and fake the UI process boundary; they need no SDK, desktop,
+app or `winapp`. Packaging refuses an existing ZIP instead of overwriting evidence.
+
+On a disposable Windows desktop/profile, validate and exercise the **extracted final ZIP**, not the
+pre-ZIP publish tree (see the UI-test safety requirements below):
+
+```powershell
+.\scripts\test-release-package.ps1 -ZipPath dist\FujiyNotepad-local-win-x64.zip -ExtractDir publish\verify -Rid win-x64 -ArtifactDir diagnostics
+```
+
+The extraction directory must be new. The driver validates required files and PE architecture, then runs the
+existing UI sweep from that directory. It records source revision, ZIP SHA-256, extracted file hashes,
+command results and a transcript; failures keep the ZIP and diagnostics. The x64 CI UI job and the
+x64/x86/native-ARM64 release matrix use this path and upload the ZIP before subsequent validation can fail.
+The ARM64 check requires a native ARM64 host; x86 runs under WOW64 on the x64 hosted runner.
+
+For hosted validation without publishing, dispatch `release.yml` against a **branch**. Dispatches use
+`0.0.0-dev` and never create a GitHub Release. Only a `v*` **tag push**, after both test and all package
+validation jobs succeed, can reach the write-enabled release job. Ordinary build/test jobs have read-only
+repository permissions. Downloadable Actions artifacts are not releases.
+
 For SDK or native-dependency upgrades, publish from a clean checkout **without a preceding managed build**.
 Check the generated app PRI (`FujiyNotepad.WinUI.pri`, as selected by `ProjectPriFileName`) alongside the
 native executable, then exercise the published app. Missing XAML resources and CsWinRT picker/callback
@@ -60,8 +95,8 @@ are unchanged.
 ### UI tests
 
 The device-free engine and presentation logic are unit-tested with xUnit. The WinUI app itself can't start
-headlessly, so it is covered by an app-layer UI test that drives the **published** executable through Windows
-UI Automation:
+headlessly, so CI drives the **extracted final ZIP** through Windows UI Automation using the package driver
+above. For a direct published-build diagnostic run:
 
 ```powershell
 ./scripts/ui-tests.ps1 -Exe publish/app/FujiyNotepad.WinUI.exe
@@ -104,7 +139,9 @@ pwsh -NoProfile -File .\scripts\test-ui-test-lifecycle.ps1
 ```
 
 They use fake process operations and isolated temporary settings, covering exit races, teardown/setup
-failures, recoverable backups and overlapping acquisition without touching real viewer windows or settings.
+failures, recoverable backups, overlapping acquisition and UI-command error propagation without touching
+real viewer windows or settings. UI commands fail on nonzero exit codes; the expected empty scrollbar
+search is accepted only with a valid no-match JSON response.
 
 ### Benchmarks
 
@@ -151,7 +188,7 @@ wiring layer in `FujiyNotepad.WinUI`.
 
 - Branch off an up-to-date `master`; keep PRs focused.
 - CI must be green: the **Build & Test** job (build, tests, 85% coverage gate) and the **UI tests** job
-  (AOT publish + UI Automation).
+  (AOT publish, shared packaging and extracted-ZIP UI Automation).
 - PRs are merged with **Squash and merge**.
 
 ## Reporting bugs

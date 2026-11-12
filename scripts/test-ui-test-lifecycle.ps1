@@ -12,6 +12,17 @@ $ErrorActionPreference = 'Stop'
 $lifecycle = Join-Path $PSScriptRoot 'ui-test-lifecycle.ps1'
 . $lifecycle
 $harness = Join-Path $PSScriptRoot 'ui-tests.ps1'
+# Load only helper definitions, never the entry point, for headless command-result tests.
+$parseErrors = $null
+$harnessAst = [System.Management.Automation.Language.Parser]::ParseFile($harness, [ref]$null, [ref]$parseErrors)
+if ($parseErrors.Count) { throw "Cannot parse UI harness: $parseErrors" }
+$helperNames = @('Invoke-Ui', 'UiInvoke', 'UiMenu', 'UiSubMenu', 'UiHas')
+foreach ($helper in $harnessAst.FindAll({
+    param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $helperNames
+}, $false)) {
+    . ([scriptblock]::Create($helper.Extent.Text))
+}
 $results = [System.Collections.Generic.List[object]]::new()
 $root = [System.IO.Directory]::CreateDirectory(
     (Join-Path ([System.IO.Path]::GetTempPath()) ("fujiy-lifecycle-tests-" + [guid]::NewGuid().ToString('N')))).FullName
@@ -124,7 +135,12 @@ function Stop-Process {
 }
 function Start-Process { throw 'Real process launch is forbidden in lifecycle tests.' }
 function Start-Sleep { }
-function winapp { throw 'mock UI failure; no UI or clipboard operations are allowed' }
+function winapp {
+    if (-not $case.ContainsKey('UiOutput')) { throw 'mock UI failure; no UI or clipboard operations are allowed' }
+    $case.UiCommands.Add(($args -join ' '))
+    $global:LASTEXITCODE = $case.UiExitCode
+    return $case.UiOutput
+}
 
 function Check-TestPath([string]$Path) {
     Check ([System.IO.Path]::IsPathFullyQualified($Path)) "Path must be absolute: $Path"
@@ -283,6 +299,51 @@ function Check-Recovery([string]$ErrorText) {
 }
 
 try {
+    Invoke-Case 'Successful UI command is recorded; failed commands are explicit, not swallowed' {
+        $ArtifactDir = $case.Directory
+        $case.UiCommands = [System.Collections.Generic.List[string]]::new()
+        $case.UiExitCode = 0
+        $case.UiOutput = 'invoked'
+        UiSubMenu 'View' 'Theme' 'ThemeSystem'
+        Check ($case.UiCommands.Count -eq 3) 'Submenu command sequence did not complete.'
+        $case.UiExitCode = 7
+        $case.UiOutput = 'mock selector failure'
+        $errorText = ''
+        try { UiInvoke 'ThemeSystem' } catch { $errorText = "$_" }
+        Check ($errorText -match 'exit 7' -and $errorText -match 'mock selector failure') 'UI invocation failure was swallowed.'
+        $records = @(Get-Content -LiteralPath (Join-Path $ArtifactDir 'ui-commands.jsonl') | ConvertFrom-Json)
+        Check ($records.Count -eq 4 -and $records[-1].exitCode -eq 7) 'Command failure evidence was lost.'
+    }
+    Invoke-Case 'Empty search is allowed only with a valid no-match result' {
+        $ArtifactDir = $case.Directory
+        $case.UiCommands = [System.Collections.Generic.List[string]]::new()
+        $case.UiExitCode = 1
+        $case.UiOutput = '{"matchCount":0,"matches":[],"hasMore":false}'
+        Check (-not (UiHas 'HScroll')) 'Expected empty HScroll search was not accepted.'
+        foreach ($invalid in '{}', '{"error":"inspection failed"}', '{"matchCount":1,"matches":[{}],"hasMore":false}',
+            '{"matchCount":0,"matches":[],"hasMore":true}') {
+            $case.UiOutput = $invalid
+            $errorText = ''
+            try { $null = UiHas 'HScroll' } catch { $errorText = "$_" }
+            Check ($errorText -match 'Invalid UI search result') "Search error was treated as no matches: $invalid"
+        }
+    }
+    Invoke-Case 'Malformed search output and inconsistent success fail explicitly' {
+        $ArtifactDir = $case.Directory
+        $case.UiCommands = [System.Collections.Generic.List[string]]::new()
+        $case.UiExitCode = 1
+        $case.UiOutput = 'mock invalid JSON'
+        $errorText = ''
+        try { $null = UiHas 'HScroll' } catch { $errorText = "$_" }
+        Check ($errorText -ne '') 'Malformed search output was accepted.'
+        $case.UiExitCode = 0
+        $case.UiOutput = '{"matchCount":0,"matches":[],"hasMore":false}'
+        $errorText = ''
+        try { $null = UiHas 'HScroll' } catch { $errorText = "$_" }
+        Check ($errorText -match 'Invalid UI search result') 'Inconsistent search status was accepted.'
+        $case.UiOutput = '{"matchCount":1,"matches":[{}],"hasMore":false}'
+        Check (UiHas 'Version') 'Valid successful search was rejected.'
+    }
     Invoke-Case 'Default settings and guard paths ignore LOCALAPPDATA overrides' {
         $expected = [System.IO.Path]::Combine(
             [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData),

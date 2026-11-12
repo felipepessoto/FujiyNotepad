@@ -20,7 +20,8 @@ constant regardless of file size.
 Grab the latest build from the [Releases page](https://github.com/felipepessoto/FujiyNotepad/releases).
 Each release publishes a **self-contained** [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
 build for every Windows architecture — each bundles the .NET runtime **and** the Windows App SDK runtime,
-so you just unzip and run `FujiyNotepad.WinUI.exe` with **no prerequisites**, nothing to install (~22 MB):
+so you just unzip and run `FujiyNotepad.WinUI.exe` with **no prerequisites**, nothing to install.
+ZIP sizes vary by version and architecture; the Releases page shows each asset's actual size.
 
 | Your PC | Download |
 | --- | --- |
@@ -124,8 +125,10 @@ the newer Visual Studio version above.
 
 A `v*` tag triggers [`release.yml`](.github/workflows/release.yml), which publishes a self-contained
 **Native AOT** build for each architecture (`win-x64`, `win-arm64`, `win-x86`) — native code with the
-.NET and Windows App SDK runtimes bundled — then zips it and attaches it to a GitHub Release. The same
-workflow has a manual `workflow_dispatch` dry-run that produces the artifacts without creating a release.
+.NET and Windows App SDK runtimes bundled — then validates and exercises each extracted final ZIP before
+attaching it to a GitHub Release. The same workflow has a manual `workflow_dispatch` dry-run that produces
+Actions artifacts without creating a release; dispatch it against a branch to check packaging without a tag.
+Only a tag **push**, not a manual dispatch, can create a GitHub Release.
 
 ## Project layout
 

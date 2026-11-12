@@ -5,7 +5,7 @@ namespace FujiyNotepad.WinUI
     /// <summary>
     /// Resolves localizable code-behind strings from <c>Strings/&lt;lang&gt;/Resources.resw</c> (issue #78).
     /// Uses the Windows App SDK <see cref="ResourceLoader"/> (MRT Core), which works in this unpackaged
-    /// Native-AOT app by reading the <c>resources.pri</c> shipped next to the executable. XAML uses
+    /// Native-AOT app by reading <c>FujiyNotepad.WinUI.pri</c> shipped next to the executable. XAML uses
     /// <c>x:Uid</c> for the same table; this helper covers strings built in code (window title, status,
     /// dialogs). Lookups are cheap and the loader is created once.
     /// </summary>
