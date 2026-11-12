@@ -23,32 +23,46 @@ namespace FujiyNotepad.Benchmarks.NativeWorkloads
                 WorkloadData.Verify(args[1]);
                 return 0;
             }
-            if ((args.Length == 5 || (args.Length == 6 && args[5] == "--exclude-utf8-character-count")) && args[0] == "run")
+            if (args.Length == 4 && args[0] == "check-count")
             {
-                bool excludeUtf8CharacterCount = args.Length == 6;
-                if (excludeUtf8CharacterCount && args[2] != "utf8")
-                {
-                    throw new ArgumentException("The character-count exclusion applies only to the utf8 workload.");
-                }
+                EnsureNative();
+                WorkloadManifest manifest = WorkloadData.Load(args[1], args[2]);
+                using var source = new FileByteSource(Path.Combine(args[1], args[2] + ".log"));
+                long actual = await CharacterCounter.CountAsync(source, WorkloadData.EncodingFor(args[2]));
+                var check = new CountCheck(Environment.Version.ToString(), args[2], manifest.Characters, actual,
+                    actual == manifest.Characters, manifest.Sha256);
+                using var output = new FileStream(args[3], FileMode.CreateNew, FileAccess.Write);
+                JsonSerializer.Serialize(output, check, ResultsJsonContext.Default.CountCheck);
+                Console.WriteLine($"{args[2]} count: expected {check.Expected}, actual {check.Actual}, correct={check.Correct}");
+                return check.Correct ? 0 : 3;
+            }
+            if ((args.Length == 5 || (args.Length == 6 && args[5] == "--exclude-character-count")) && args[0] == "run")
+            {
+                bool excludeCharacterCount = args.Length == 6;
                 int iterations = int.Parse(args[4], CultureInfo.InvariantCulture);
-                if (iterations < 1 || iterations > 100)
+                if (iterations < 0 || iterations > 100)
                 {
-                    throw new ArgumentOutOfRangeException(nameof(iterations), "Use 1-100 measured iterations.");
+                    throw new ArgumentOutOfRangeException(nameof(iterations), "Use 1-100 measured iterations, or 0 for correctness-only preflight.");
                 }
-                if (RuntimeFeature.IsDynamicCodeSupported)
-                {
-                    throw new InvalidOperationException("Run the published Native AOT executable, not the managed build.");
-                }
-                RunResult result = await RunAsync(args[1], args[2], iterations, excludeUtf8CharacterCount);
+                EnsureNative();
+                RunResult result = await RunAsync(args[1], args[2], iterations, excludeCharacterCount);
                 using var output = new FileStream(args[3], FileMode.CreateNew, FileAccess.Write);
                 JsonSerializer.Serialize(output, result, ResultsJsonContext.Default.RunResult);
                 return 0;
             }
-            Console.Error.WriteLine("Commands: generate <directory> <minimum-bytes> | verify <directory> | run <directory> <ascii|utf8|utf16le|utf32le> <result.json> <iterations> [--exclude-utf8-character-count]");
+            Console.Error.WriteLine("Commands: generate <directory> <minimum-bytes> | verify <directory> | check-count <directory> <id> <result.json> | run <directory> <ascii|utf8|utf16le|utf32le> <result.json> <iterations> [--exclude-character-count]");
             return 2;
         }
 
-        private static async Task<RunResult> RunAsync(string directory, string id, int iterations, bool excludeUtf8CharacterCount)
+        private static void EnsureNative()
+        {
+            if (RuntimeFeature.IsDynamicCodeSupported)
+            {
+                throw new InvalidOperationException("Run the published Native AOT executable, not the managed build.");
+            }
+        }
+
+        private static async Task<RunResult> RunAsync(string directory, string id, int iterations, bool excludeCharacterCount)
         {
             WorkloadManifest manifest = WorkloadData.Load(directory, id);
             TextEncoding encoding = WorkloadData.EncodingFor(id);
@@ -127,13 +141,18 @@ namespace FujiyNotepad.Benchmarks.NativeWorkloads
             var samples = new List<Sample>();
             foreach (var operation in operations)
             {
-                if (excludeUtf8CharacterCount && operation.Name == "CountCharacters")
+                if (excludeCharacterCount && operation.Name == "CountCharacters")
                 {
-                    Console.Error.WriteLine("EXCLUDED utf8 CountCharacters: pre-existing decoder-state correctness defect (issue #201).");
+                    Console.Error.WriteLine($"EXCLUDED {id} CountCharacters: explicit correctness exclusion (issue #201).");
                     continue;
                 }
                 // Native code has no JIT warmup. This pass warms file pages, pools and operation-specific caches.
-                Check(operation.Expected, await operation.Action(), operation.Name + " warmup");
+                long warmupValue = await operation.Action();
+                Check(operation.Expected, warmupValue, operation.Name + " warmup");
+                if (iterations == 0)
+                {
+                    Console.WriteLine($"Validated {id} {operation.Name}: {warmupValue}");
+                }
                 for (int iteration = 0; iteration < iterations; iteration++)
                 {
                     DateTimeOffset started = DateTimeOffset.UtcNow;
@@ -163,7 +182,7 @@ namespace FujiyNotepad.Benchmarks.NativeWorkloads
                 "OS file cache warmed by full indexing and one unscored invocation per operation; no cache flush. Cold = fresh LineProvider only; shared index block cache. No forced GC.",
                 "Memory peaks are OS process-lifetime high-water marks including setup/warmup, not per-operation peaks. Private commit is not resident working set; virtual bytes are address space.",
                 manifest, samples, NativeMemory.Snapshot(), process.VirtualMemorySize64,
-                excludeUtf8CharacterCount ? ["CountCharacters"] : []);
+                excludeCharacterCount ? ["CountCharacters"] : [], iterations == 0);
 
             async Task<long> CountMatchesAsync(byte[] pattern)
             {
@@ -212,15 +231,17 @@ namespace FujiyNotepad.Benchmarks.NativeWorkloads
     }
 
     internal sealed record MemorySnapshot(ulong PrivateBytes, ulong PeakPrivateBytes, ulong WorkingSetBytes, ulong PeakWorkingSetBytes);
+    internal sealed record CountCheck(string Runtime, string Workload, long Expected, long Actual, bool Correct, string InputSha256);
     internal sealed record Sample(string Operation, int Iteration, DateTimeOffset StartedUtc, double Milliseconds,
         long Value, int LinesPerOperation, double? MiBPerSecond, long AllocatedBytes, int Gen0, int Gen1, int Gen2, MemorySnapshot Memory);
     internal sealed record RunResult(int FormatVersion, string Runtime, string Architecture, string OS, bool DynamicCodeSupported,
         bool ServerGC, string CachePolicy, string MemoryPolicy, WorkloadManifest Workload, List<Sample> Samples,
-        MemorySnapshot ProcessMemory, long VirtualBytes, string[] ExcludedOperations);
+        MemorySnapshot ProcessMemory, long VirtualBytes, string[] ExcludedOperations, bool ValidationOnly);
 
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(WorkloadManifest))]
     [JsonSerializable(typeof(RunResult))]
+    [JsonSerializable(typeof(CountCheck))]
     internal partial class ResultsJsonContext : JsonSerializerContext { }
 
     internal static partial class NativeMemory

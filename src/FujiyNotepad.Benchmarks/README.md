@@ -58,7 +58,7 @@ $Sdk11 = 'C:\tools\dotnet11\dotnet.exe' # Your installed, stable 11.0.100 SDK.
 
 # Only after reserving a quiet machine/window and letting preparation finish:
 .\scripts\compare-native-aot.ps1 -Phase Micro -ArtifactRoot $Evidence -MeasurementApproved
-.\scripts\compare-native-aot.ps1 -Phase Disk -ArtifactRoot $Evidence -MeasurementApproved -ExcludeUtf8CharacterCount
+.\scripts\compare-native-aot.ps1 -Phase Disk -ArtifactRoot $Evidence -MeasurementApproved -ExcludeCharacterCountFor utf8,utf16le
 ```
 
 The defaults compare source `98f6e9e99cd4379fd84be2ce2bb52d22552daa7c` using SDK **10.0.404** /
@@ -130,15 +130,23 @@ termination are used. Timings are wall clock; scan throughput uses the entire fi
 is a batch measurement, not a UI frame measurement. The tiny warm-read batches are better interpreted
 alongside BenchmarkDotNet's overhead-calibrated engine case.
 
-**Known correctness exclusion for these source revisions:** the counter does not advance its UTF-8
+**Known correctness exclusion for these source revisions:** the counter does not advance its
 decoder state across chunks ([issue #201](https://github.com/felipepessoto/FujiyNotepad/issues/201)).
-The same valid 64 MiB input overcounts by two on both Native AOT runtimes; an independent strict
-`StreamReader` count agrees with the generated expectation. `-ExcludeUtf8CharacterCount` explicitly omits
-only `CountCharacters` for the multilingual `utf8` input, records it in `ExcludedOperations`, and logs the
-exclusion. All other correctness gates, original expectations, input bytes and production code remain
+UTF-8 sequences and UTF-16 surrogate pairs crossing a chunk boundary can therefore count incorrectly.
+Use the native driver's `check-count <directory> <id> <result.json>` command on **full-size inputs**
+before spending time on throughput runs: a small smoke input may miss the failing boundary.
+`-ExcludeCharacterCountFor utf8,utf16le` explicitly omits only `CountCharacters` for those inputs,
+records it in `ExcludedOperations`, and logs the exclusion. A mismatch remains a failure by default;
+`check-count` returns exit code 3 and preserves the expected/actual counts in JSON.
+All other correctness gates, original expectations, input bytes and production code remain
 unchanged. Omitting the switch keeps the gate strict and fails on the defect. Do not report a UTF-8
-character-count speedup from these revisions, mix different harness versions, or treat the excluded metric
+or UTF-16 character-count speedup from these revisions, mix different harness versions, or treat an excluded metric
 as measured. Remove this exclusion only in a separately controlled comparison after the production fix.
+
+Preflight **every** full-size case on both sides before scoring: invoke the published driver with
+`run <directory> <id> <result.json> 0` (and `--exclude-character-count` only for independently confirmed
+invalid counter cases). Zero iterations executes and checks each operation once, records
+`ValidationOnly=true`, and emits no timing samples. A validation-only result is never performance evidence.
 
 JSON records allocation deltas and generation collection counts for each operation. Windows memory counters
 report **process-lifetime** peak private commit and peak resident working set, including setup/warmup and

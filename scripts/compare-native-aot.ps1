@@ -11,7 +11,7 @@ param(
     [ValidateRange(1, 100)][int]$DiskIterations = 3,
     [switch]$MeasurementApproved,
     [switch]$Resume,
-    [switch]$ExcludeUtf8CharacterCount
+    [ValidateSet('ascii', 'utf8', 'utf16le', 'utf32le')][string[]]$ExcludeCharacterCountFor = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -203,18 +203,24 @@ $resultsRoot = Join-Path $ArtifactRoot $Phase.ToLowerInvariant()
 if (Test-Path -LiteralPath $resultsRoot) {
     if (!$Resume) { throw "Result directory already exists: $resultsRoot. Use -Resume to preserve completed batches." }
     $configuration = Get-Content -LiteralPath (Join-Path $resultsRoot 'configuration.json') -Raw | ConvertFrom-Json
-    $savedExclusion = $configuration.PSObject.Properties['excludeUtf8CharacterCount']
+    $savedExclusions = @()
+    if ($configuration.PSObject.Properties['excludeCharacterCountFor']) {
+        $savedExclusions = @($configuration.excludeCharacterCountFor)
+    }
+    elseif ($configuration.PSObject.Properties['excludeUtf8CharacterCount'] -and $configuration.excludeUtf8CharacterCount) {
+        $savedExclusions = @('utf8')
+    }
     if ($configuration.phase -ne $Phase -or $configuration.rounds -ne $Rounds -or $configuration.diskIterations -ne $DiskIterations) {
         throw 'Resume must use the original phase, round count and disk iteration count.'
     }
-    if ([bool]$ExcludeUtf8CharacterCount -ne [bool]($savedExclusion -and $savedExclusion.Value)) {
+    if ((@($ExcludeCharacterCountFor | Sort-Object -Unique) -join ',') -ne (@($savedExclusions | Sort-Object -Unique) -join ',')) {
         throw 'Resume must use the original character-count exclusion.'
     }
 }
 else {
     New-Item -ItemType Directory -Path $resultsRoot | Out-Null
     Save-Json ([ordered]@{ phase = $Phase; rounds = $Rounds; diskIterations = $DiskIterations;
-        measurementApproved = $true; excludeUtf8CharacterCount = [bool]$ExcludeUtf8CharacterCount }) `
+        measurementApproved = $true; excludeCharacterCountFor = @($ExcludeCharacterCountFor | Sort-Object -Unique) }) `
         (Join-Path $resultsRoot 'configuration.json')
 }
 $hostPrefix = if ($Resume) { 'host-resume-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') } else { 'host' }
@@ -249,7 +255,7 @@ for ($round = 0; $round -lt $Rounds; $round++) {
             foreach ($id in @('ascii', 'utf8', 'utf16le', 'utf32le')) {
                 Assert-MeasurementSlot
                 $resultPath = Join-Path $resultsRoot "$round-$($side.name)-$id.json"
-                $excludeCount = $ExcludeUtf8CharacterCount -and $id -eq 'utf8'
+                $excludeCount = $id -in $ExcludeCharacterCountFor
                 $operationCount = if ($excludeCount) { 10 } else { 11 }
                 if ($Resume -and (Test-Path -LiteralPath $resultPath)) {
                     $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
@@ -269,7 +275,7 @@ for ($round = 0; $round -lt $Rounds; $round++) {
                 $nativeArguments = @('run',
                     (Join-Path $ArtifactRoot 'data'), $id, $resultPath,
                     $DiskIterations.ToString([Globalization.CultureInfo]::InvariantCulture))
-                if ($excludeCount) { $nativeArguments += '--exclude-utf8-character-count' }
+                if ($excludeCount) { $nativeArguments += '--exclude-character-count' }
                 Invoke-Checked (Join-Path $side.native 'NativeWorkloads.exe') $nativeArguments `
                     (Join-Path $resultsRoot "$round-$($side.name)-$id.log")
             }
