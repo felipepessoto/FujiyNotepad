@@ -19,7 +19,10 @@
     Full path to the published FujiyNotepad.WinUI.exe. Defaults to the FUJIY_APP_EXE environment variable.
 
 .PARAMETER ArtifactDir
-    Directory to write a failure screenshot into. Defaults to the system temp folder.
+    Directory for command logs, structured results, and any failure screenshot.
+
+.PARAMETER ExpectedArchitecture
+    Required process architecture for this temporary, hosted-only release validation.
 
 .NOTES
     Requires the winapp CLI on PATH (locally: `winget install Microsoft.winappcli`; in CI:
@@ -28,32 +31,43 @@
 [CmdletBinding()]
 param(
     [string]$Exe = $env:FUJIY_APP_EXE,
-    [string]$ArtifactDir = $env:TEMP
+    [string]$ArtifactDir = $env:TEMP,
+    [Parameter(Mandatory)]
+    [ValidateSet('x64', 'x86', 'arm64')]
+    [string]$ExpectedArchitecture
 )
 
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $false
 $env:WINAPP_CLI_TELEMETRY_OPTOUT = '1'
+if ($env:GITHUB_ACTIONS -ne 'true' -or
+    $env:GITHUB_REPOSITORY -ne 'felipepessoto/FujiyNotepad' -or
+    $env:GITHUB_REF -ne 'refs/heads/felipepessoto-release-zip-validation') {
+    throw 'This temporary validation copy must never run on a local desktop.'
+}
 
 if ([string]::IsNullOrWhiteSpace($Exe) -or -not (Test-Path $Exe)) {
     Write-Error "App executable not found. Pass -Exe <path> or set FUJIY_APP_EXE. Got: '$Exe'"
     exit 2
 }
 
-# The test drives the real app, which persists every settings change (theme, font, tab width, the View
-# toggles, ...) to its settings.json — that would clobber the developer's saved settings on a local run. Back
-# the file up now and restore it in Cleanup so a run is non-destructive. On a fresh CI runner there is no prior
-# file, so settingsExisted is false and Cleanup just deletes the one the test created.
+# This branch-only safety adaptation is not a permanent fix for #199/#200.
 $script:settingsPath = Join-Path $env:LOCALAPPDATA 'FujiyNotepad\settings.json'
-$script:settingsExisted = Test-Path $script:settingsPath
+$script:settingsExisted = Test-Path -LiteralPath $script:settingsPath
 $script:settingsBackup = $null
 if ($script:settingsExisted) {
-    $script:settingsBackup = [System.IO.Path]::GetTempFileName()
-    Copy-Item $script:settingsPath $script:settingsBackup -Force
+    $script:settingsBackup = [System.IO.File]::ReadAllBytes($script:settingsPath)
     Write-Host "Backed up settings.json (restored after the test)"
 }
 
 $script:failures = 0
+$script:assertions = [System.Collections.Generic.List[object]]::new()
+$script:proc = $null
+$script:hwnd = $null
+$script:processEvidence = [ordered]@{}
+$script:cleanupSucceeded = $false
 function Assert([bool]$Condition, [string]$Message, [string]$Detail = '') {
+    $script:assertions.Add([ordered]@{ passed = $Condition; message = $Message; detail = $Detail })
     if ($Condition) {
         Write-Host "  [PASS] $Message"
     } else {
@@ -72,62 +86,109 @@ $sampleLines = @(
     'epsilon fifth line'
 )
 $sample = Join-Path ([System.IO.Path]::GetTempPath()) ("fujiy-uitests-{0}.txt" -f ([guid]::NewGuid().ToString('N')))
-[System.IO.File]::WriteAllText($sample, ($sampleLines -join "`r`n"))
 $sampleName = Split-Path $sample -Leaf
 
-Write-Host "Launching $Exe on $sampleName"
-$proc = Start-Process -FilePath $Exe -ArgumentList "`"$sample`"" -PassThru
-
 function Cleanup {
-    Get-Process FujiyNotepad* -ErrorAction SilentlyContinue | ForEach-Object {
-        try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch { }
-    }
-    Remove-Item $sample -Force -ErrorAction SilentlyContinue
-
-    # Restore the settings the app overwrote while the test drove it (done after killing the process so it can't
-    # write again). Give the killed process a moment to release the file first.
-    Start-Sleep -Milliseconds 400
-    if ($script:settingsExisted) {
-        if ($script:settingsBackup -and (Test-Path $script:settingsBackup)) {
-            Copy-Item $script:settingsBackup $script:settingsPath -Force
-            Remove-Item $script:settingsBackup -Force -ErrorAction SilentlyContinue
-            Write-Host "Restored settings.json"
+    if ($script:proc) {
+        $script:proc.Refresh()
+        if (-not $script:proc.HasExited) {
+            try {
+                Stop-Process -Id $script:proc.Id -Force -ErrorAction Stop
+            } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+                if (-not $script:proc.HasExited) { throw }
+                Write-Host "Owned PID $($script:proc.Id) exited before cleanup; no further process targeted."
+            }
         }
-    } else {
-        Remove-Item $script:settingsPath -Force -ErrorAction SilentlyContinue
+        if (-not $script:proc.WaitForExit(10000)) { throw "Owned PID $($script:proc.Id) did not exit." }
+        Write-Host "Owned PID $($script:proc.Id) has exited."
     }
+    if (Test-Path -LiteralPath $sample) { Remove-Item -LiteralPath $sample -Force }
+
+    if ($script:settingsExisted) {
+        [System.IO.File]::WriteAllBytes($script:settingsPath, $script:settingsBackup)
+        $expectedHash = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($script:settingsBackup))
+        if ((Get-FileHash -LiteralPath $script:settingsPath -Algorithm SHA256).Hash -ne $expectedHash) {
+            throw 'Settings restoration failed byte-for-byte verification.'
+        }
+        Write-Host 'Restored and verified the original settings bytes.'
+    } elseif (Test-Path -LiteralPath $script:settingsPath) {
+        Remove-Item -LiteralPath $script:settingsPath -Force
+        Write-Host 'Removed only the settings file created by this run.'
+    }
+    $script:cleanupSucceeded = $true
 }
 
-$script:proc = $proc
+function Invoke-Ui([string[]]$Arguments, [int[]]$AllowedExitCodes = @(0)) {
+    $output = (& winapp ui @Arguments 2>&1 | Out-String).Trim()
+    $script:lastUiExitCode = $LASTEXITCODE
+    [ordered]@{
+        utc = [DateTime]::UtcNow.ToString('o')
+        executable = 'winapp'
+        arguments = @('ui') + $Arguments
+        exitCode = $script:lastUiExitCode
+        output = $output
+    } | ConvertTo-Json -Compress -Depth 5 | Add-Content -LiteralPath (Join-Path $ArtifactDir 'ui-commands.jsonl') -Encoding utf8
+    if ($script:lastUiExitCode -notin $AllowedExitCodes) {
+        throw "winapp ui $($Arguments -join ' ') failed (exit $script:lastUiExitCode): $output"
+    }
+    return $output
+}
 
 # --- winapp ui helpers (UIA-driven, so they need no mouse/DPI and run unattended in CI) ---
 function UiInvoke([string]$Selector, [int]$WaitMs = 600) {
-    winapp ui invoke $Selector -w $script:hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('invoke', $Selector, '-w', "$script:hwnd") | Out-Null
     Start-Sleep -Milliseconds $WaitMs
 }
 function UiMenu([string]$Top, [string]$Item, [int]$WaitMs = 750) {
-    winapp ui invoke $Top -w $script:hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('invoke', $Top, '-w', "$script:hwnd") | Out-Null
     Start-Sleep -Milliseconds 450
-    winapp ui invoke $Item -w $script:hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('invoke', $Item, '-w', "$script:hwnd") | Out-Null
     Start-Sleep -Milliseconds $WaitMs
 }
 function UiSubMenu([string]$Top, [string]$Sub, [string]$Item, [int]$WaitMs = 750) {
-    winapp ui invoke $Top -w $script:hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('invoke', $Top, '-w', "$script:hwnd") | Out-Null
     Start-Sleep -Milliseconds 400
-    winapp ui invoke $Sub -w $script:hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('invoke', $Sub, '-w', "$script:hwnd") | Out-Null
     Start-Sleep -Milliseconds 400
-    winapp ui invoke $Item -w $script:hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('invoke', $Item, '-w', "$script:hwnd") | Out-Null
     Start-Sleep -Milliseconds $WaitMs
 }
 function UiValue([string]$Selector) {
-    return ((winapp ui get-value $Selector -w $script:hwnd 2>$null | Out-String).Trim())
+    return (Invoke-Ui -Arguments @('get-value', $Selector, '-w', "$script:hwnd"))
 }
 function UiHas([string]$Text) {
-    return ((winapp ui search $Text -w $script:hwnd 2>$null | Out-String) -match 'Found\s+[1-9]')
+    $search = Invoke-Ui -Arguments @('search', $Text, '-w', "$script:hwnd", '--json') -AllowedExitCodes @(0, 1) | ConvertFrom-Json
+    # winapp returns 1 for a valid empty search, as well as for errors. Require the successful JSON shape.
+    if ('matchCount' -notin $search.PSObject.Properties.Name -or
+        'matches' -notin $search.PSObject.Properties.Name -or
+        $search.matchCount -ne @($search.matches).Count -or
+        (($script:lastUiExitCode -eq 0) -ne ($search.matchCount -gt 0))) {
+        throw "Invalid UI search result for '$Text'."
+    }
+    return $search.matchCount -gt 0
 }
 
 try {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class ReleaseValidationNative
+{
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWow64Process2(IntPtr process, out ushort processMachine, out ushort nativeMachine);
+}
+'@
+    [System.IO.File]::WriteAllText($sample, ($sampleLines -join "`r`n"))
+    Write-Host "Start-Process -FilePath '$Exe' -ArgumentList '$sample' -PassThru"
+    $script:proc = Start-Process -FilePath $Exe -ArgumentList "`"$sample`"" -PassThru
     $id = $proc.Id
+    $script:processEvidence = [ordered]@{
+        id = $id
+        executable = $proc.Path
+        startedUtc = $proc.StartTime.ToUniversalTime().ToString('o')
+        expectedArchitecture = $ExpectedArchitecture
+    }
 
     # 1) The process stays up (an AOT activation crash would exit within a couple of seconds).
     Start-Sleep -Seconds 6
@@ -135,11 +196,27 @@ try {
         "Process exited with code $($proc.ExitCode) — likely an activation/AOT crash."
     if ($proc.HasExited) { throw "App exited on launch; aborting UI tests." }
 
+    [ushort]$processMachine = 0
+    [ushort]$nativeMachine = 0
+    if (-not [ReleaseValidationNative]::IsWow64Process2($proc.Handle, [ref]$processMachine, [ref]$nativeMachine)) {
+        throw [System.ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error())
+    }
+    $actualMachine = if ($processMachine -eq 0) { $nativeMachine } else { $processMachine }
+    $expectedMachine = @{ x64 = 0x8664; x86 = 0x014c; arm64 = 0xaa64 }[$ExpectedArchitecture]
+    $expectedNative = if ($ExpectedArchitecture -eq 'arm64') { 0xaa64 } else { 0x8664 }
+    $script:processEvidence.processMachine = '0x{0:X4}' -f $processMachine
+    $script:processEvidence.nativeMachine = '0x{0:X4}' -f $nativeMachine
+    $script:processEvidence.actualMachine = '0x{0:X4}' -f $actualMachine
+    $script:processEvidence.wow64 = $processMachine -ne 0
+    Assert ($actualMachine -eq $expectedMachine) "Running process architecture matches $ExpectedArchitecture"
+    Assert ($nativeMachine -eq $expectedNative) 'Running process is on the expected native host architecture'
+    if ($actualMachine -ne $expectedMachine -or $nativeMachine -ne $expectedNative) { throw 'Architecture mismatch.' }
+
     # 2) The main window appears and carries the expected title (proves XAML loaded + file opened).
     $hwnd = $null
     $title = $null
     for ($i = 0; $i -lt 20 -and -not $hwnd; $i++) {
-        $wins = (winapp ui list-windows -a $id --json 2>$null | ConvertFrom-Json)
+        $wins = (Invoke-Ui -Arguments @('list-windows', '-a', "$id", '--json') | ConvertFrom-Json)
         $main = $wins | Where-Object { $_.title -like '*Fujiy Notepad*' } | Select-Object -First 1
         if ($main) { $hwnd = $main.hwnd; $title = $main.title }
         else { Start-Sleep -Milliseconds 500 }
@@ -150,13 +227,13 @@ try {
     $script:hwnd = $hwnd
 
     # 3) The menu bar rendered with its top-level menus.
-    $menuText = (winapp ui inspect window -w $hwnd 2>$null | Out-String)
+    $menuText = Invoke-Ui -Arguments @('inspect', 'window', '-w', "$hwnd")
     foreach ($m in 'File', 'Edit', 'View', 'Encoding', 'Help') {
         Assert ($menuText -match "\b$m\b") "Menu '$m' is present"
     }
 
     # 4) The status bar populated from the opened file (line + character counts).
-    $status = (winapp ui get-value 'LblStatus' -w $hwnd 2>$null | Out-String)
+    $status = UiValue 'LblStatus'
     Assert ($status -match '5\s+lines') "Status bar shows the line count (5 lines)" "Status was: '$($status.Trim())'"
 
     # 5) Status bar populated from the opened file: the device-free formatters (StatusText, CharacterCounter,
@@ -209,12 +286,12 @@ try {
     #     turning it off restores it. The wrap layout math is unit-tested; here we assert the live wiring.
     UiMenu 'View' 'Word Wrap'
     Assert (-not $proc.HasExited) "Word Wrap toggle on did not crash"
-    $hScrollHidden = ((winapp ui search 'HScroll' -w $hwnd 2>$null | Out-String) -notmatch 'Found\s+[1-9]')
+    $hScrollHidden = -not (UiHas 'HScroll')
     Assert $hScrollHidden "Word Wrap hides the horizontal scrollbar"
     UiMenu 'View' 'Word Wrap'  # toggle off
     Assert (-not $proc.HasExited) "Word Wrap toggle off did not crash"
 
-    # 9) Menu reachability for features whose effect is Win2D-painted or clipboard-bound: invoke and assert
+    # 9) Menu reachability for features whose effect is Win2D-painted: invoke and assert
     #    the handler ran without crashing (a throwing handler would exit the AOT process).
     UiMenu 'Edit' 'Toggle Bookmark';        Assert (-not $proc.HasExited) "Toggle Bookmark did not crash"
     UiMenu 'Edit' 'Next Bookmark';          Assert (-not $proc.HasExited) "Next Bookmark did not crash"
@@ -241,11 +318,10 @@ try {
 
     # 11) Find: open the bar, confirm its accessibility name, type a term, run Find Next, read the live count.
     UiMenu 'Edit' 'Find...'
-    $nameJson = (winapp ui get-property 'MatchCaseToggle' -w $hwnd --property Name --json 2>$null | Out-String)
-    $matchName = $null
-    try { $matchName = ($nameJson | ConvertFrom-Json).properties.Name } catch { }
+    $nameJson = Invoke-Ui -Arguments @('get-property', 'MatchCaseToggle', '-w', "$hwnd", '--property', 'Name', '--json')
+    $matchName = ($nameJson | ConvertFrom-Json).properties.Name
     Assert ($matchName -eq 'Match case') "Find bar option toggle exposes its accessibility name" "Name: '$matchName'"
-    winapp ui set-value 'FindBox' 'ERROR' -w $hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('set-value', 'FindBox', 'ERROR', '-w', "$hwnd") | Out-Null
     Start-Sleep -Milliseconds 700
     Assert ((UiValue 'FindBox') -match 'ERROR') "Find box accepts typed text"
     # Incremental find (issue #63): the match count appears as you type, before pressing Enter.
@@ -258,7 +334,7 @@ try {
 
     # 12) Filter / grep view: collapse the file to matching lines and read the filtered count.
     UiMenu 'Edit' 'Filter...'
-    winapp ui set-value 'FilterBox' 'ERROR' -w $hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('set-value', 'FilterBox', 'ERROR', '-w', "$hwnd") | Out-Null
     Start-Sleep -Milliseconds 300
     UiInvoke 'Apply' 1200
     $filtered = UiValue 'LblStatus'
@@ -294,19 +370,36 @@ try {
     Assert (-not $proc.HasExited) "Process is still running after the full interaction sweep"
 }
 catch {
-    Write-Host "EXCEPTION: $_" -ForegroundColor Red
-    $script:failures++
+    Assert $false 'UI sweep completed without an exception' ($_ | Out-String)
 }
 finally {
     # On failure, capture a screenshot for the CI artifact before tearing down.
     if ($script:failures -gt 0 -and $hwnd) {
         try {
             $shot = Join-Path $ArtifactDir 'ui-tests-failure.png'
-            winapp ui screenshot window -w $hwnd --output $shot 2>$null | Out-Null
+            Invoke-Ui -Arguments @('screenshot', 'window', '-w', "$hwnd", '--output', $shot) | Out-Null
             Write-Host "Saved failure screenshot to $shot"
-        } catch { }
+        } catch {
+            Write-Warning "Could not capture the failure screenshot: $_"
+        }
     }
-    Cleanup
+    if ($proc) {
+        $script:processEvidence.exitedBeforeCleanup = $proc.HasExited
+        if ($proc.HasExited) { $script:processEvidence.exitCodeBeforeCleanup = $proc.ExitCode }
+    }
+    try {
+        Cleanup
+    } catch {
+        Assert $false 'PID-scoped cleanup and settings restoration succeeded' ($_ | Out-String)
+    }
+    $script:processEvidence | ConvertTo-Json -Depth 5 |
+        Set-Content -LiteralPath (Join-Path $ArtifactDir 'process.json') -Encoding utf8
+    [ordered]@{
+        failures = $script:failures
+        cleanupSucceeded = $script:cleanupSucceeded
+        settingsPreviouslyExisted = $script:settingsExisted
+        assertions = @($script:assertions.ToArray())
+    } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $ArtifactDir 'ui-results.json') -Encoding utf8
 }
 
 Write-Host ''
