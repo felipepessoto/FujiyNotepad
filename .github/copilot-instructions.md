@@ -8,7 +8,8 @@ reintroduce them).
 
 ## Build, test, run
 
-From the repository root (requires the .NET 10 SDK; `global.json` pins `10.0.100` / `latestMinor`):
+From the repository root (requires the stable .NET 11 SDK; `global.json` pins `11.0.100` /
+`latestMinor` with prerelease SDKs disabled; Visual Studio IDE builds require 2026 version 18.12+):
 
 ```powershell
 dotnet build src/FujiyNotepad.slnx -c Release
@@ -41,6 +42,12 @@ AOT build**, not in `dotnet run`. Two practical gotchas:
 - **After adding/renaming an `x:Name` or `Click` in XAML, delete `src/FujiyNotepad.WinUI/obj` and `bin`
   before publishing.** A stale `MainWindow.g.cs` from a prior publish causes `CS1061 'MainWindow' does not
   contain a definition for …` even though `dotnet build` succeeds.
+
+For toolchain/dependency upgrades, publish without a preceding managed build and check the app PRI
+(`FujiyNotepad.WinUI.pri`, selected by `ProjectPriFileName`) in the output. SDK 11.0.100 keeps
+`UseOptimizedPublish=false` by default; do not opt into the optimized pipeline without separately verifying
+clean XAML/PRI generation. Preserve all three RIDs and the Windows version floor. The accepted .NET 11
+x86/x64 CPU baseline requires SSE4.2/POPCNT (x86-64-v2-class features); ARM64 remains Armv8.0-A.
 
 ### UI tests
 

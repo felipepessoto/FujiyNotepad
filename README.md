@@ -95,8 +95,12 @@ The builds are unsigned, so Windows SmartScreen may warn on first run (*More inf
 ## Requirements
 
 - Windows 10 (version 1809 / build 17763) or Windows 11 — **x64, Arm64, or x86**.
+- .NET 11's [Native AOT CPU minimum](https://learn.microsoft.com/dotnet/core/compatibility/jit/11/minimum-hardware-requirements)
+  is **x86-64-v2-class features**, including SSE4.2 and POPCNT, for x64 and x86. Older Intel/AMD CPUs
+  that could run the .NET 10 builds are no longer supported. ARM64 retains **Armv8.0-A**; the higher
+  ReadyToRun targets do not impose AVX2 or ARM LSE requirements on these Native AOT builds.
 - Released builds need **nothing** installed (self-contained Native AOT).
-- To build from source: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Running an
+- To build from source: the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0). Running an
   unpackaged **dev build** also needs the [Windows App SDK runtime](https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads)
   (already on most dev machines); released self-contained builds bundle it, so they need nothing.
 
@@ -108,11 +112,13 @@ dotnet build src/FujiyNotepad.slnx -c Release
 dotnet run --project src/FujiyNotepad.WinUI -c Release
 ```
 
-Or open `src/FujiyNotepad.slnx` in Visual Studio 2022 (17.13+, for the `.slnx` solution format) and press F5.
+Or open `src/FujiyNotepad.slnx` in Visual Studio 2026 (18.12+ for .NET 11) and press F5.
 
 The app is **unpackaged** (`WindowsPackageType=None`), so the produced `.exe` runs directly. The
 release build additionally uses **Native AOT** (`PublishAot=true`); building AOT locally requires
-the *Desktop development with C++* workload (the CI runner already has it).
+the *Desktop development with C++* workload from Visual Studio 2022 or later, including its default
+Windows SDK and compiler/linker components. The CLI uses the .NET SDK's MSBuild; IDE builds require
+the newer Visual Studio version above.
 
 ## Release
 
