@@ -12,14 +12,14 @@
     runs as a dedicated CI job rather than via `dotnet test`.
 
     It targets the published Native-AOT executable on purpose: this app's nastiest regressions (e.g. the
-    CsWinRT file-picker CCW failure, missing resources.pri) only reproduce in the AOT build, so a UI test
+    CsWinRT file-picker CCW failure, missing FujiyNotepad.WinUI.pri) only reproduce in the AOT build, so a UI test
     against the managed build would miss them.
 
 .PARAMETER Exe
     Full path to the published FujiyNotepad.WinUI.exe. Defaults to the FUJIY_APP_EXE environment variable.
 
 .PARAMETER ArtifactDir
-    Directory to write a failure screenshot into. Defaults to the system temp folder.
+    Existing directory for command diagnostics and a failure screenshot. Defaults to the system temp folder.
 
 .NOTES
     Requires the winapp CLI on PATH (locally: `winget install Microsoft.winappcli`; in CI:
@@ -70,29 +70,50 @@ $sample = $run.SamplePath
 $sampleName = Split-Path $sample -Leaf
 
 # --- winapp ui helpers (UIA-driven, so they need no mouse/DPI and run unattended in CI) ---
+function Invoke-Ui([string[]]$Arguments, [switch]$AllowEmptySearch) {
+    $PSNativeCommandUseErrorActionPreference = $false
+    $output = (& winapp ui @Arguments 2>&1 | Out-String).Trim()
+    $exitCode = $LASTEXITCODE
+    [ordered]@{
+        arguments = @('ui') + $Arguments
+        exitCode = $exitCode
+        output = $output
+    } | ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $ArtifactDir 'ui-commands.jsonl')
+    if ($exitCode -ne 0 -and -not ($AllowEmptySearch -and $exitCode -eq 1)) {
+        throw "winapp ui $($Arguments -join ' ') failed (exit $exitCode): $output"
+    }
+    if ($AllowEmptySearch) {
+        # Search returns 1 for both no matches and real errors; only a valid empty JSON result is benign.
+        $search = $output | ConvertFrom-Json
+        if ($Arguments[0] -ne 'search' -or
+            'matchCount' -notin $search.PSObject.Properties.Name -or
+            'matches' -notin $search.PSObject.Properties.Name -or
+            $search.matchCount -ne @($search.matches).Count -or $search.hasMore -or
+            (($exitCode -eq 0) -ne ($search.matchCount -gt 0))) {
+            throw "Invalid UI search result (exit $exitCode): $output"
+        }
+    }
+    return $output
+}
 function UiInvoke([string]$Selector, [int]$WaitMs = 600) {
-    winapp ui invoke $Selector -w $script:hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('invoke', $Selector, '-w', "$script:hwnd") | Out-Null
     Start-Sleep -Milliseconds $WaitMs
 }
 function UiMenu([string]$Top, [string]$Item, [int]$WaitMs = 750) {
-    winapp ui invoke $Top -w $script:hwnd 2>$null | Out-Null
-    Start-Sleep -Milliseconds 450
-    winapp ui invoke $Item -w $script:hwnd 2>$null | Out-Null
-    Start-Sleep -Milliseconds $WaitMs
+    UiInvoke $Top 450
+    UiInvoke $Item $WaitMs
 }
 function UiSubMenu([string]$Top, [string]$Sub, [string]$Item, [int]$WaitMs = 750) {
-    winapp ui invoke $Top -w $script:hwnd 2>$null | Out-Null
-    Start-Sleep -Milliseconds 400
-    winapp ui invoke $Sub -w $script:hwnd 2>$null | Out-Null
-    Start-Sleep -Milliseconds 400
-    winapp ui invoke $Item -w $script:hwnd 2>$null | Out-Null
-    Start-Sleep -Milliseconds $WaitMs
+    UiInvoke $Top 400
+    UiInvoke $Sub 400
+    UiInvoke $Item $WaitMs
 }
 function UiValue([string]$Selector) {
-    return ((winapp ui get-value $Selector -w $script:hwnd 2>$null | Out-String).Trim())
+    return (Invoke-Ui -Arguments @('get-value', $Selector, '-w', "$script:hwnd"))
 }
 function UiHas([string]$Text) {
-    return ((winapp ui search $Text -w $script:hwnd 2>$null | Out-String) -match 'Found\s+[1-9]')
+    $search = Invoke-Ui -Arguments @('search', $Text, '-w', "$script:hwnd", '--json') -AllowEmptySearch | ConvertFrom-Json
+    return $search.matchCount -gt 0
 }
 
 try {
@@ -109,7 +130,7 @@ try {
     $hwnd = $null
     $title = $null
     for ($i = 0; $i -lt 20 -and -not $hwnd; $i++) {
-        $wins = (winapp ui list-windows -a $id --json 2>$null | ConvertFrom-Json)
+        $wins = Invoke-Ui -Arguments @('list-windows', '-a', "$id", '--json') | ConvertFrom-Json
         $main = $wins | Where-Object { $_.title -like '*Fujiy Notepad*' } | Select-Object -First 1
         if ($main) { $hwnd = $main.hwnd; $title = $main.title }
         else { Start-Sleep -Milliseconds 500 }
@@ -120,13 +141,13 @@ try {
     $script:hwnd = $hwnd
 
     # 3) The menu bar rendered with its top-level menus.
-    $menuText = (winapp ui inspect window -w $hwnd 2>$null | Out-String)
+    $menuText = Invoke-Ui -Arguments @('inspect', '-w', "$hwnd")
     foreach ($m in 'File', 'Edit', 'View', 'Encoding', 'Help') {
         Assert ($menuText -match "\b$m\b") "Menu '$m' is present"
     }
 
     # 4) The status bar populated from the opened file (line + character counts).
-    $status = (winapp ui get-value 'LblStatus' -w $hwnd 2>$null | Out-String)
+    $status = UiValue 'LblStatus'
     Assert ($status -match '5\s+lines') "Status bar shows the line count (5 lines)" "Status was: '$($status.Trim())'"
 
     # 5) Status bar populated from the opened file: the device-free formatters (StatusText, CharacterCounter,
@@ -179,7 +200,7 @@ try {
     #     turning it off restores it. The wrap layout math is unit-tested; here we assert the live wiring.
     UiMenu 'View' 'Word Wrap'
     Assert (-not $proc.HasExited) "Word Wrap toggle on did not crash"
-    $hScrollHidden = ((winapp ui search 'HScroll' -w $hwnd 2>$null | Out-String) -notmatch 'Found\s+[1-9]')
+    $hScrollHidden = -not (UiHas 'HScroll')
     Assert $hScrollHidden "Word Wrap hides the horizontal scrollbar"
     UiMenu 'View' 'Word Wrap'  # toggle off
     Assert (-not $proc.HasExited) "Word Wrap toggle off did not crash"
@@ -191,7 +212,7 @@ try {
     UiMenu 'Edit' 'Clear All Bookmarks';    Assert (-not $proc.HasExited) "Clear All Bookmarks did not crash"
     UiSubMenu 'Edit' 'Tab Width' '8';       Assert (-not $proc.HasExited) "Tab Width 8 did not crash"
     UiSubMenu 'View' 'Theme' 'Dark';        Assert (-not $proc.HasExited) "Theme Dark did not crash"
-    UiSubMenu 'View' 'Theme' 'System';      Assert (-not $proc.HasExited) "Theme System did not crash"
+    UiSubMenu 'View' 'Theme' 'ThemeSystem'; Assert (-not $proc.HasExited) "Theme System did not crash"
     UiSubMenu 'View' 'Font' 'Cascadia Mono'; Assert (-not $proc.HasExited) "Font change did not crash"
 
     # 10) Dialogs open from their menu handlers and dismiss via the ContentDialog's CloseButton (its
@@ -211,11 +232,10 @@ try {
 
     # 11) Find: open the bar, confirm its accessibility name, type a term, run Find Next, read the live count.
     UiMenu 'Edit' 'Find...'
-    $nameJson = (winapp ui get-property 'MatchCaseToggle' -w $hwnd --property Name --json 2>$null | Out-String)
-    $matchName = $null
-    try { $matchName = ($nameJson | ConvertFrom-Json).properties.Name } catch { }
+    $nameJson = Invoke-Ui -Arguments @('get-property', 'MatchCaseToggle', '-w', "$hwnd", '--property', 'Name', '--json')
+    $matchName = ($nameJson | ConvertFrom-Json).properties.Name
     Assert ($matchName -eq 'Match case') "Find bar option toggle exposes its accessibility name" "Name: '$matchName'"
-    winapp ui set-value 'FindBox' 'ERROR' -w $hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('set-value', 'FindBox', 'ERROR', '-w', "$hwnd") | Out-Null
     Start-Sleep -Milliseconds 700
     Assert ((UiValue 'FindBox') -match 'ERROR') "Find box accepts typed text"
     # Incremental find (issue #63): the match count appears as you type, before pressing Enter.
@@ -228,7 +248,7 @@ try {
 
     # 12) Filter / grep view: collapse the file to matching lines and read the filtered count.
     UiMenu 'Edit' 'Filter...'
-    winapp ui set-value 'FilterBox' 'ERROR' -w $hwnd 2>$null | Out-Null
+    Invoke-Ui -Arguments @('set-value', 'FilterBox', 'ERROR', '-w', "$hwnd") | Out-Null
     Start-Sleep -Milliseconds 300
     UiInvoke 'Apply' 1200
     $filtered = UiValue 'LblStatus'
@@ -272,9 +292,11 @@ finally {
     if ($script:failures -gt 0 -and $hwnd) {
         try {
             $shot = Join-Path $ArtifactDir 'ui-tests-failure.png'
-            winapp ui screenshot window -w $hwnd --output $shot 2>$null | Out-Null
+            Invoke-Ui -Arguments @('screenshot', '-w', "$hwnd", '--output', $shot) | Out-Null
             Write-Host "Saved failure screenshot to $shot"
-        } catch { }
+        } catch {
+            Write-Warning "Could not capture the failure screenshot: $_"
+        }
     }
     try {
         Complete-UiTestRun -Run $run

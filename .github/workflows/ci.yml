@@ -35,6 +35,10 @@ jobs:
         shell: pwsh
         run: ./scripts/test-ui-test-lifecycle.ps1
 
+      - name: Test release packaging (headless)
+        shell: pwsh
+        run: .\scripts\test-prepare-release.ps1
+
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v6
         with:
@@ -106,7 +110,7 @@ jobs:
   # Windows App SDK host can't start headlessly. Instead we publish the real Native-AOT executable and drive
   # it through Windows UI Automation with the winapp CLI (installed by microsoft/setup-WinAppCli), asserting
   # the window/menus/status render and each feature's menu works without crashing. AOT on purpose: this app's
-  # worst bugs (CsWinRT picker CCW, missing resources.pri) only reproduce in the published AOT build.
+  # worst bugs (CsWinRT picker CCW, missing app PRI) only reproduce in the published AOT build.
   ui-tests:
     name: UI tests
     runs-on: windows-latest
@@ -136,7 +140,7 @@ jobs:
         uses: microsoft/setup-WinAppCli@v0.3
 
       # Mirrors the release publish (Properties/PublishProfiles/win-x64.pubxml): self-contained Native AOT,
-      # AOT linking via the runner's C++ toolchain. One arch (x64) is enough for the UI tests.
+      # AOT linking via the runner's C++ toolchain. Release dry-runs cover the other architectures.
       - name: Publish app (Native AOT, x64)
         run: >
           dotnet publish src/FujiyNotepad.WinUI/FujiyNotepad.WinUI.csproj
@@ -145,15 +149,33 @@ jobs:
           -p:PublishProfile=win-x64
           -o publish/app
 
-      - name: UI tests
+      - name: Package
+        id: package
         shell: pwsh
-        run: ./scripts/ui-tests.ps1 -Exe "${{ github.workspace }}/publish/app/FujiyNotepad.WinUI.exe" -ArtifactDir "${{ github.workspace }}"
+        run: .\scripts\prepare-release.ps1 -PublishDir publish\app -ZipPath dist\FujiyNotepad-ci-win-x64.zip
 
-      - name: Upload failure screenshot
-        if: failure()
+      - name: Upload build artifact
+        if: always() && steps.package.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: ui-tests-failure
-          path: ${{ github.workspace }}/ui-tests-failure.png
-          if-no-files-found: ignore
+          name: FujiyNotepad-ci-win-x64
+          path: dist/FujiyNotepad-ci-win-x64.zip
+          if-no-files-found: error
+
+      - name: Validate and exercise final ZIP
+        shell: pwsh
+        run: >
+          .\scripts\test-release-package.ps1
+          -ZipPath dist\FujiyNotepad-ci-win-x64.zip
+          -ExtractDir publish\verify
+          -Rid win-x64
+          -ArtifactDir diagnostics
+
+      - name: Upload package diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: package-diagnostics-ci-win-x64
+          path: diagnostics
+          if-no-files-found: warn
 
