@@ -11,6 +11,12 @@ tag per published build. Each release also has downloadable builds and notes on 
      concurrent pull requests never touch the same file. See changelog.d/README.md, and run
      ./scripts/assemble-changelog.ps1 -Preview to see what is queued for the next release. -->
 
+## [4.15.0] - 2026-11-11
+
+### Changed
+- **Updated Windows UI runtime** — bundles Windows App SDK 2.6.5 with servicing fixes for file-picker focus,
+  rendering, and popup handling, while preserving the existing text renderer and styles (issue #191).
+
 ## [4.14.0] - 2026-09-25
 
 ### Added

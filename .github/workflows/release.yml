@@ -127,6 +127,8 @@ jobs:
             'PushNotificationsLongRunningTask.ProxyStub.dll',
             'Microsoft.UI.Xaml.Phone.dll', 'Microsoft.UI.Designer.dll', 'Microsoft.Graphics.Imaging.dll',
             'Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll',
+            'Microsoft.Asg.SemanticIndex.AiFabric.Compatibility.dll',
+            'Microsoft.Windows.Search.dll', 'Microsoft.Windows.Search.winmd',
             'Microsoft.Windows.Workloads.dll', 'Microsoft.Windows.Workloads.Resources.dll', 'Microsoft.Windows.Workloads.Resources_ec.dll'
           )
           Get-ChildItem publish/app -Recurse -File | Where-Object {
