@@ -298,7 +298,24 @@ public static class ReleaseValidationNative
     UiMenu 'Edit' 'Clear All Bookmarks';    Assert (-not $proc.HasExited) "Clear All Bookmarks did not crash"
     UiSubMenu 'Edit' 'Tab Width' '8';       Assert (-not $proc.HasExited) "Tab Width 8 did not crash"
     UiSubMenu 'View' 'Theme' 'Dark';        Assert (-not $proc.HasExited) "Theme Dark did not crash"
-    UiSubMenu 'View' 'Theme' 'System';      Assert (-not $proc.HasExited) "Theme System did not crash"
+
+    # "System" also matches native window chrome; require the tagged theme control's unique UIA ID.
+    UiInvoke 'View' 400
+    UiInvoke 'Theme' 400
+    $systemThemeSearch = Invoke-Ui -Arguments @('search', 'ThemeSystem', '-w', "$hwnd", '--json') | ConvertFrom-Json
+    $systemThemeUnique = $systemThemeSearch.matchCount -eq 1 -and
+        @($systemThemeSearch.matches).Count -eq 1 -and -not $systemThemeSearch.hasMore
+    Assert $systemThemeUnique 'ThemeSystem selector resolves to exactly one element'
+    if (-not $systemThemeUnique) { throw 'System-theme selector is not unique; refusing to choose a match.' }
+    $systemThemeMatch = @($systemThemeSearch.matches)[0]
+    $systemThemeProperties = Invoke-Ui -Arguments @('get-property', 'ThemeSystem', '-w', "$hwnd", '--property', 'AutomationId', '--json') | ConvertFrom-Json
+    $systemThemeIntended = $systemThemeMatch.type -eq 'MenuItem' -and $systemThemeMatch.name -eq 'System' -and
+        $systemThemeProperties.properties.AutomationId -ceq 'ThemeSystem'
+    Assert $systemThemeIntended 'Unique System menu item has the tagged ThemeSystem AutomationId'
+    if (-not $systemThemeIntended) { throw 'Unique match is not the intended System-theme control.' }
+    UiInvoke 'ThemeSystem' 750
+    Assert (-not $proc.HasExited) "Theme System did not crash"
+
     UiSubMenu 'View' 'Font' 'Cascadia Mono'; Assert (-not $proc.HasExited) "Font change did not crash"
 
     # 10) Dialogs open from their menu handlers and dismiss via the ContentDialog's CloseButton (its

@@ -27,7 +27,7 @@ jobs:
       - name: Checkout validation-only revision
         uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 3
           persist-credentials: false
 
       - name: Set up winapp CLI

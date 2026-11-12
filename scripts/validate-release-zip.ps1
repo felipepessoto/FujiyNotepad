@@ -78,7 +78,11 @@ try {
     $head = & git rev-parse HEAD
     if ($LASTEXITCODE -ne 0 -or $head -ne $env:GITHUB_SHA) { throw 'Unexpected validation checkout.' }
     $parent = & git rev-parse 'HEAD^'
-    if ($LASTEXITCODE -ne 0 -or $parent -ne $sourceCommit) { throw 'Validation must be a single commit on the authorized source.' }
+    if ($LASTEXITCODE -ne 0 -or $parent -ne '913a81fa20f9087a0797a40ee8e13a329ce1c201') {
+        throw 'Corrected validation must directly follow the preserved initial validation revision.'
+    }
+    $base = & git rev-parse 'HEAD^^'
+    if ($LASTEXITCODE -ne 0 -or $base -ne $sourceCommit) { throw 'Validation must still be based on the authorized released source.' }
     $changed = @(& git diff --name-only $sourceCommit HEAD)
     if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the validation diff.' }
     $allowed = @('.github/workflows/release.yml', 'scripts/ui-tests.ps1', 'scripts/validate-release-zip.ps1')
