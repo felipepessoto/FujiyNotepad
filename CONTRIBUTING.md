@@ -69,6 +69,33 @@ UI Automation:
 
 It needs the `winapp` CLI on `PATH` (`winget install Microsoft.winappcli`).
 
+**Close other FujiyNotepad instances before running, and do not open any until the run finishes.**
+The harness refuses to start when it detects an existing viewer (the standard process name or the supplied
+executable's name). This is only a preflight check: renamed viewers or ones started later can still share
+`%LOCALAPPDATA%\FujiyNotepad\settings.json`. Use a disposable Windows user/profile if you cannot keep other
+instances closed. The harness stops only its own launched process; it never closes unrelated viewers.
+
+An exclusive `settings.json.ui-tests.lock` beside the settings file rejects overlapping harness runs before
+they back up or modify settings. Setup and teardown failures still attempt cleanup. Settings are restored
+byte-for-byte (or removed if originally absent) only after the owned process is confirmed exited.
+
+If safe restoration fails, the command fails and keeps any backup and the recovery guard. The error reports
+the exact recovery paths; the guard also records whether settings originally existed, the backup path and,
+after launch, the owned PID. **Do not remove an active run's guard.** For an interrupted/failed run, first
+confirm that its process and all other viewer instances are closed. Copy the backup over `settings.json`
+(or remove the test-created settings file if none existed originally), then remove the backup and guard.
+A forcibly terminated harness cannot run `finally`; an incomplete guard requires inspecting the reported
+files before manual recovery, not blindly deleting the guard or killing a potentially reused PID.
+
+The lifecycle regression tests need only PowerShell 7, not a desktop, SDK, published app or `winapp`:
+
+```powershell
+pwsh -NoProfile -File .\scripts\test-ui-test-lifecycle.ps1
+```
+
+They use fake process operations and isolated temporary settings, covering exit races, teardown/setup
+failures, recoverable backups and overlapping acquisition without touching real viewer windows or settings.
+
 ### Benchmarks
 
 `FujiyNotepad.Benchmarks` is a [BenchmarkDotNet](https://benchmarkdotnet.org/) harness over the engine's hot

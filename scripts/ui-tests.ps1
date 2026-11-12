@@ -24,6 +24,8 @@
 .NOTES
     Requires the winapp CLI on PATH (locally: `winget install Microsoft.winappcli`; in CI:
     the microsoft/setup-WinAppCli action).
+    Close other viewer instances and do not open any during the run: settings are shared, and the
+    exclusive UI-test guard only coordinates cooperating harnesses. See CONTRIBUTING.md for recovery.
 #>
 [CmdletBinding()]
 param(
@@ -34,25 +36,17 @@ param(
 $ErrorActionPreference = 'Stop'
 $env:WINAPP_CLI_TELEMETRY_OPTOUT = '1'
 
-if ([string]::IsNullOrWhiteSpace($Exe) -or -not (Test-Path $Exe)) {
+if ([string]::IsNullOrWhiteSpace($Exe) -or -not (Test-Path -LiteralPath $Exe)) {
     Write-Error "App executable not found. Pass -Exe <path> or set FUJIY_APP_EXE. Got: '$Exe'"
     exit 2
 }
 
-# The test drives the real app, which persists every settings change (theme, font, tab width, the View
-# toggles, ...) to its settings.json — that would clobber the developer's saved settings on a local run. Back
-# the file up now and restore it in Cleanup so a run is non-destructive. On a fresh CI runner there is no prior
-# file, so settingsExisted is false and Cleanup just deletes the one the test created.
-$script:settingsPath = Join-Path $env:LOCALAPPDATA 'FujiyNotepad\settings.json'
-$script:settingsExisted = Test-Path $script:settingsPath
-$script:settingsBackup = $null
-if ($script:settingsExisted) {
-    $script:settingsBackup = [System.IO.Path]::GetTempFileName()
-    Copy-Item $script:settingsPath $script:settingsBackup -Force
-    Write-Host "Backed up settings.json (restored after the test)"
-}
+. (Join-Path $PSScriptRoot 'ui-test-lifecycle.ps1')
+$run = New-UiTestRun -SettingsPath (Join-Path $env:LOCALAPPDATA 'FujiyNotepad\settings.json')
 
 $script:failures = 0
+$script:proc = $null
+$script:hwnd = $null
 function Assert([bool]$Condition, [string]$Message, [string]$Detail = '') {
     if ($Condition) {
         Write-Host "  [PASS] $Message"
@@ -71,34 +65,8 @@ $sampleLines = @(
     'delta fourth line',
     'epsilon fifth line'
 )
-$sample = Join-Path ([System.IO.Path]::GetTempPath()) ("fujiy-uitests-{0}.txt" -f ([guid]::NewGuid().ToString('N')))
-[System.IO.File]::WriteAllText($sample, ($sampleLines -join "`r`n"))
+$sample = $run.SamplePath
 $sampleName = Split-Path $sample -Leaf
-
-Write-Host "Launching $Exe on $sampleName"
-$proc = Start-Process -FilePath $Exe -ArgumentList "`"$sample`"" -PassThru
-
-function Cleanup {
-    Get-Process FujiyNotepad* -ErrorAction SilentlyContinue | ForEach-Object {
-        try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch { }
-    }
-    Remove-Item $sample -Force -ErrorAction SilentlyContinue
-
-    # Restore the settings the app overwrote while the test drove it (done after killing the process so it can't
-    # write again). Give the killed process a moment to release the file first.
-    Start-Sleep -Milliseconds 400
-    if ($script:settingsExisted) {
-        if ($script:settingsBackup -and (Test-Path $script:settingsBackup)) {
-            Copy-Item $script:settingsBackup $script:settingsPath -Force
-            Remove-Item $script:settingsBackup -Force -ErrorAction SilentlyContinue
-            Write-Host "Restored settings.json"
-        }
-    } else {
-        Remove-Item $script:settingsPath -Force -ErrorAction SilentlyContinue
-    }
-}
-
-$script:proc = $proc
 
 # --- winapp ui helpers (UIA-driven, so they need no mouse/DPI and run unattended in CI) ---
 function UiInvoke([string]$Selector, [int]$WaitMs = 600) {
@@ -127,6 +95,7 @@ function UiHas([string]$Text) {
 }
 
 try {
+    $proc = Start-UiTestRun -Run $run -Exe $Exe -SampleLines $sampleLines
     $id = $proc.Id
 
     # 1) The process stays up (an AOT activation crash would exit within a couple of seconds).
@@ -306,7 +275,12 @@ finally {
             Write-Host "Saved failure screenshot to $shot"
         } catch { }
     }
-    Cleanup
+    try {
+        Complete-UiTestRun -Run $run
+    } catch {
+        Write-Host "CLEANUP ERROR: $_" -ForegroundColor Red
+        $script:failures++
+    }
 }
 
 Write-Host ''
@@ -314,6 +288,6 @@ if ($script:failures -eq 0) {
     Write-Host "UI tests PASSED" -ForegroundColor Green
     exit 0
 } else {
-    Write-Host "UI tests FAILED ($script:failures assertion failure(s))" -ForegroundColor Red
+    Write-Host "UI tests FAILED ($script:failures failure(s))" -ForegroundColor Red
     exit 1
 }
