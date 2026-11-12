@@ -23,6 +23,21 @@ function New-UiTestRun {
     }
 }
 
+function Get-UiTestProcessOwnerSid([int]$ProcessId) {
+    try {
+        $process = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction Stop
+        # A viewer can exit between enumeration and this read-only lookup.
+        if ($null -eq $process) { return $null }
+        $owner = Invoke-CimMethod -InputObject $process -MethodName GetOwnerSid -ErrorAction Stop
+        if ($owner.ReturnValue -ne 0 -or [string]::IsNullOrWhiteSpace($owner.Sid)) {
+            throw "GetOwnerSid returned code '$($owner.ReturnValue)' or no owner SID."
+        }
+        return $owner.Sid
+    } catch {
+        throw "Cannot determine owner of PID $ProcessId; refusing to assume it belongs to another Windows user. $($_.Exception.Message)"
+    }
+}
+
 # The caller must put this entire acquisition inside try/finally with Complete-UiTestRun.
 function Start-UiTestRun($Run, [string]$Exe, [string[]]$SampleLines) {
     [System.IO.Directory]::CreateDirectory((Split-Path $Run.SettingsPath -Parent)) | Out-Null
@@ -38,7 +53,13 @@ function Start-UiTestRun($Run, [string]$Exe, [string[]]$SampleLines) {
     $appNames = @('FujiyNotepad.WinUI', [System.IO.Path]::GetFileNameWithoutExtension($Exe))
     $otherApps = @(Get-Process | Where-Object { $_.ProcessName -in $appNames })
     if ($otherApps.Count -gt 0) {
-        throw "Close existing FujiyNotepad instances before running UI tests (detected PID(s): $($otherApps.Id -join ', ')). They share settings and will not be stopped by this harness."
+        $userSid = Get-UiTestProcessOwnerSid -ProcessId $PID
+        if (-not $userSid) { throw "Cannot determine owner of harness PID $PID." }
+        # Account SID, not session ID: the same user's other logon sessions can share settings.
+        $otherApps = @($otherApps | Where-Object { (Get-UiTestProcessOwnerSid -ProcessId $_.Id) -eq $userSid })
+    }
+    if ($otherApps.Count -gt 0) {
+        throw "Close existing FujiyNotepad instances for this Windows user, including other sessions, before running UI tests (detected PID(s): $($otherApps.Id -join ', ')). They share settings and will not be stopped by this harness."
     }
 
     $Run.SettingsExisted = Test-Path -LiteralPath $Run.SettingsPath
@@ -163,7 +184,7 @@ function Complete-UiTestRun($Run) {
         } else {
             "remove the test-created settings file '$($Run.SettingsPath)' (there was no original)"
         }
-        $errors.Add("Settings recovery required. After confirming the owned process and all other viewer instances are closed, $action, then remove guard '$($Run.GuardPath)'. Do not rerun UI tests before recovery.")
+        $errors.Add("Settings recovery required. After confirming the owned process and all other viewer instances for this Windows user are closed, $action, then remove guard '$($Run.GuardPath)'. Do not rerun UI tests before recovery.")
     }
     if ($errors.Count -gt 0) { throw ("UI-test cleanup failed:`n" + ($errors -join "`n")) }
 }

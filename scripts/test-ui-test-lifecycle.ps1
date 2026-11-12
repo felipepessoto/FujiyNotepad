@@ -70,6 +70,31 @@ function New-Object([string]$TypeName) {
     return $case.Process
 }
 function Get-Process { return $case.OtherProcesses }
+function Get-CimInstance {
+    [CmdletBinding()]
+    param([string]$ClassName, [string]$Filter)
+    Check ($ClassName -eq 'Win32_Process' -and $Filter -match '^ProcessId = (\d+)$') 'Unexpected CIM query.'
+    $processId = [int]$Matches[1]
+    if ($processId -eq $PID) {
+        return [pscustomobject]@{ Id = $PID; UserSid = $case.UserSid; SessionId = 1 }
+    }
+    $case.OwnerLookupIds.Add($processId)
+    if ($case.OwnerLookupMode -eq 'query-error') { throw 'mock owner query failure' }
+    return $case.OtherProcesses | Where-Object { $_.Id -eq $processId -and -not $_.Exited }
+}
+function Invoke-CimMethod {
+    [CmdletBinding()]
+    param($InputObject, [string]$MethodName)
+    Check ($MethodName -eq 'GetOwnerSid') 'Only read-only process ownership queries are allowed.'
+    if ($InputObject.Id -ne $PID) {
+        switch ($case.OwnerLookupMode) {
+            'method-error' { throw 'mock owner method failure' }
+            'denied' { return [pscustomobject]@{ ReturnValue = 2; Sid = $null } }
+            'missing-sid' { return [pscustomobject]@{ ReturnValue = 0; Sid = $null } }
+        }
+    }
+    return [pscustomobject]@{ ReturnValue = 0; Sid = $InputObject.UserSid }
+}
 function Stop-Process {
     [CmdletBinding()]
     param([int]$Id, [switch]$Force)
@@ -161,6 +186,9 @@ function Invoke-Case([string]$Name, [scriptblock]$Test) {
         Original = [Convert]::ToBase64String($original)
         Exe = $exe
         Process = New-FakeProcess
+        UserSid = 'S-1-5-21-111-222-333-1001'
+        OwnerLookupMode = 'success'
+        OwnerLookupIds = [System.Collections.Generic.List[int]]::new()
         OtherProcesses = @()
         StopIds = [System.Collections.Generic.List[int]]::new()
         Backups = [System.Collections.Generic.List[string]]::new()
@@ -381,14 +409,64 @@ try {
         Check (Test-Path -LiteralPath $case.Run.BackupPath) 'Fixture did not retain the backup.'
         Check (-not (Test-Path -LiteralPath $case.Run.SamplePath)) 'Sample leaked.'
     }
-    Invoke-Case 'Existing viewer blocks setup without becoming a termination target' {
-        $case.OtherProcesses = @([pscustomobject]@{ Id = 987654321; ProcessName = 'FujiyNotepad.WinUI'; Exited = $false })
+    foreach ($sessionId in 1, 7) {
+        Invoke-Case "Same-user viewer in session $sessionId blocks setup without becoming a termination target" {
+            $case.OtherProcesses = @([pscustomobject]@{
+                Id = 987654321; ProcessName = 'FujiyNotepad.WinUI'; Exited = $false
+                UserSid = $case.UserSid; SessionId = $sessionId
+            })
+            $result = Invoke-TestRun
+            Check ($result.SetupError -match 'Close existing FujiyNotepad instances') 'Same-user viewer was not detected.'
+            Check (-not $result.CleanupError -and $case.StopIds.Count -eq 0) 'Refused setup attempted process termination.'
+            Check ($case.Backups.Count -eq 0 -and -not $case.Process.Started) 'Refused setup acquired app resources.'
+            Check-Original
+            Check-Cleaned
+        }
+    }
+    Invoke-Case 'Other-user viewers in any session do not block or become termination targets' {
+        $case.OtherProcesses = @(
+            [pscustomobject]@{
+                Id = 987654321; ProcessName = 'FujiyNotepad.WinUI'; Exited = $false
+                UserSid = 'S-1-5-21-111-222-333-1002'; SessionId = 7
+            },
+            [pscustomobject]@{
+                Id = 987654322; ProcessName = [System.IO.Path]::GetFileNameWithoutExtension($case.Exe); Exited = $false
+                UserSid = 'S-1-5-21-111-222-333-1002'; SessionId = 1
+            }
+        )
         $result = Invoke-TestRun
-        Check ($result.SetupError -match 'Close existing FujiyNotepad instances') 'Existing viewer was not detected.'
-        Check (-not $result.CleanupError -and $case.StopIds.Count -eq 0) 'Refused setup attempted process termination.'
-        Check ($case.Backups.Count -eq 0 -and -not $case.Process.Started) 'Refused setup acquired app resources.'
+        Check (-not $result.SetupError -and -not $result.CleanupError) "$($result.SetupError) $($result.CleanupError)"
+        Check ($case.OwnerLookupIds.Count -eq 2) 'Not all matching viewer owners were inspected.'
+        Check ($case.StopIds.Count -eq 1 -and $case.StopIds[0] -eq $case.Process.Id) 'Cleanup targeted an unrelated user process.'
+        Check (@($case.OtherProcesses | Where-Object Exited).Count -eq 0) 'Another user viewer was stopped.'
         Check-Original
         Check-Cleaned
+    }
+    Invoke-Case 'Viewer exiting before ownership lookup does not block setup' {
+        $case.OtherProcesses = @([pscustomobject]@{
+            Id = 987654321; ProcessName = 'FujiyNotepad.WinUI'; Exited = $true
+            UserSid = $case.UserSid; SessionId = 1
+        })
+        $result = Invoke-TestRun
+        Check (-not $result.SetupError -and -not $result.CleanupError) "$($result.SetupError) $($result.CleanupError)"
+        Check ($case.StopIds.Count -eq 1 -and $case.StopIds[0] -eq $case.Process.Id) 'Cleanup targeted the exited viewer.'
+        Check-Original
+        Check-Cleaned
+    }
+    foreach ($mode in 'query-error', 'method-error', 'denied', 'missing-sid') {
+        Invoke-Case "Unverified viewer ownership fails closed before settings mutation: $mode" {
+            $case.OwnerLookupMode = $mode
+            $case.OtherProcesses = @([pscustomobject]@{
+                Id = 987654321; ProcessName = 'FujiyNotepad.WinUI'; Exited = $false
+                UserSid = $case.UserSid; SessionId = 7
+            })
+            $result = Invoke-TestRun
+            Check ($result.SetupError -match 'Cannot determine owner of PID 987654321') 'Ownership failure was hidden or treated as another user.'
+            Check (-not $result.CleanupError -and $case.StopIds.Count -eq 0) 'Ownership failure attempted process termination.'
+            Check ($case.Backups.Count -eq 0 -and -not $case.Process.Started) 'Ownership failure acquired app resources.'
+            Check-Original
+            Check-Cleaned
+        }
     }
     Invoke-Case 'Partial backup failure cleans up without changing original settings' {
         $case.BackupFails = $true
@@ -467,6 +545,10 @@ try {
     }
     Invoke-Case 'CLI launch failure is nonzero and runs cleanup' {
         $case.Process.StartMode = 'throw'
+        $case.OtherProcesses = @([pscustomobject]@{
+            Id = 987654321; ProcessName = 'FujiyNotepad.WinUI'; Exited = $false
+            UserSid = 'S-1-5-21-111-222-333-1002'; SessionId = 7
+        })
         $result = Invoke-TestHarness
         $output = $result.Output
         Check ($result.ExitCode -eq 1 -and $output -match 'mock launch failure' -and $output -match 'UI tests FAILED') "Unexpected CLI result: $output"

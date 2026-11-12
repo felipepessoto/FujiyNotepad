@@ -24,8 +24,9 @@
 .NOTES
     Requires the winapp CLI on PATH (locally: `winget install Microsoft.winappcli`; in CI:
     the microsoft/setup-WinAppCli action).
-    Close other viewer instances and do not open any during the run: settings are shared, and the
-    exclusive UI-test guard only coordinates cooperating harnesses. See CONTRIBUTING.md for recovery.
+    Close other viewer instances for the current Windows user, including other sessions, and do not open
+    any during the run: settings are shared, and the exclusive UI-test guard only coordinates cooperating
+    harnesses. See CONTRIBUTING.md for ownership-check limitations and recovery.
 #>
 [CmdletBinding()]
 param(

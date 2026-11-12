@@ -69,11 +69,17 @@ UI Automation:
 
 It needs the `winapp` CLI on `PATH` (`winget install Microsoft.winappcli`).
 
-**Close other FujiyNotepad instances before running, and do not open any until the run finishes.**
-The harness refuses to start when it detects an existing viewer (the standard process name or the supplied
-executable's name). This is only a preflight check: renamed viewers or ones started later can still share
-`%LOCALAPPDATA%\FujiyNotepad\settings.json`. Use a disposable Windows user/profile if you cannot keep other
-instances closed. The harness stops only its own launched process; it never closes unrelated viewers.
+**Close other FujiyNotepad instances for the Windows user running the tests, including other logon sessions,
+and do not open any until the run finishes.** The harness checks the standard process name and the supplied
+executable's name, comparing owner SIDs rather than session IDs. Viewers confirmed to belong to another
+Windows user are ignored because their settings are separate. If Windows denies ownership inspection or
+returns an unknown owner, the harness fails before backing up settings or launching the app rather than
+guessing that the process is unrelated; sufficient permissions to inspect matching viewers are required.
+
+This is only a preflight check: renamed viewers or ones started later can still share
+`%LOCALAPPDATA%\FujiyNotepad\settings.json`. Use a disposable Windows user/profile if you cannot keep your
+usual user's instances closed (ownership-inspection permissions still apply). The harness stops only its
+own launched process; it never closes unrelated viewers.
 
 Settings and guard paths use the Windows `LocalApplicationData` known folder, matching the viewer.
 Overriding the `LOCALAPPDATA` environment variable does **not** isolate a UI-test run.
@@ -85,8 +91,9 @@ byte-for-byte (or removed if originally absent) only after the owned process is 
 If safe restoration fails, the command fails and keeps any backup and the recovery guard. The error reports
 the exact recovery paths; the guard also records whether settings originally existed, the backup path and,
 after launch, the owned PID. **Do not remove an active run's guard.** For an interrupted/failed run, first
-confirm that its process and all other viewer instances are closed. Copy the backup over `settings.json`
-(or remove the test-created settings file if none existed originally), then remove the backup and guard.
+confirm that its process and all other viewer instances for that Windows user are closed. Copy the backup
+over `settings.json` (or remove the test-created settings file if none existed originally), then remove the
+backup and guard.
 A forcibly terminated harness cannot run `finally`; an incomplete guard requires inspecting the reported
 files before manual recovery, not blindly deleting the guard or killing a potentially reused PID.
 
