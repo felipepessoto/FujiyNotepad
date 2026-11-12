@@ -10,7 +10,8 @@ param(
     [ValidateRange(1, 20)][int]$Rounds = 2,
     [ValidateRange(1, 100)][int]$DiskIterations = 3,
     [switch]$MeasurementApproved,
-    [switch]$Resume
+    [switch]$Resume,
+    [switch]$ExcludeUtf8CharacterCount
 )
 
 $ErrorActionPreference = 'Stop'
@@ -202,13 +203,18 @@ $resultsRoot = Join-Path $ArtifactRoot $Phase.ToLowerInvariant()
 if (Test-Path -LiteralPath $resultsRoot) {
     if (!$Resume) { throw "Result directory already exists: $resultsRoot. Use -Resume to preserve completed batches." }
     $configuration = Get-Content -LiteralPath (Join-Path $resultsRoot 'configuration.json') -Raw | ConvertFrom-Json
+    $savedExclusion = $configuration.PSObject.Properties['excludeUtf8CharacterCount']
     if ($configuration.phase -ne $Phase -or $configuration.rounds -ne $Rounds -or $configuration.diskIterations -ne $DiskIterations) {
         throw 'Resume must use the original phase, round count and disk iteration count.'
+    }
+    if ([bool]$ExcludeUtf8CharacterCount -ne [bool]($savedExclusion -and $savedExclusion.Value)) {
+        throw 'Resume must use the original character-count exclusion.'
     }
 }
 else {
     New-Item -ItemType Directory -Path $resultsRoot | Out-Null
-    Save-Json ([ordered]@{ phase = $Phase; rounds = $Rounds; diskIterations = $DiskIterations; measurementApproved = $true }) `
+    Save-Json ([ordered]@{ phase = $Phase; rounds = $Rounds; diskIterations = $DiskIterations;
+        measurementApproved = $true; excludeUtf8CharacterCount = [bool]$ExcludeUtf8CharacterCount }) `
         (Join-Path $resultsRoot 'configuration.json')
 }
 $hostPrefix = if ($Resume) { 'host-resume-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') } else { 'host' }
@@ -243,20 +249,28 @@ for ($round = 0; $round -lt $Rounds; $round++) {
             foreach ($id in @('ascii', 'utf8', 'utf16le', 'utf32le')) {
                 Assert-MeasurementSlot
                 $resultPath = Join-Path $resultsRoot "$round-$($side.name)-$id.json"
+                $excludeCount = $ExcludeUtf8CharacterCount -and $id -eq 'utf8'
+                $operationCount = if ($excludeCount) { 10 } else { 11 }
                 if ($Resume -and (Test-Path -LiteralPath $resultPath)) {
                     $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
                     if ($result.Runtime -ne $side.runtime -or $result.DynamicCodeSupported -or $result.Workload.Id -ne $id -or
-                        $result.Samples.Count -ne 11 * $DiskIterations -or
+                        $result.Samples.Count -ne $operationCount * $DiskIterations -or
                         @($result.Samples | Group-Object Operation | Where-Object Count -ne $DiskIterations).Count -ne 0) {
                         throw "Cannot resume from an invalid disk result: $resultPath"
+                    }
+                    if (($excludeCount -and ($result.ExcludedOperations.Count -ne 1 -or $result.ExcludedOperations[0] -ne 'CountCharacters')) -or
+                        (!$excludeCount -and $result.ExcludedOperations.Count -ne 0)) {
+                        throw "Unexpected excluded operations: $resultPath"
                     }
                     Write-Host "Keeping completed disk batch $round-$($side.name)-$id."
                     continue
                 }
                 if ($Resume) { Preserve-Interrupted (Join-Path $resultsRoot "$round-$($side.name)-$id.log") }
-                Invoke-Checked (Join-Path $side.native 'NativeWorkloads.exe') @('run',
+                $nativeArguments = @('run',
                     (Join-Path $ArtifactRoot 'data'), $id, $resultPath,
-                    $DiskIterations.ToString([Globalization.CultureInfo]::InvariantCulture)) `
+                    $DiskIterations.ToString([Globalization.CultureInfo]::InvariantCulture))
+                if ($excludeCount) { $nativeArguments += '--exclude-utf8-character-count' }
+                Invoke-Checked (Join-Path $side.native 'NativeWorkloads.exe') $nativeArguments `
                     (Join-Path $resultsRoot "$round-$($side.name)-$id.log")
             }
         }
