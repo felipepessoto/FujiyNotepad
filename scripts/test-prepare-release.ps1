@@ -149,6 +149,28 @@ try {
         Expect-Failure { & $prepare -PublishDir $case.Publish -ZipPath (Join-Path $case.Publish 'nested.zip') } 'outside PublishDir'
         Check ((Get-Snapshot $case.Directory) -ceq $before) 'Rejected archive path mutated files.'
     }
+    foreach ($ancestorKind in 'junction', 'file') {
+        $descendants = @('', 'new\nested')
+        if ($ancestorKind -eq 'junction') { $descendants += 'Assets' }
+        foreach ($relativeParent in $descendants) {
+            Invoke-Case "ZIP destination $ancestorKind fails before mutation (descendants='$relativeParent')" {
+                $parent = Split-Path $case.Zip -Parent
+                if ($ancestorKind -eq 'junction') {
+                    $case.Junction = $parent
+                    New-Item -ItemType Junction -Path $parent -Target $case.Publish | Out-Null
+                } else {
+                    Write-FixtureFile $parent
+                }
+                $zip = if ($relativeParent) { Join-Path $parent (Join-Path $relativeParent 'package.zip') } else { $case.Zip }
+                $before = Get-Snapshot $case.Directory
+                $errorText = ''
+                try { & $prepare -PublishDir $case.Publish -ZipPath $zip } catch { $errorText = "$_" }
+                Check ((Get-Snapshot $case.Directory) -ceq $before) 'Invalid ZIP ancestor caused mutation before rejection.'
+                Check ($errorText.Contains('ZIP destination ancestor')) "Expected explicit ancestor rejection, got '$errorText'."
+                Check (-not (Test-Path -LiteralPath $zip)) 'Invalid ZIP destination created an archive.'
+            }
+        }
+    }
     Invoke-Case 'Broad roots and non-directory inputs fail without mutation' {
         $before = Get-Snapshot $case.Directory
         Expect-Failure { & $prepare -PublishDir (Split-Path $PSScriptRoot -Parent) } 'repository root'

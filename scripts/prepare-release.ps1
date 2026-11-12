@@ -5,7 +5,7 @@
 .PARAMETER PublishDir
     Explicit staging directory. Required files and path safety are checked before any mutation.
 .PARAMETER ZipPath
-    New ZIP outside PublishDir. Existing archives are never overwritten.
+    New ZIP outside PublishDir. Existing ancestors must be non-reparse directories; archives are never overwritten.
 .PARAMETER ValidateOnly
     Checks an extracted package without changing any files.
 #>
@@ -72,6 +72,14 @@ if ($ZipPath) {
         throw "ZIP must be outside PublishDir: '$zip'."
     }
     if (Test-Path -LiteralPath $zip) { throw "Refusing to overwrite an existing archive: '$zip'." }
+    for ($parent = [System.IO.Path]::GetDirectoryName($zip); $parent; $parent = [System.IO.Path]::GetDirectoryName($parent)) {
+        if (-not (Test-Path -LiteralPath $parent)) { continue }
+        $directory = Get-Item -LiteralPath $parent -Force
+        if ($directory -isnot [System.IO.DirectoryInfo] -or
+            ($directory.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            throw "ZIP destination ancestor must be a non-reparse directory: '$parent'."
+        }
+    }
 }
 
 # SDK components are at the publish root; do not match their names inside app resource directories.
