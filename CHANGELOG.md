@@ -11,6 +11,13 @@ tag per published build. Each release also has downloadable builds and notes on 
      concurrent pull requests never touch the same file. See changelog.d/README.md, and run
      ./scripts/assemble-changelog.ps1 -Preview to see what is queued for the next release. -->
 
+## [4.16.0] - 2026-11-11
+
+### Changed
+- **.NET 11 runtime** — Move to stable .NET 11 while retaining self-contained Native AOT builds for x64,
+  ARM64, and x86. Intel/AMD CPUs now need x86-64-v2-class features, including SSE4.2 and POPCNT; the Windows
+  version floor and ARM64 CPU minimum are unchanged, and no separate runtime installation is needed (issue #192).
+
 ## [4.15.0] - 2026-11-11
 
 ### Changed
