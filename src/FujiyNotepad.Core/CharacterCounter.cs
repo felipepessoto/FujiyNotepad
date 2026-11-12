@@ -3,9 +3,9 @@ using System.Text;
 namespace FujiyNotepad.Core
 {
     /// <summary>
-    /// Counts the total number of decoded characters in a file, reading it in chunks (constant memory) with a
-    /// stateful <see cref="Decoder"/> so a multi-byte character that straddles a chunk boundary is counted
-    /// exactly once. A leading byte-order mark is skipped. Cancellation is cooperative: a cancelled token stops
+    /// Counts decoded UTF-16 code units in a file, reading it in chunks (constant memory) with a stateful
+    /// <see cref="Decoder"/> so sequences that straddle chunk boundaries are preserved.
+    /// A matching leading byte-order mark is skipped. Cancellation is cooperative: a cancelled token stops
     /// the count between chunks and returns the partial total (callers treat a cancelled count as superseded).
     /// </summary>
     public static class CharacterCounter
@@ -27,6 +27,8 @@ namespace FujiyNotepad.Core
 
             Decoder decoder = encoding.Encoding.GetDecoder();
             byte[] buffer = new byte[chunkSize];
+            // Include room for pending decoder state and replacement fallback output.
+            char[] chars = new char[encoding.Encoding.GetMaxCharCount(chunkSize)];
             long pos = start;
             long total = 0;
             long span = length - start;
@@ -48,7 +50,7 @@ namespace FujiyNotepad.Core
                 }
 
                 bool flush = pos + read >= length;
-                total += decoder.GetCharCount(buffer, 0, read, flush);
+                total += decoder.GetChars(buffer, 0, read, chars, 0, flush);
                 pos += read;
 
                 if (progress != null)
