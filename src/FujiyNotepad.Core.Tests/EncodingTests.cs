@@ -90,6 +90,11 @@ namespace FujiyNotepad.Core.Tests
         [InlineData(new byte[] { 0xFE, 0xFF, 0x00, 0x41 }, "utf-16be")]
         [InlineData(new byte[] { 0xFF, 0xFE, 0x00, 0x00 }, "utf-32le")]
         [InlineData(new byte[] { 0x00, 0x00, 0xFE, 0xFF }, "utf-32be")]
+        [InlineData(new byte[] { 0xEF, 0xBB, 0xBF, 0xE0, 0x80, 0x80 }, "utf-8-bom")]
+        [InlineData(new byte[] { 0xFF, 0xFE, 0xE0, 0x80, 0x80 }, "utf-16le")]
+        [InlineData(new byte[] { 0xFE, 0xFF, 0xE0, 0x80, 0x80 }, "utf-16be")]
+        [InlineData(new byte[] { 0xFF, 0xFE, 0x00, 0x00, 0xE0, 0x80, 0x80 }, "utf-32le")]
+        [InlineData(new byte[] { 0x00, 0x00, 0xFE, 0xFF, 0xE0, 0x80, 0x80 }, "utf-32be")]
         public void Detect_ByteOrderMark(byte[] bytes, string expectedId)
         {
             Assert.Equal(expectedId, EncodingDetector.Detect(bytes).Id);
@@ -100,6 +105,7 @@ namespace FujiyNotepad.Core.Tests
         [Fact]
         public void Detect_EmptyFile_IsUtf8()
         {
+            Assert.Same(TextEncoding.Utf8, EncodingDetector.Detect(ReadOnlySpan<byte>.Empty));
             Assert.Same(TextEncoding.Utf8, EncodingDetector.Detect(new InMemoryByteSource(Array.Empty<byte>())));
         }
 
@@ -123,10 +129,61 @@ namespace FujiyNotepad.Core.Tests
             Assert.Same(TextEncoding.Utf8, EncodingDetector.Detect(Encoding.ASCII.GetBytes("plain ascii text")));
         }
 
-        [Fact]
-        public void Detect_Utf8Multibyte_IsUtf8()
+        [Theory]
+        [InlineData("café résumé naïve")]
+        [InlineData("\u0080\u07FF\u0800\uD7FF\uE000\uFFFF\U00010000\U0010FFFF")]
+        public void Detect_Utf8Multibyte_IsUtf8(string text)
         {
-            Assert.Same(TextEncoding.Utf8, EncodingDetector.Detect(Encoding.UTF8.GetBytes("café résumé naïve")));
+            Assert.Same(TextEncoding.Utf8, EncodingDetector.Detect(Encoding.UTF8.GetBytes(text)));
+        }
+
+        [Theory]
+        [InlineData(new byte[] { 0xE0, 0x80, 0x80 }, "windows-1252")]
+        [InlineData(new byte[] { 0xF0, 0x80, 0x80, 0x80 }, "windows-1252")]
+        [InlineData(new byte[] { 0xED, 0xA0, 0x80 }, "windows-1252")]
+        [InlineData(new byte[] { 0xF4, 0x90, 0x80, 0x80 }, "windows-1252")]
+        [InlineData(new byte[] { 0xE2, 0x41 }, "windows-1252")]
+        [InlineData(new byte[] { 0xF0, 0x90, 0x41 }, "windows-1252")]
+        [InlineData(new byte[] { 0xE0, 0x80 }, "windows-1252")]
+        [InlineData(new byte[] { 0xED, 0xA0 }, "windows-1252")]
+        [InlineData(new byte[] { 0xF0, 0x80, 0x80 }, "windows-1252")]
+        [InlineData(new byte[] { 0xF4, 0x90, 0x80 }, "windows-1252")]
+        [InlineData(new byte[] { 0xE0, 0x80, 0x80, 0xE2, 0x82 }, "windows-1252")]
+        [InlineData(new byte[] { 0xC2 }, "utf-8")]
+        [InlineData(new byte[] { 0xE0 }, "utf-8")]
+        [InlineData(new byte[] { 0xE0, 0xA0 }, "utf-8")]
+        [InlineData(new byte[] { 0xE2, 0x82 }, "utf-8")]
+        [InlineData(new byte[] { 0xED, 0x9F }, "utf-8")]
+        [InlineData(new byte[] { 0xF0 }, "utf-8")]
+        [InlineData(new byte[] { 0xF0, 0x90 }, "utf-8")]
+        [InlineData(new byte[] { 0xF0, 0x90, 0x80 }, "utf-8")]
+        [InlineData(new byte[] { 0xF4, 0x8F, 0xBF }, "utf-8")]
+        public void Detect_Utf8Suffix_RejectsMalformedButAllowsTruncation(byte[] suffix, string expectedId)
+        {
+            foreach (string prefixText in new[] { "", "prefix ", "caf\u00E9 ", new string('a', 4096 - suffix.Length) })
+            {
+                byte[] prefix = Encoding.UTF8.GetBytes(prefixText);
+                byte[] sample = new byte[prefix.Length + suffix.Length];
+                prefix.CopyTo(sample, 0);
+                suffix.CopyTo(sample, prefix.Length);
+
+                Assert.Equal(expectedId, EncodingDetector.Detect(sample).Id);
+                Assert.Equal(expectedId, EncodingDetector.Detect(new InMemoryByteSource(sample)).Id);
+            }
+        }
+
+        [Theory]
+        [InlineData(0x82, "utf-8")]
+        [InlineData(0x41, "windows-1252")]
+        public void Detect_Source_ValidatesOnly4096ByteSample(byte lastSampleByte, string expectedId)
+        {
+            byte[] bytes = new byte[4097];
+            Array.Fill(bytes, (byte)'a');
+            bytes[4094] = 0xE2;
+            bytes[4095] = lastSampleByte;
+
+            Assert.Equal(expectedId, EncodingDetector.Detect(new InMemoryByteSource(bytes)).Id);
+            Assert.Same(TextEncoding.Windows1252, EncodingDetector.Detect(bytes));
         }
 
         [Fact]

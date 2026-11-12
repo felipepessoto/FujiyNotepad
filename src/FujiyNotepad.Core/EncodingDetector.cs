@@ -1,3 +1,7 @@
+using System.Buffers;
+using System.Text;
+using System.Text.Unicode;
+
 namespace FujiyNotepad.Core
 {
     /// <summary>
@@ -74,35 +78,12 @@ namespace FujiyNotepad.Core
             return true;
         }
 
-        // Well-formed-UTF-8 check, tolerant of a multi-byte sequence cut off by the sample boundary. Good
-        // enough to distinguish UTF-8 from single-byte (Windows-1252/Latin-1) text for auto-detection.
+        // A sample may end within a UTF-8 sequence, but its available bytes must still form a valid prefix.
         private static bool IsValidUtf8(ReadOnlySpan<byte> data)
         {
-            int i = 0;
-            while (i < data.Length)
-            {
-                byte b = data[i];
-                int extra;
-                if (b <= 0x7F) { i++; continue; }
-                else if (b >= 0xC2 && b <= 0xDF) extra = 1;
-                else if (b >= 0xE0 && b <= 0xEF) extra = 2;
-                else if (b >= 0xF0 && b <= 0xF4) extra = 3;
-                else return false; // stray continuation byte or an invalid lead byte
-
-                if (i + extra >= data.Length)
-                {
-                    return true; // the sequence is truncated by the sample end; treat as valid
-                }
-                for (int k = 1; k <= extra; k++)
-                {
-                    if ((data[i + k] & 0xC0) != 0x80)
-                    {
-                        return false;
-                    }
-                }
-                i += extra + 1;
-            }
-            return true;
+            int invalidIndex = Utf8.IndexOfInvalidSubsequence(data);
+            return invalidIndex < 0 ||
+                Rune.DecodeFromUtf8(data[invalidIndex..], out _, out _) == OperationStatus.NeedMoreData;
         }
     }
 }
