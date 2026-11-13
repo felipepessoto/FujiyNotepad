@@ -534,8 +534,10 @@ namespace FujiyNotepad.Core.Tests
             Assert.InRange(counting.Reads, 1, 8);
         }
 
-        [Fact]
-        public async Task Search_EndOffsetExclusive_StillCompletesAMatchStraddlingTheBound()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Search_EndOffsetExclusive_StillCompletesAMatchStraddlingTheBound(bool requireCompleteRead)
         {
             // A match that STARTS before the bound must be found in full, so reads extend by the pattern
             // overlap. "needle" starts at 6 and runs to 12; the bound at 8 sits inside it.
@@ -543,7 +545,8 @@ namespace FujiyNotepad.Core.Tests
             var searcher = new TextSearcher(source);
 
             var hits = new List<long>();
-            await foreach (long offset in searcher.Search(0, Ascii("needle"), default, null, default, endOffsetExclusive: 8))
+            await foreach (long offset in searcher.Search(
+                0, Ascii("needle"), default, null, default, endOffsetExclusive: 8, requireCompleteRead: requireCompleteRead))
             {
                 hits.Add(offset);
             }

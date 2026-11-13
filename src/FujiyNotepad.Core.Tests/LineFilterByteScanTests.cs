@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using FujiyNotepad.Core;
@@ -20,6 +21,28 @@ namespace FujiyNotepad.Core.Tests
             private readonly Action<int> report;
             public SyncProgress(Action<int> report) => this.report = report;
             public void Report(int value) => report(value);
+        }
+
+        private sealed class ObservedByteSource : IByteSource
+        {
+            private readonly IByteSource inner;
+            public ObservedByteSource(IByteSource inner) => this.inner = inner;
+            public Action? BeforeRead { get; set; }
+            public int Reads { get; private set; }
+            public long Length => inner.Length;
+            public long RefreshLength() => inner.RefreshLength();
+
+            public int Read(long offset, Span<byte> buffer)
+            {
+                Reads++;
+                BeforeRead?.Invoke();
+                return inner.Read(offset, buffer);
+            }
+
+            public ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken token = default)
+                => ValueTask.FromResult(Read(offset, buffer.Span));
+
+            public void Dispose() => inner.Dispose();
         }
 
         private static byte[] Ascii(string s) => System.Text.Encoding.ASCII.GetBytes(s);
@@ -265,6 +288,148 @@ namespace FujiyNotepad.Core.Tests
             Assert.True(cts.IsCancellationRequested);
             Assert.Equal(new[] { 0 }, lines);
             Assert.False(capped);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_PreCancelled_DoesNotReadAnUncachedLongLine(bool exclude)
+        {
+            using var source = new ObservedByteSource(new InMemoryByteSource(new string('x', 8192) + "\n"));
+            var searcher = new TextSearcher(source, chunkSize: 64);
+            var indexer = new LineIndexer(searcher);
+            indexer.SetPartialIndexForTest(8193);
+            indexer.IsCompleted = true;
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("absent"), default, token: cts.Token, exclude: exclude);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
+            Assert.Equal(0, source.Reads);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_Exclude_CancelledDuringSnapshotLookup_StopsReading()
+        {
+            using var source = new ObservedByteSource(new InMemoryByteSource(new string('x', 8192) + "\n"));
+            var searcher = new TextSearcher(source, chunkSize: 64);
+            var indexer = new LineIndexer(searcher);
+            indexer.SetPartialIndexForTest(8193);
+            indexer.IsCompleted = true;
+            using var cts = new CancellationTokenSource();
+            source.BeforeRead = () =>
+            {
+                if (source.Reads == 3)
+                {
+                    cts.Cancel();
+                }
+            };
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("absent"), default, token: cts.Token, exclude: true);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
+            Assert.Equal(3, source.Reads);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_CancelledDuringRead_DoesNotCollectBufferedMatches(bool exclude)
+        {
+            using var source = new ObservedByteSource(new InMemoryByteSource("keep\nx\nkeep\nx\n"));
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            indexer.SetPartialIndexForTest(5, 7, 12, 14);
+            indexer.IsCompleted = true;
+            Assert.Equal(3, indexer.GetLineNumberFromOffset(source.Length - 1));
+            int readsBeforeScan = source.Reads;
+            using var cts = new CancellationTokenSource();
+            source.BeforeRead = cts.Cancel;
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("x"), default, token: cts.Token, exclude: exclude);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
+            Assert.Equal(readsBeforeScan + 1, source.Reads);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(5)]
+        public async Task MatchLinesByPattern_Exclude_TruncatedSnapshot_ThrowsInsteadOfReturningOldRows(int remainingBytes)
+        {
+            using var source = new GrowableByteSource("keep\nERROR\nother\n");
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            var progress = new SyncProgress(p =>
+            {
+                if (p == 0)
+                {
+                    source.Truncate(remainingBytes);
+                }
+            });
+
+            await Assert.ThrowsAsync<EndOfStreamException>(() =>
+                LineFilter.MatchLinesByPatternAsync(
+                    searcher, indexer, Ascii("ERROR"), default, progress: progress, exclude: true));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_TruncatedBetweenChunks_DoesNotComplementTheUnscannedTail(bool exclude)
+        {
+            using var source = new GrowableByteSource("keep\nERROR\nkeep\nERROR\nkeep\n");
+            var searcher = new TextSearcher(source, chunkSize: 16);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            var progress = new SyncProgress(p =>
+            {
+                if (p > 0)
+                {
+                    source.Truncate(16);
+                }
+            });
+
+            var scan = LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, progress: progress, exclude: exclude);
+
+            if (exclude)
+            {
+                await Assert.ThrowsAsync<EndOfStreamException>(() => scan);
+            }
+            else
+            {
+                var (lines, capped) = await scan;
+                Assert.Equal(new[] { 1 }, lines);
+                Assert.False(capped);
+            }
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_Exclude_LengthShrinksDuringSnapshotLookup_Throws()
+        {
+            var data = new GrowableByteSource("keep\nERROR\nother\n");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            source.BeforeRead = () =>
+            {
+                source.BeforeRead = null;
+                data.Truncate(5);
+                data.RefreshLength();
+            };
+
+            await Assert.ThrowsAsync<EndOfStreamException>(() =>
+                LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default, exclude: true));
         }
 
         // ----- The scan must not map offsets the index does not cover (issue #169) -----

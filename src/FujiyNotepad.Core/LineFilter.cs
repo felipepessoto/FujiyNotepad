@@ -104,6 +104,8 @@ namespace FujiyNotepad.Core
         /// <c>Capped</c> is true). Cancellation is cooperative, mirroring <see cref="TextSearcher.Search"/>: a
         /// cancelled <paramref name="token"/> ends the scan and returns the lines found so far rather than
         /// throwing, so the caller decides whether to keep or discard them.
+        /// Exclusion throws <see cref="EndOfStreamException"/> if the source ends before the captured
+        /// snapshot has been read, rather than treating unscanned rows as nonmatching.
         /// </para>
         /// </summary>
         public static async Task<(List<int> Lines, bool Capped)> MatchLinesByPatternAsync(
@@ -117,80 +119,85 @@ namespace FujiyNotepad.Core
             bool exclude = false)
         {
             var lines = new List<int>();
-            int lastLine = -1;
-
-            // Capture the covered region once, before scanning. Snapshot IsCompleted into a local first: if it
-            // flips to false right afterwards, indexing has only appended, so this bound stays conservative
-            // rather than stale.
-            bool completeAtStart = indexer.IsCompleted;
-            long limit = searcher.SourceLength;
-            if (!completeAtStart)
+            try
             {
-                limit = Math.Min(limit, indexer.IndexedFrontier);
-            }
+                token.ThrowIfCancellationRequested();
+                int lastLine = -1;
 
-            // The final byte belongs to the last covered line, even with a trailing newline. Deriving the
-            // count from this same bound avoids phantom rows and rows indexed past the cached file length.
-            int totalLines = exclude && limit > 0 ? indexer.GetLineNumberFromOffset(limit - 1) + 1 : 0;
-            int nextLine = 0;
-
-            bool CollectNonMatchingLines(int endExclusive)
-            {
-                while (nextLine < endExclusive && !token.IsCancellationRequested)
+                // Capture the covered region once, before scanning. Snapshot IsCompleted into a local first: if it
+                // flips to false right afterwards, indexing has only appended, so this bound stays conservative
+                // rather than stale.
+                bool completeAtStart = indexer.IsCompleted;
+                long limit = searcher.SourceLength;
+                if (!completeAtStart)
                 {
-                    lines.Add(nextLine++);
-                    if (lines.Count >= maxMatches)
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-
-            // Bound the scan itself, not just the mapping: Search otherwise reads to the live end of file, so on
-            // a file being appended to quickly it would keep reading well past the snapshot even when nothing
-            // there matches. The per-match check below still guards the mapping.
-            await foreach (long offset in searcher.Search(0, pattern, options, progress, token, limit))
-            {
-                if (offset >= limit)
-                {
-                    // Past what the index covers; mapping from here on would clamp onto the last indexed line.
-                    break;
+                    limit = Math.Min(limit, indexer.IndexedFrontier);
                 }
 
-                int line = indexer.GetLineNumberFromOffset(offset);
+                // The final byte belongs to the last covered line, even with a trailing newline. Deriving the
+                // count from this same bound avoids phantom rows and rows indexed past the cached file length.
+                int totalLines = exclude && limit > 0 ? indexer.GetLineNumberFromOffset(limit - 1, token) + 1 : 0;
+                int nextLine = 0;
 
-                // Matches arrive in ascending offset order, so their line numbers are non-decreasing: a match on
-                // the same line as the previous one is a duplicate to skip, yielding an ascending, distinct list.
-                if (line != lastLine)
+                bool CollectNonMatchingLines(int endExclusive)
                 {
-                    lastLine = line;
-                    if (exclude)
+                    while (nextLine < endExclusive)
                     {
-                        if (CollectNonMatchingLines(line))
-                        {
-                            return (lines, true);
-                        }
-                        if (token.IsCancellationRequested)
-                        {
-                            return (lines, false);
-                        }
-                        nextLine = line + 1;
-                    }
-                    else
-                    {
-                        lines.Add(line);
+                        token.ThrowIfCancellationRequested();
+                        lines.Add(nextLine++);
                         if (lines.Count >= maxMatches)
                         {
-                            return (lines, true);
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
+                // Bound the scan itself, not just the mapping. Exclusion also requires reaching that snapshot:
+                // an early EOF must not classify the unread tail as nonmatching.
+                await foreach (long offset in searcher.Search(0, pattern, options, progress, token, limit, requireCompleteRead: exclude))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (offset >= limit)
+                    {
+                        // Past what the index covers; mapping from here on would clamp onto the last indexed line.
+                        break;
+                    }
+
+                    int line = indexer.GetLineNumberFromOffset(offset, token);
+
+                    // Matches arrive in ascending offset order, so their line numbers are non-decreasing: a match on
+                    // the same line as the previous one is a duplicate to skip, yielding an ascending, distinct list.
+                    if (line != lastLine)
+                    {
+                        lastLine = line;
+                        if (exclude)
+                        {
+                            if (CollectNonMatchingLines(line))
+                            {
+                                return (lines, true);
+                            }
+                            nextLine = line + 1;
+                        }
+                        else
+                        {
+                            lines.Add(line);
+                            if (lines.Count >= maxMatches)
+                            {
+                                return (lines, true);
+                            }
                         }
                     }
                 }
-            }
 
-            // Only a completed scan proves that the remaining snapshot lines contain no match.
-            bool capped = exclude && !token.IsCancellationRequested && CollectNonMatchingLines(totalLines);
-            return (lines, capped);
+                token.ThrowIfCancellationRequested();
+                bool capped = exclude && CollectNonMatchingLines(totalLines);
+                return (lines, capped);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                return (lines, false);
+            }
         }
     }
 }

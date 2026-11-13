@@ -221,9 +221,11 @@ namespace FujiyNotepad.Core
         /// binary-searched for the block holding the offset, then that block is expanded and scanned for the
         /// exact line. If indexing has not yet reached the offset, the last indexed line is returned (a clamping
         /// fallback rather than an exact, not-yet-known answer).
+        /// A cancelled <paramref name="token"/> aborts sparse-block reconstruction without caching a partial block.
         /// </summary>
-        public int GetLineNumberFromOffset(long offset)
+        public int GetLineNumberFromOffset(long offset, CancellationToken token = default)
         {
+            token.ThrowIfCancellationRequested();
             int block;
             long checkpointOffset;
             int knownInBlock;
@@ -260,7 +262,7 @@ namespace FujiyNotepad.Core
                 knownInBlock = (int)Math.Min(CheckpointInterval, (long)lineStartCount - firstLineOfBlock);
             }
 
-            long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock);
+            long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock, token);
 
             // Largest local i with starts[i] <= offset (starts[0] <= offset always, by the checkpoint search).
             int loi = 0;
@@ -321,7 +323,7 @@ namespace FujiyNotepad.Core
 
         // Returns block b's line-start offsets (length = knownInBlock), from the cache when present and current,
         // otherwise by expanding from the checkpoint (reading the source outside the lock) and caching the result.
-        private long[] GetBlockStarts(int block, long checkpointOffset, int knownInBlock)
+        private long[] GetBlockStarts(int block, long checkpointOffset, int knownInBlock, CancellationToken token = default)
         {
             lock (indexLock)
             {
@@ -334,7 +336,7 @@ namespace FujiyNotepad.Core
                 }
             }
 
-            long[] starts = ExpandBlock(checkpointOffset, knownInBlock);
+            long[] starts = ExpandBlock(checkpointOffset, knownInBlock, token);
 
             lock (indexLock)
             {
@@ -353,7 +355,7 @@ namespace FujiyNotepad.Core
 
         // Reads up to (knownInBlock - 1) newlines forward from the checkpoint and turns them into line-start
         // offsets [checkpoint, newline0+len, newline1+len, ...]. I/O happens here, outside indexLock.
-        private long[] ExpandBlock(long checkpointOffset, int knownInBlock)
+        private long[] ExpandBlock(long checkpointOffset, int knownInBlock, CancellationToken token)
         {
             if (knownInBlock <= 1)
             {
@@ -365,7 +367,7 @@ namespace FujiyNotepad.Core
             // the next line's start. starts[0] is the checkpoint (the block's first line start).
             long[] starts = new long[knownInBlock];
             starts[0] = checkpointOffset;
-            int found = searcher.FindForward(checkpointOffset, encoding.NewLineBytes, newlineOptions, starts.AsSpan(1));
+            int found = searcher.FindForward(checkpointOffset, encoding.NewLineBytes, newlineOptions, starts.AsSpan(1), token);
             int nlLen = encoding.NewLineBytes.Length;
             for (int i = 1; i <= found; i++)
             {
