@@ -56,6 +56,7 @@ namespace FujiyNotepad.Core
         // the ascending-order precondition of the binary search in GetLineNumberFromOffset).
         private int indexingActive;
 
+        private long? completedReadEnd;
         private volatile bool isCompleted;
         public bool IsCompleted
         {
@@ -94,7 +95,7 @@ namespace FujiyNotepad.Core
                     "the task it returned before starting another; the indexer is the sole writer of the index.");
             }
 
-            bool reachedEnd = false;
+            long? readEnd = null;
             try
             {
                 long startOffset;
@@ -119,7 +120,8 @@ namespace FujiyNotepad.Core
                 // scan itself stops between chunks; without it cancellation would only be observed once per
                 // newline found, making Stop indexing a no-op across a long newline-free region (issue #167).
                 // The next line starts past the whole newline sequence.
-                await foreach (long result in searcher.Search(startOffset, encoding.NewLineBytes, newlineOptions, progress, cancelToken))
+                await foreach (long result in searcher.SearchForIndex(
+                    startOffset, encoding.NewLineBytes, newlineOptions, progress, cancelToken, position => readEnd = position))
                 {
                     cancelToken.ThrowIfCancellationRequested();
                     long lineStart = result + encoding.NewLineBytes.Length;
@@ -140,7 +142,6 @@ namespace FujiyNotepad.Core
                 // was forwarded for). Re-check here: without this, a cancelled pass would fall through and
                 // publish a PARTIAL index as complete, permanently freezing the line count and blocking resume.
                 cancelToken.ThrowIfCancellationRequested();
-                reachedEnd = true;
             }
             finally
             {
@@ -149,9 +150,19 @@ namespace FujiyNotepad.Core
                 Volatile.Write(ref indexingActive, 0);
             }
 
-            if (reachedEnd)
+            if (readEnd is not long coveredLength)
             {
-                IsCompleted = true;
+                throw new InvalidOperationException("The indexing scan ended without reporting its covered byte extent.");
+            }
+            MarkCompleted(coveredLength);
+        }
+
+        private void MarkCompleted(long readEnd)
+        {
+            lock (indexLock)
+            {
+                completedReadEnd = readEnd;
+                isCompleted = true;
             }
         }
 
@@ -166,9 +177,12 @@ namespace FujiyNotepad.Core
         /// the new end of the file; that resolves to empty text rather than failing, and is corrected when the
         /// shrink is noticed and the file reloaded. Detecting it here is not possible without re-reading — the
         /// source's cached length is itself stale until something calls <c>RefreshLength</c>.</para>
+        /// <para><paramref name="requireExact"/> opts out of that rendering fallback for strict filter reads:
+        /// a missing line start throws <see cref="EndOfStreamException"/> instead of clamping.</para>
         /// </summary>
-        public long GetOffsetFromLineNumber(int lineNumber)
+        public long GetOffsetFromLineNumber(int lineNumber, CancellationToken token = default, bool requireExact = false)
         {
+            token.ThrowIfCancellationRequested();
             int block;
             long checkpointOffset;
             int knownInBlock;
@@ -191,7 +205,7 @@ namespace FujiyNotepad.Core
                 knownInBlock = (int)Math.Min(CheckpointInterval, (long)lineStartCount - (long)block * CheckpointInterval);
             }
 
-            long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock);
+            long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock, token);
             int local = (lineNumber - 1) - block * CheckpointInterval;
 
             // ExpandBlock returns a SHORT array when the source shrank since it was indexed (log rotation /
@@ -201,6 +215,10 @@ namespace FujiyNotepad.Core
             // the clamping contract GetLineNumberFromOffset already documents. starts is never empty.
             if (local >= starts.Length)
             {
+                if (requireExact)
+                {
+                    throw new EndOfStreamException("The indexed line boundary is no longer available.");
+                }
                 local = starts.Length - 1;
             }
 
@@ -221,9 +239,11 @@ namespace FujiyNotepad.Core
         /// binary-searched for the block holding the offset, then that block is expanded and scanned for the
         /// exact line. If indexing has not yet reached the offset, the last indexed line is returned (a clamping
         /// fallback rather than an exact, not-yet-known answer).
+        /// A cancelled <paramref name="token"/> aborts sparse-block reconstruction without caching a partial block.
         /// </summary>
-        public int GetLineNumberFromOffset(long offset)
+        public int GetLineNumberFromOffset(long offset, CancellationToken token = default)
         {
+            token.ThrowIfCancellationRequested();
             int block;
             long checkpointOffset;
             int knownInBlock;
@@ -260,7 +280,7 @@ namespace FujiyNotepad.Core
                 knownInBlock = (int)Math.Min(CheckpointInterval, (long)lineStartCount - firstLineOfBlock);
             }
 
-            long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock);
+            long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock, token);
 
             // Largest local i with starts[i] <= offset (starts[0] <= offset always, by the checkpoint search).
             int loi = 0;
@@ -300,6 +320,22 @@ namespace FujiyNotepad.Core
         }
 
         /// <summary>
+        /// The indexed snapshot's byte extent. An incomplete index covers terminated lines only; completion
+        /// also covers the final unterminated line up to the endpoint actually read by the scan. A later
+        /// source-length refresh cannot widen this extent before indexing catches up.
+        /// </summary>
+        public long IndexedLength
+        {
+            get
+            {
+                lock (indexLock)
+                {
+                    return isCompleted ? completedReadEnd ?? lastLineStart : lastLineStart;
+                }
+            }
+        }
+
+        /// <summary>
         /// True if a match at <paramref name="offset"/> can be resolved to its exact line without reading
         /// past the indexed region: either indexing has completed, or the offset lies before the last
         /// indexed line start (so the line containing it has a known end). When this is false the offset is
@@ -321,7 +357,7 @@ namespace FujiyNotepad.Core
 
         // Returns block b's line-start offsets (length = knownInBlock), from the cache when present and current,
         // otherwise by expanding from the checkpoint (reading the source outside the lock) and caching the result.
-        private long[] GetBlockStarts(int block, long checkpointOffset, int knownInBlock)
+        private long[] GetBlockStarts(int block, long checkpointOffset, int knownInBlock, CancellationToken token = default)
         {
             lock (indexLock)
             {
@@ -334,7 +370,7 @@ namespace FujiyNotepad.Core
                 }
             }
 
-            long[] starts = ExpandBlock(checkpointOffset, knownInBlock);
+            long[] starts = ExpandBlock(checkpointOffset, knownInBlock, token);
 
             lock (indexLock)
             {
@@ -353,7 +389,7 @@ namespace FujiyNotepad.Core
 
         // Reads up to (knownInBlock - 1) newlines forward from the checkpoint and turns them into line-start
         // offsets [checkpoint, newline0+len, newline1+len, ...]. I/O happens here, outside indexLock.
-        private long[] ExpandBlock(long checkpointOffset, int knownInBlock)
+        private long[] ExpandBlock(long checkpointOffset, int knownInBlock, CancellationToken token)
         {
             if (knownInBlock <= 1)
             {
@@ -365,7 +401,7 @@ namespace FujiyNotepad.Core
             // the next line's start. starts[0] is the checkpoint (the block's first line start).
             long[] starts = new long[knownInBlock];
             starts[0] = checkpointOffset;
-            int found = searcher.FindForward(checkpointOffset, encoding.NewLineBytes, newlineOptions, starts.AsSpan(1));
+            int found = searcher.FindForward(checkpointOffset, encoding.NewLineBytes, newlineOptions, starts.AsSpan(1), token);
             int nlLen = encoding.NewLineBytes.Length;
             for (int i = 1; i <= found; i++)
             {
@@ -402,6 +438,7 @@ namespace FujiyNotepad.Core
                 checkpoints.Clear();
                 blockCache.Clear();
                 blockLru.Clear();
+                completedReadEnd = null;
 
                 checkpoints.Add(0);
                 lineStartCount = 1;

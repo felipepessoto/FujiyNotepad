@@ -1,21 +1,24 @@
 namespace FujiyNotepad.Core
 {
     /// <summary>
-    /// Computes the set of lines that match a predicate, for the filter / grep view. The scan is bounded
-    /// (stops at a maximum number of matches) and cooperatively cancellable, so it stays responsive on huge
+    /// Computes the set of lines to keep in the filter / grep view, optionally excluding matches. The scan is bounded
+    /// (stops at a maximum number of kept lines) and cooperatively cancellable, so it stays responsive on huge
     /// files. The predicate (literal contains / regex / case option) is supplied by the caller, keeping this
     /// dependency-free and headlessly testable.
     /// </summary>
     public static class LineFilter
     {
-        /// <summary>Default cap on collected matches, so a too-broad filter can't allocate without bound.</summary>
+        /// <summary>Default cap on kept lines, so a too-broad filter can't allocate without bound.</summary>
         public const int DefaultMaxMatches = 2_000_000;
 
         /// <summary>
         /// Returns the ascending indices of the lines in <paramref name="source"/> for which
-        /// <paramref name="predicate"/> is true, scanning <c>[0, LineCount)</c> and stopping once
-        /// <paramref name="maxMatches"/> are found (then <paramref name="capped"/> is true) or the
+        /// <paramref name="predicate"/> is true (false when <paramref name="exclude"/> is set), scanning
+        /// <c>[0, LineCount)</c> and stopping once <paramref name="maxMatches"/> lines are kept
+        /// (then <paramref name="capped"/> is true) or the
         /// <paramref name="token"/> is cancelled (which throws <see cref="OperationCanceledException"/>).
+        /// Exclusion uses <see cref="ILineSource.GetLineForFilter"/> so an unread file row cannot be
+        /// classified as a nonmatch. An incomplete read aborts the scan rather than returning a partial result.
         /// </summary>
         public static List<int> Match(
             ILineSource source,
@@ -23,7 +26,8 @@ namespace FujiyNotepad.Core
             out bool capped,
             int maxMatches = DefaultMaxMatches,
             IProgress<int>? progress = null,
-            CancellationToken token = default)
+            CancellationToken token = default,
+            bool exclude = false)
         {
             capped = false;
             var result = new List<int>();
@@ -49,7 +53,8 @@ namespace FujiyNotepad.Core
                     }
                 }
 
-                if (predicate(source.GetLineUncached(i)))
+                string text = exclude ? source.GetLineForFilter(i, token) : source.GetLineUncached(i);
+                if (predicate(text) != exclude)
                 {
                     result.Add(i);
                     if (result.Count >= maxMatches)
@@ -66,14 +71,17 @@ namespace FujiyNotepad.Core
 
         /// <summary>
         /// Returns the ascending, de-duplicated 0-based indices of the lines that contain at least one match of
-        /// the literal byte <paramref name="pattern"/>. It scans the raw bytes with <paramref name="searcher"/>
+        /// the literal byte <paramref name="pattern"/>, or do not contain it when <paramref name="exclude"/>
+        /// is set. It scans the raw bytes with <paramref name="searcher"/>
         /// (no per-line decoding) and maps each match offset to its line via
         /// <see cref="LineIndexer.GetLineNumberFromOffset"/>, so its cost scales with the number of matches
-        /// rather than the total line count — the fast equivalent of <see cref="Match"/> for a literal term.
+        /// and kept lines rather than decoding every line — the fast equivalent of <see cref="Match"/> for a literal term.
+        /// Exclusion collects gaps between matching lines as the scan advances, without allocating a match set
+        /// or taking the complement of an already capped or cancelled scan.
         /// <para>
-        /// Only offsets the index actually covers are mapped. The bound is taken once, up front: the source's
-        /// cached length, further limited to the indexed frontier if the index is not yet complete. Matches
-        /// beyond it end the scan, so the result is a snapshot of the file as indexed — the same semantics
+        /// Only bytes the index actually covers are scanned. The bound is taken once, up front: the source's
+        /// cached length, capped by the index's recorded extent, including a completed final unterminated line.
+        /// A length refresh alone cannot extend that coverage. The result is a snapshot of the file as indexed — the same semantics
         /// <see cref="Match"/> has by capturing <c>LineCount</c> once.
         /// </para>
         /// <para>
@@ -95,10 +103,12 @@ namespace FujiyNotepad.Core
         /// no matter what indexing does afterwards, so the bound alone makes both cases safe.
         /// </para>
         /// <para>
-        /// Scanning stops once <paramref name="maxMatches"/> distinct lines are collected (then the returned
+        /// Scanning stops once <paramref name="maxMatches"/> distinct kept lines are collected (then the returned
         /// <c>Capped</c> is true). Cancellation is cooperative, mirroring <see cref="TextSearcher.Search"/>: a
         /// cancelled <paramref name="token"/> ends the scan and returns the lines found so far rather than
         /// throwing, so the caller decides whether to keep or discard them.
+        /// Exclusion throws <see cref="EndOfStreamException"/> if the source ends before the captured
+        /// snapshot has been read, rather than treating unscanned rows as nonmatching.
         /// </para>
         /// </summary>
         public static async Task<(List<int> Lines, bool Capped)> MatchLinesByPatternAsync(
@@ -108,48 +118,84 @@ namespace FujiyNotepad.Core
             SearchOptions options,
             int maxMatches = DefaultMaxMatches,
             IProgress<int>? progress = null,
-            CancellationToken token = default)
+            CancellationToken token = default,
+            bool exclude = false)
         {
             var lines = new List<int>();
-            int lastLine = -1;
-
-            // Capture the covered region once, before scanning. Snapshot IsCompleted into a local first: if it
-            // flips to false right afterwards, indexing has only appended, so this bound stays conservative
-            // rather than stale.
-            bool completeAtStart = indexer.IsCompleted;
-            long limit = searcher.SourceLength;
-            if (!completeAtStart)
+            try
             {
-                limit = Math.Min(limit, indexer.IndexedFrontier);
-            }
+                token.ThrowIfCancellationRequested();
+                int lastLine = -1;
 
-            // Bound the scan itself, not just the mapping: Search otherwise reads to the live end of file, so on
-            // a file being appended to quickly it would keep reading well past the snapshot even when nothing
-            // there matches. The per-match check below still guards the mapping.
-            await foreach (long offset in searcher.Search(0, pattern, options, progress, token, limit))
-            {
-                if (offset >= limit)
+                // Follow Tail refreshes the source length before re-arming indexing. Use recorded index
+                // coverage, not that newer length paired with a still-true completion flag.
+                long limit = Math.Min(searcher.SourceLength, indexer.IndexedLength);
+
+                // The final byte belongs to the last covered line, even with a trailing newline. Deriving the
+                // count from this same bound avoids phantom rows and rows indexed past the cached file length.
+                int totalLines = exclude && limit > 0 ? indexer.GetLineNumberFromOffset(limit - 1, token) + 1 : 0;
+                int nextLine = 0;
+
+                bool CollectNonMatchingLines(int endExclusive)
                 {
-                    // Past what the index covers; mapping from here on would clamp onto the last indexed line.
-                    break;
+                    while (nextLine < endExclusive)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        lines.Add(nextLine++);
+                        if (lines.Count >= maxMatches)
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
                 }
 
-                int line = indexer.GetLineNumberFromOffset(offset);
-
-                // Matches arrive in ascending offset order, so their line numbers are non-decreasing: a match on
-                // the same line as the previous one is a duplicate to skip, yielding an ascending, distinct list.
-                if (line != lastLine)
+                // Bound the scan itself, not just the mapping. Exclusion also requires reaching that snapshot:
+                // an early EOF must not classify the unread tail as nonmatching.
+                await foreach (long offset in searcher.Search(
+                    0, pattern, options, progress, token, limit, requireCompleteRead: exclude, snapshotLength: limit))
                 {
-                    lines.Add(line);
-                    lastLine = line;
-                    if (lines.Count >= maxMatches)
+                    token.ThrowIfCancellationRequested();
+                    if (offset >= limit)
                     {
-                        return (lines, true);
+                        // Past what the index covers; mapping from here on would clamp onto the last indexed line.
+                        break;
+                    }
+
+                    int line = indexer.GetLineNumberFromOffset(offset, token);
+
+                    // Matches arrive in ascending offset order, so their line numbers are non-decreasing: a match on
+                    // the same line as the previous one is a duplicate to skip, yielding an ascending, distinct list.
+                    if (line != lastLine)
+                    {
+                        lastLine = line;
+                        if (exclude)
+                        {
+                            if (CollectNonMatchingLines(line))
+                            {
+                                return (lines, true);
+                            }
+                            nextLine = line + 1;
+                        }
+                        else
+                        {
+                            lines.Add(line);
+                            if (lines.Count >= maxMatches)
+                            {
+                                return (lines, true);
+                            }
+                        }
                     }
                 }
-            }
 
-            return (lines, false);
+                token.ThrowIfCancellationRequested();
+                bool capped = exclude && CollectNonMatchingLines(totalLines);
+                return (lines, capped);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                return (lines, false);
+            }
         }
     }
 }

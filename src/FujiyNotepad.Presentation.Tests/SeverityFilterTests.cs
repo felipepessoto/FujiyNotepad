@@ -88,22 +88,24 @@ namespace FujiyNotepad.Presentation.Tests
             }
         }
 
-        [Fact]
-        public void SeverityFilteredLines_CanBeCopiedAndSaved_WithOriginalEndings()
+        [Theory]
+        [InlineData(false, "WARN retry\r\nERROR failed\nCRITICAL stop", 3)]
+        [InlineData(true, "INFO start\r\nDEBUG detail\r\n", 2)]
+        public void SeverityFilteredLines_CanBeCopiedAndSaved_WithOriginalEndings(bool exclude, string expected, int count)
         {
             var source = new FakeLinesWithEndings(
                 new[] { "INFO start", "WARN retry", "DEBUG detail", "ERROR failed", "CRITICAL stop" },
                 new[] { LineEnding.CrLf, LineEnding.CrLf, LineEnding.CrLf, LineEnding.Lf, LineEnding.None });
             Regex regex = UserRegex.Create(SeverityFilter.GetPattern(LogSeverity.Warn), RegexOptions.None);
-            var filtered = new FilteredLineSource(source, LineFilter.Match(source, line => regex.IsMatch(line), out _));
-            const string expected = "WARN retry\r\nERROR failed\nCRITICAL stop";
+            var filtered = new FilteredLineSource(
+                source, LineFilter.Match(source, line => regex.IsMatch(line), out _, exclude: exclude));
 
             var clipboard = MatchingLinesExporter.BuildClipboardText(filtered);
             using var writer = new StringWriter();
             MatchingLinesExporter.Write(filtered, writer);
 
             Assert.Equal(expected, clipboard.Text);
-            Assert.Equal(3, clipboard.LineCount);
+            Assert.Equal(count, clipboard.LineCount);
             Assert.False(clipboard.Truncated);
             Assert.Equal(expected, writer.ToString());
         }

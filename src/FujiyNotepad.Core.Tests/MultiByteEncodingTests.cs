@@ -339,6 +339,13 @@ namespace FujiyNotepad.Core.Tests
             List<int> slow = LineFilter.Match(provider, predicate, out _);
 
             Assert.Equal(slow, fast);
+
+            var (excludedFast, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, encoding.Encode(term), OptionsFor(encoding, ignoreCase, wholeWord), exclude: true);
+            List<int> excludedSlow = LineFilter.Match(provider, predicate, out _, exclude: true);
+
+            Assert.Equal(Enumerable.Range(0, provider.LineCount).Except(fast), excludedFast);
+            Assert.Equal(excludedSlow, excludedFast);
         }
 
         [Theory]

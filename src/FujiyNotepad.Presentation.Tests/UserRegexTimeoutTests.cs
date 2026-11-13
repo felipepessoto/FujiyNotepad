@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using FujiyNotepad.Core;
+using FujiyNotepad.TestSupport;
 
 namespace FujiyNotepad.Presentation.Tests
 {
@@ -89,6 +91,21 @@ namespace FujiyNotepad.Presentation.Tests
             Assert.Equal(RegexOptions.IgnoreCase, r.Options); // Compiled dropped, everything else preserved
             Assert.Equal(UserRegex.MatchTimeout, r.MatchTimeout);
             Assert.Matches(r, "ABC");
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task LineFilter_Timeout_PropagatesInBothModes(bool exclude)
+        {
+            Regex regex = UserRegex.Create(CatastrophicPattern, RegexOptions.None);
+            var source = new FakeLines("plain", EvilInput);
+
+            Exception? error = await Task.Run(() => Record.Exception(() =>
+                LineFilter.Match(source, line => regex.IsMatch(line), out _, exclude: exclude)))
+                .WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.IsType<RegexMatchTimeoutException>(error);
         }
 
         [Fact]

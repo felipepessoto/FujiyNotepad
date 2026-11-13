@@ -19,5 +19,16 @@ namespace FujiyNotepad.Core
         /// <see cref="GetLine"/>; <see cref="LineProvider"/> overrides it to read without inserting into its cache.
         /// </summary>
         string GetLineUncached(int lineIndex) => GetLine(lineIndex);
+
+        /// <summary>
+        /// Display-capped text for a filter that requires confirmed input. File-backed sources must reject
+        /// missing or incomplete rows instead of serving stale cached text or treating a short read as empty.
+        /// In-memory sources can use the normal bulk reader.
+        /// </summary>
+        string GetLineForFilter(int lineIndex, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            return GetLineUncached(lineIndex);
+        }
     }
 }

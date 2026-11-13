@@ -1555,7 +1555,7 @@ namespace FujiyNotepad.WinUI
             }
         }
 
-        // ----- Filter / grep view (show only matching lines) -----
+        // ----- Filter / grep view (include or exclude matching lines) -----
 
         private void Filter_Click(object sender, RoutedEventArgs e)
         {
@@ -1605,6 +1605,7 @@ namespace FujiyNotepad.WinUI
                 FilterRegex.IsChecked = true;
                 FilterMatchCase.IsChecked = false;
                 FilterWholeWord.IsChecked = false;
+                FilterExclude.IsChecked = false;
                 await ApplyFilter();
             }
         }
@@ -1699,6 +1700,7 @@ namespace FujiyNotepad.WinUI
             LineProvider activeProvider = provider;
             TextSearcher activeSearcher = searcher;
             LineIndexer activeIndexer = LineIndexer;
+            bool exclude = FilterExclude.IsChecked == true;
             var progress = new Progress<int>(p =>
             {
                 if (!token.IsCancellationRequested)
@@ -1736,13 +1738,14 @@ namespace FujiyNotepad.WinUI
                     };
                     (matches, capped) = await Task.Run(() =>
                         LineFilter.MatchLinesByPatternAsync(
-                            activeSearcher, activeIndexer, pattern, options, progress: progress, token: token));
+                            activeSearcher, activeIndexer, pattern, options, progress: progress, token: token, exclude: exclude));
                 }
                 else
                 {
                     matches = await Task.Run(() =>
                     {
-                        List<int> hits = LineFilter.Match(activeProvider, predicate, out bool c, progress: progress, token: token);
+                        List<int> hits = LineFilter.Match(
+                            activeProvider, predicate, out bool c, progress: progress, token: token, exclude: exclude);
                         capped = c;
                         return hits;
                     }, token);
@@ -1780,9 +1783,8 @@ namespace FujiyNotepad.WinUI
             View.SetProvider(filteredSource);
             CopyMatchingItem.IsEnabled = true;
             SaveMatchingItem.IsEnabled = true;
-            FilterStatus.Text = capped
-                ? $"{matches.Count:N0} matching lines (capped)"
-                : $"{matches.Count:N0} matching lines";
+            FilterStatus.Text = LocalizedStrings.Format(
+                capped ? "FilterLineCountCapped" : "FilterLineCount", matches.Count);
             LblStatus.Text = StatusText.Filtered(matches.Count, activeProvider.LineCount);
             View.FocusCanvas();
         }
@@ -1832,9 +1834,8 @@ namespace FujiyNotepad.WinUI
                 package.SetText(text);
                 Clipboard.SetContent(package);
 
-                FilterStatus.Text = truncated
-                    ? $"Copied first {lineCount:N0} matching lines (capped)"
-                    : $"Copied {lineCount:N0} matching lines";
+                FilterStatus.Text = LocalizedStrings.Format(
+                    truncated ? "FilterCopiedLinesCapped" : "FilterCopiedLines", lineCount);
             }
             catch (Exception)
             {
@@ -1883,7 +1884,7 @@ namespace FujiyNotepad.WinUI
                     using var writer = new StreamWriter(path, append: false, new UTF8Encoding(false));
                     MatchingLinesExporter.Write(lines, writer);
                 });
-                FilterStatus.Text = $"Saved {lines.LineCount:N0} matching lines";
+                FilterStatus.Text = LocalizedStrings.Format("FilterSavedLines", lines.LineCount);
             }
             catch (Exception)
             {

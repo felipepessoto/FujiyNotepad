@@ -91,8 +91,8 @@
   <data name="GoToPercentItem.Text" xml:space="preserve"><value>Go To Percentage...</value></data>
   <data name="FindItem.Text" xml:space="preserve"><value>Find...</value></data>
   <data name="FilterItem.Text" xml:space="preserve"><value>Filter...</value></data>
-  <data name="CopyMatchingItem.Text" xml:space="preserve"><value>Copy Matching Lines</value></data>
-  <data name="SaveMatchingItem.Text" xml:space="preserve"><value>Save Matching Lines As...</value></data>
+  <data name="CopyMatchingItem.Text" xml:space="preserve"><value>Copy Filtered Lines</value></data>
+  <data name="SaveMatchingItem.Text" xml:space="preserve"><value>Save Filtered Lines As...</value></data>
   <data name="ClearSearchHistoryItem.Text" xml:space="preserve"><value>Clear Search History</value></data>
   <data name="ToggleBookmarkItem.Text" xml:space="preserve"><value>Toggle Bookmark</value></data>
   <data name="NextBookmarkItem.Text" xml:space="preserve"><value>Next Bookmark</value></data>
@@ -157,7 +157,7 @@
   <data name="FindCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Close</value></data>
 
   <!-- ===== Filter bar ===== -->
-  <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filter — show only lines that match</value></data>
+  <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filter — include or exclude matching lines</value></data>
   <data name="FilterSeverity.Content" xml:space="preserve"><value>Severity</value></data>
   <data name="FilterSeverity.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Filter by minimum severity</value></data>
   <data name="FilterSeverity.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Replace the filter with a severity preset and apply immediately</value></data>
@@ -173,10 +173,18 @@
   <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Match whole word</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Use regular expression</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Use regular expression</value></data>
+  <data name="FilterExclude.Content" xml:space="preserve"><value>Exclude</value></data>
+  <data name="FilterExclude.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Hide matching lines instead of keeping them</value></data>
+  <data name="FilterExclude.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Exclude matching lines</value></data>
   <data name="FilterApplyButton.Content" xml:space="preserve"><value>Apply</value></data>
-  <data name="FilterApplyButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Show only matching lines (Enter)</value></data>
+  <data name="FilterApplyButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Apply filter (Enter)</value></data>
   <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Clear filter and close</value></data>
   <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Clear filter and close (Esc)</value></data>
+  <data name="FilterLineCount" xml:space="preserve"><value>{0:N0} filtered lines</value></data>
+  <data name="FilterLineCountCapped" xml:space="preserve"><value>{0:N0} filtered lines (capped)</value></data>
+  <data name="FilterCopiedLines" xml:space="preserve"><value>Copied {0:N0} filtered lines</value></data>
+  <data name="FilterCopiedLinesCapped" xml:space="preserve"><value>Copied first {0:N0} filtered lines (capped)</value></data>
+  <data name="FilterSavedLines" xml:space="preserve"><value>Saved {0:N0} filtered lines</value></data>
 
   <!-- ===== Dialogs (read via LocalizedStrings) ===== -->
   <data name="DialogGo" xml:space="preserve"><value>Go</value></data>

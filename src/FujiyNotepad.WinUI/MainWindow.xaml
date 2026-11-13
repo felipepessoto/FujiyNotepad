@@ -88,8 +88,8 @@
                         <KeyboardAccelerator Modifiers="Control,Shift" Key="F" />
                     </MenuFlyoutItem.KeyboardAccelerators>
                 </MenuFlyoutItem>
-                <MenuFlyoutItem x:Uid="CopyMatchingItem" x:Name="CopyMatchingItem" Text="Copy Matching Lines" Click="CopyMatchingLines_Click" IsEnabled="False" />
-                <MenuFlyoutItem x:Uid="SaveMatchingItem" x:Name="SaveMatchingItem" Text="Save Matching Lines As..." Click="SaveMatchingLines_Click" IsEnabled="False" />
+                <MenuFlyoutItem x:Uid="CopyMatchingItem" x:Name="CopyMatchingItem" Text="Copy Filtered Lines" Click="CopyMatchingLines_Click" IsEnabled="False" />
+                <MenuFlyoutItem x:Uid="SaveMatchingItem" x:Name="SaveMatchingItem" Text="Save Filtered Lines As..." Click="SaveMatchingLines_Click" IsEnabled="False" />
                 <MenuFlyoutItem x:Uid="ClearSearchHistoryItem" Text="Clear Search History" Click="ClearSearchHistory_Click" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem x:Uid="ToggleBookmarkItem" Text="Toggle Bookmark" Click="ToggleBookmark_Click">
@@ -247,7 +247,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox x:Uid="FilterBox" x:Name="FilterBox" Grid.Column="0" PlaceholderText="Filter — show only lines that match"
+            <TextBox x:Uid="FilterBox" x:Name="FilterBox" Grid.Column="0" PlaceholderText="Filter — include or exclude matching lines"
                      VerticalAlignment="Center" KeyDown="FilterBox_KeyDown" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                 <DropDownButton x:Uid="FilterSeverity" Content="Severity" Margin="0,0,4,0"
@@ -280,9 +280,13 @@
                 <ToggleButton x:Uid="FilterRegex" x:Name="FilterRegex" Content=".*" Style="{StaticResource OptionToggleStyle}"
                               ToolTipService.ToolTip="Use regular expression"
                               AutomationProperties.Name="Use regular expression" />
+                <ToggleButton x:Uid="FilterExclude" x:Name="FilterExclude" Content="Exclude" Style="{StaticResource OptionToggleStyle}"
+                              ToolTipService.ToolTip="Hide matching lines instead of keeping them"
+                              AutomationProperties.AutomationId="FilterExclude"
+                              AutomationProperties.Name="Exclude matching lines" />
             </StackPanel>
             <Button x:Uid="FilterApplyButton" Grid.Column="2" Content="Apply" Click="FilterApply_Click" VerticalAlignment="Center"
-                    ToolTipService.ToolTip="Show only matching lines (Enter)" />
+                    ToolTipService.ToolTip="Apply filter (Enter)" />
             <TextBlock x:Name="FilterStatus" Grid.Column="3" VerticalAlignment="Center" Margin="8,0"
                        TextTrimming="CharacterEllipsis" />
             <Button x:Uid="FilterCloseButton" Grid.Column="4" Content="&#x2715;" VerticalAlignment="Center" Click="FilterClose_Click"

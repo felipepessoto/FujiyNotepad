@@ -254,7 +254,28 @@ try {
     $filtered = UiValue 'LblStatus'
     Assert ($filtered -match 'Filtered:\s*1\s+of\s+5') "Filter shows 1 of 5 matching lines" "LblStatus: '$filtered'"
 
-    # Severity presets replace the term and immediately reapply, including from an empty filtered view.
+    $excludeNameJson = Invoke-Ui -Arguments @('get-property', 'FilterExclude', '-w', "$hwnd", '--property', 'Name', '--json')
+    $excludeName = ($excludeNameJson | ConvertFrom-Json).properties.Name
+    Assert ($excludeName -eq 'Exclude matching lines') "Exclude toggle exposes its accessibility name" "Name: '$excludeName'"
+    UiInvoke 'FilterExclude'
+    Assert ((UiValue 'LblStatus') -match 'Filtered:\s*1\s+of\s+5') "Exclude waits for Apply like the other filter options"
+    UiInvoke 'Apply' 1200
+    Assert ((UiValue 'LblStatus') -match 'Filtered:\s*4\s+of\s+5') "Exclude hides the ERROR line and keeps the other four"
+    Assert ((UiValue 'TextCanvas') -match 'alpha first line') "Exclude displays a retained line, not the hidden match"
+    Assert ((UiValue 'FilterStatus') -match '4 filtered lines') "Filter status describes the kept rows"
+    UiInvoke 'FilterExclude'
+    UiInvoke 'Apply' 1200
+    Assert ((UiValue 'LblStatus') -match 'Filtered:\s*1\s+of\s+5') "Turning Exclude off restores inclusion"
+    UiInvoke 'FilterExclude'
+    Invoke-Ui -Arguments @('set-value', 'FilterBox', '', '-w', "$hwnd") | Out-Null
+    UiInvoke 'Apply' 1200
+    Assert ((UiValue 'LblStatus') -match '^5\s+lines') "An empty term clears an inverse filter back to the full file"
+    Assert (UiHas 'FilterExclude') "Applying an empty term leaves the filter bar open"
+    Invoke-Ui -Arguments @('set-value', 'FilterBox', 'ERROR', '-w', "$hwnd") | Out-Null
+    UiInvoke 'Apply' 1200
+    Assert ((UiValue 'LblStatus') -match 'Filtered:\s*4\s+of\s+5') "Clearing the term preserves the Exclude option"
+
+    # Severity presets reset Exclude and immediately reapply, including from an empty filtered view.
     UiInvoke 'FilterSeverity'
     UiInvoke 'SeverityFatal' 1200
     Assert ((UiValue 'LblStatus') -match 'Filtered:\s*0\s+of\s+5') "Fatal preset immediately filters out the ERROR line"
@@ -262,6 +283,14 @@ try {
     UiInvoke 'SeverityWarn' 1200
     Assert ((UiValue 'LblStatus') -match 'Filtered:\s*1\s+of\s+5') "Warn preset immediately restores the ERROR line"
     Assert ((UiValue 'FilterBox') -match 'WARN.*ERROR.*FATAL') "Severity preset exposes its editable regex"
+
+    UiInvoke 'FilterExclude'
+    UiInvoke 'Apply' 1200
+    Assert ((UiValue 'LblStatus') -match 'Filtered:\s*4\s+of\s+5') "Exclude also inverts the severity regex"
+    Invoke-Ui -Arguments @('set-value', 'FilterBox', '(', '-w', "$hwnd") | Out-Null
+    UiInvoke 'Apply' 1200
+    Assert ((UiValue 'FilterStatus') -eq 'Invalid regex') "An invalid inverse regex reports an error"
+    Assert ((UiValue 'LblStatus') -match 'Filtered:\s*4\s+of\s+5') "An invalid inverse regex preserves the previous result"
 
     # 12b) Clear Search History runs without crashing (sections 11-12 above populated the Find/Filter history).
     UiMenu 'Edit' 'Clear Search History'; Assert (-not $proc.HasExited) "Clear Search History did not crash"

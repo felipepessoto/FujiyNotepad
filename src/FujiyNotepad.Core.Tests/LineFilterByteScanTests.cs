@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using FujiyNotepad.Core;
@@ -15,6 +16,43 @@ namespace FujiyNotepad.Core.Tests
     /// </summary>
     public class LineFilterByteScanTests
     {
+        private sealed class SyncProgress : IProgress<int>
+        {
+            private readonly Action<int> report;
+            public SyncProgress(Action<int> report) => this.report = report;
+            public void Report(int value) => report(value);
+        }
+
+        private sealed class ObservedByteSource : IByteSource
+        {
+            private readonly IByteSource inner;
+            public ObservedByteSource(IByteSource inner) => this.inner = inner;
+            public Action? BeforeRead { get; set; }
+            public Action? BeforeLength { get; set; }
+            public int Reads { get; private set; }
+            public long Length
+            {
+                get
+                {
+                    BeforeLength?.Invoke();
+                    return inner.Length;
+                }
+            }
+            public long RefreshLength() => inner.RefreshLength();
+
+            public int Read(long offset, Span<byte> buffer)
+            {
+                Reads++;
+                BeforeRead?.Invoke();
+                return inner.Read(offset, buffer);
+            }
+
+            public ValueTask<int> ReadAsync(long offset, Memory<byte> buffer, CancellationToken token = default)
+                => ValueTask.FromResult(Read(offset, buffer.Span));
+
+            public void Dispose() => inner.Dispose();
+        }
+
         private static byte[] Ascii(string s) => System.Text.Encoding.ASCII.GetBytes(s);
 
         private static async Task<(TextSearcher searcher, LineIndexer indexer)> BuildAsync(string content)
@@ -26,37 +64,46 @@ namespace FujiyNotepad.Core.Tests
             return (searcher, indexer);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_ReturnsMatchingLineIndices()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_ReturnsMatchingLineIndicesOrTheirComplement(bool exclude)
         {
             var (searcher, indexer) = await BuildAsync("INFO start\nERROR boom\nINFO tick\nERROR again\ndone");
 
-            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default);
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
 
-            Assert.Equal(new[] { 1, 3 }, lines);
+            Assert.Equal(exclude ? new[] { 0, 2, 4 } : new[] { 1, 3 }, lines);
             Assert.False(capped);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_NoMatch_ReturnsEmpty()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_NoMatch_ReturnsEmptyOrAllLines(bool exclude)
         {
             var (searcher, indexer) = await BuildAsync("a\nb\nc");
 
-            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("zzz"), default);
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("zzz"), default, exclude: exclude);
 
-            Assert.Empty(lines);
+            Assert.Equal(exclude ? new[] { 0, 1, 2 } : Array.Empty<int>(), lines);
             Assert.False(capped);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_MultipleMatchesOnOneLine_CountTheLineOnce()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_MultipleMatchesOnOneLine_CountTheLineOnce(bool exclude)
         {
             // line 0 and line 2 each contain several 'x's; the dedupe must collapse each line to a single index.
             var (searcher, indexer) = await BuildAsync("x x x\ny\nxx");
 
-            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("x"), default);
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("x"), default, exclude: exclude);
 
-            Assert.Equal(new[] { 0, 2 }, lines);
+            Assert.Equal(exclude ? new[] { 1 } : new[] { 0, 2 }, lines);
         }
 
         [Fact]
@@ -70,25 +117,45 @@ namespace FujiyNotepad.Core.Tests
             Assert.True(capped);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_IgnoreCase_FoldsAsciiLetters()
+        [Theory]
+        [InlineData("x\nx\nx\nkeep\nx\nkeep\nkeep", new[] { 3, 5 })]
+        [InlineData("keep\nkeep\nkeep\nx", new[] { 0, 1 })]
+        [InlineData("keep\nkeep\nkeep", new[] { 0, 1 })]
+        public async Task MatchLinesByPattern_Exclude_CapsKeptLinesNotDiscardedMatches(string content, int[] expected)
+        {
+            var (searcher, indexer) = await BuildAsync(content);
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("x"), default, maxMatches: 2, exclude: true);
+
+            Assert.Equal(expected, lines);
+            Assert.True(capped);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_IgnoreCase_FoldsAsciiLetters(bool exclude)
         {
             var (searcher, indexer) = await BuildAsync("error one\nERROR two\nErRoR three\nok");
 
             var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
-                searcher, indexer, Ascii("error"), new SearchOptions { IgnoreCase = true });
+                searcher, indexer, Ascii("error"), new SearchOptions { IgnoreCase = true }, exclude: exclude);
 
-            Assert.Equal(new[] { 0, 1, 2 }, lines);
+            Assert.Equal(exclude ? new[] { 3 } : new[] { 0, 1, 2 }, lines);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_CaseSensitive_MatchesExactCaseOnly()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_CaseSensitive_MatchesExactCaseOnly(bool exclude)
         {
             var (searcher, indexer) = await BuildAsync("error one\nERROR two\nok");
 
-            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default);
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
 
-            Assert.Equal(new[] { 1 }, lines);
+            Assert.Equal(exclude ? new[] { 0, 2 } : new[] { 1 }, lines);
         }
 
         [Fact]
@@ -117,8 +184,10 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(expected, lines);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_FindsMatchBeyondPerLineDecodeCap()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_FindsMatchBeyondPerLineDecodeCap(bool exclude)
         {
             // A line longer than LineProvider's 64 KB per-line decode cap, with the term only past that cap. The
             // byte scanner has no per-line cap (like Find), so it still matches the line — unlike the old per-line
@@ -126,40 +195,432 @@ namespace FujiyNotepad.Core.Tests
             string longLine = new string('a', 70_000) + "NEEDLE";
             var (searcher, indexer) = await BuildAsync("short\n" + longLine + "\ntail");
 
-            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("NEEDLE"), default);
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("NEEDLE"), default, exclude: exclude);
 
-            Assert.Equal(new[] { 1 }, lines);
+            Assert.Equal(exclude ? new[] { 0, 2 } : new[] { 1 }, lines);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_WholeWord_MatchesBoundedTermOnly()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_WholeWord_MatchesBoundedTermOnly(bool exclude)
         {
             var (searcher, indexer) = await BuildAsync("error\nerrors\nan error here\nterror\nERROR caps\n(error)");
 
             var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
-                searcher, indexer, Ascii("error"), new SearchOptions { WholeWord = true });
+                searcher, indexer, Ascii("error"), new SearchOptions { WholeWord = true }, exclude: exclude);
 
             // "errors" (trailing 's') and "terror" (leading 't') are not whole-word matches; the caps line is
             // dropped by the case-sensitive default; "(error)" matches since '(' and ')' are word boundaries.
-            Assert.Equal(new[] { 0, 2, 5 }, lines);
+            Assert.Equal(exclude ? new[] { 1, 3, 4 } : new[] { 0, 2, 5 }, lines);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_WholeWord_IgnoreCase_FoldsButStillBounded()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_WholeWord_IgnoreCase_FoldsButStillBounded(bool exclude)
         {
             var (searcher, indexer) = await BuildAsync("error\nERROR\nerrors\nMyError");
 
             var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
-                searcher, indexer, Ascii("error"), new SearchOptions { WholeWord = true, IgnoreCase = true });
+                searcher, indexer, Ascii("error"), new SearchOptions { WholeWord = true, IgnoreCase = true }, exclude: exclude);
 
             // Case-folded so ERROR matches, but "errors" (trailing 's') and "MyError" (leading word char) don't.
-            Assert.Equal(new[] { 0, 1 }, lines);
+            Assert.Equal(exclude ? new[] { 2, 3 } : new[] { 0, 1 }, lines);
+        }
+
+        [Theory]
+        [InlineData("", 0)]
+        [InlineData("plain", 1)]
+        [InlineData("plain\n", 1)]
+        [InlineData("plain\r\n", 1)]
+        [InlineData("\n\n", 2)]
+        [InlineData("plain\n\ntail", 3)]
+        public async Task MatchLinesByPattern_Exclude_NoMatch_DoesNotInventTrailingRows(string content, int count)
+        {
+            var (searcher, indexer) = await BuildAsync(content);
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("absent"), default, exclude: true);
+
+            Assert.Equal(Enumerable.Range(0, count), lines);
+            Assert.False(capped);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_Exclude_AllLinesMatch_ReturnsEmpty()
+        {
+            var (searcher, indexer) = await BuildAsync("x\nx\nx");
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("x"), default, maxMatches: 1, exclude: true);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_Exclude_PreCancelled_DoesNotReturnTheWholeFile()
+        {
+            var (searcher, indexer) = await BuildAsync("keep\nERROR\nkeep");
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, token: cts.Token, exclude: true);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_Exclude_CancelledBetweenChunks_DoesNotComplementTheUnscannedTail()
+        {
+            using var source = new InMemoryByteSource("keep\nERROR\nkeep\nERROR\nkeep\n");
+            var searcher = new TextSearcher(source, chunkSize: 16);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            using var cts = new CancellationTokenSource();
+            var progress = new SyncProgress(p =>
+            {
+                if (p > 0)
+                {
+                    cts.Cancel();
+                }
+            });
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, progress: progress, token: cts.Token, exclude: true);
+
+            Assert.True(cts.IsCancellationRequested);
+            Assert.Equal(new[] { 0 }, lines);
+            Assert.False(capped);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_PreCancelled_DoesNotReadAnUncachedLongLine(bool exclude)
+        {
+            using var source = new ObservedByteSource(new InMemoryByteSource(new string('x', 8192) + "\n"));
+            var searcher = new TextSearcher(source, chunkSize: 64);
+            var indexer = new LineIndexer(searcher);
+            indexer.SetPartialIndexForTest(8193);
+            indexer.IsCompleted = true;
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("absent"), default, token: cts.Token, exclude: exclude);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
+            Assert.Equal(0, source.Reads);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_Exclude_CancelledDuringSnapshotLookup_StopsReading()
+        {
+            using var source = new ObservedByteSource(new InMemoryByteSource(new string('x', 8192) + "\n"));
+            var searcher = new TextSearcher(source, chunkSize: 64);
+            var indexer = new LineIndexer(searcher);
+            indexer.SetPartialIndexForTest(8193);
+            indexer.IsCompleted = true;
+            using var cts = new CancellationTokenSource();
+            source.BeforeRead = () =>
+            {
+                if (source.Reads == 3)
+                {
+                    cts.Cancel();
+                }
+            };
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("absent"), default, token: cts.Token, exclude: true);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
+            Assert.Equal(3, source.Reads);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_CancelledDuringRead_DoesNotCollectBufferedMatches(bool exclude)
+        {
+            using var source = new ObservedByteSource(new InMemoryByteSource("keep\nx\nkeep\nx\n"));
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            indexer.SetPartialIndexForTest(5, 7, 12, 14);
+            indexer.IsCompleted = true;
+            Assert.Equal(3, indexer.GetLineNumberFromOffset(source.Length - 1));
+            int readsBeforeScan = source.Reads;
+            using var cts = new CancellationTokenSource();
+            source.BeforeRead = cts.Cancel;
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("x"), default, token: cts.Token, exclude: exclude);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
+            Assert.Equal(readsBeforeScan + 1, source.Reads);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(5)]
+        public async Task MatchLinesByPattern_Exclude_TruncatedSnapshot_ThrowsInsteadOfReturningOldRows(int remainingBytes)
+        {
+            using var source = new GrowableByteSource("keep\nERROR\nother\n");
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            var progress = new SyncProgress(p =>
+            {
+                if (p == 0)
+                {
+                    source.Truncate(remainingBytes);
+                }
+            });
+
+            await Assert.ThrowsAsync<EndOfStreamException>(() =>
+                LineFilter.MatchLinesByPatternAsync(
+                    searcher, indexer, Ascii("ERROR"), default, progress: progress, exclude: true));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_TruncatedBetweenChunks_DoesNotComplementTheUnscannedTail(bool exclude)
+        {
+            using var source = new GrowableByteSource("keep\nERROR\nkeep\nERROR\nkeep\n");
+            var searcher = new TextSearcher(source, chunkSize: 16);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            var progress = new SyncProgress(p =>
+            {
+                if (p > 0)
+                {
+                    source.Truncate(16);
+                }
+            });
+
+            var scan = LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, progress: progress, exclude: exclude);
+
+            if (exclude)
+            {
+                await Assert.ThrowsAsync<EndOfStreamException>(() => scan);
+            }
+            else
+            {
+                var (lines, capped) = await scan;
+                Assert.Equal(new[] { 1 }, lines);
+                Assert.False(capped);
+            }
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_Exclude_LengthShrinksDuringSnapshotLookup_Throws()
+        {
+            var data = new GrowableByteSource("keep\nERROR\nother\n");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            source.BeforeRead = () =>
+            {
+                source.BeforeRead = null;
+                data.Truncate(5);
+                data.RefreshLength();
+            };
+
+            await Assert.ThrowsAsync<EndOfStreamException>(() =>
+                LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default, exclude: true));
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task MatchLinesByPattern_LengthRefreshDuringCapture_DoesNotIncludeUnindexedRows(
+            bool exclude, bool rearmDuringRefresh)
+        {
+            var data = new GrowableByteSource("keep\nERROR\n");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            source.BeforeLength = () =>
+            {
+                source.BeforeLength = null;
+                data.Append("unindexed\n");
+                data.RefreshLength();
+                if (rearmDuringRefresh)
+                {
+                    indexer.IsCompleted = false;
+                }
+            };
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii(exclude ? "ERROR" : "unindexed"), default, exclude: exclude);
+
+            Assert.Equal(exclude ? new[] { 0 } : Array.Empty<int>(), lines);
+            Assert.False(capped);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_LengthRefreshBeforeRearm_PreservesTheCompletedUnterminatedSnapshot(bool exclude)
+        {
+            var data = new GrowableByteSource("keep\nERR");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            source.BeforeLength = () =>
+            {
+                source.BeforeLength = null;
+                data.Append("OR");
+                data.RefreshLength();
+            };
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
+
+            Assert.Equal(exclude ? new[] { 0, 1 } : Array.Empty<int>(), lines);
+            Assert.False(capped);
+        }
+
+        [Theory]
+        [InlineData(8, new[] { 0 })]
+        [InlineData(16, new[] { 0, 1 })]
+        public async Task MatchLinesByPattern_IndexCompletion_CoversOnlyBytesActuallyScanned(int chunkSize, int[] expected)
+        {
+            using var source = new GrowableByteSource("keep\nERR");
+            var searcher = new TextSearcher(source, chunkSize);
+            var indexer = new LineIndexer(searcher);
+            bool grew = false;
+            var progress = new SyncProgress(p =>
+            {
+                if (p == 100 && !grew)
+                {
+                    grew = true;
+                    source.Append("OR");
+                    source.RefreshLength();
+                }
+            });
+            await indexer.StartTaskToIndexLines(CancellationToken.None, progress);
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: true);
+
+            Assert.True(grew);
+            Assert.Equal(expected, lines);
+            Assert.False(capped);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_IndexSourceShrinks_CoversOnlyTheReadPrefix()
+        {
+            var data = new GrowableByteSource("keep\nERROR\n");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            source.BeforeRead = () =>
+            {
+                source.BeforeRead = null;
+                data.Truncate(5);
+            };
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: true);
+
+            Assert.Equal(new[] { 0 }, lines);
+            Assert.False(capped);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_FollowTailCompletesTermDuringLookup_KeepsTheOriginalSnapshot(bool exclude)
+        {
+            var data = new GrowableByteSource("keep\nERR");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            source.BeforeRead = () =>
+            {
+                source.BeforeRead = null;
+                data.Append("OR");
+                data.RefreshLength();
+            };
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
+
+            Assert.Equal(exclude ? new[] { 0, 1 } : Array.Empty<int>(), lines);
+            Assert.False(capped);
+
+            indexer.IsCompleted = false;
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            var (updated, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
+            Assert.Equal(exclude ? new[] { 0 } : new[] { 1 }, updated);
+        }
+
+        [Theory]
+        [MemberData(nameof(MultiByteEncodingTests.AllEncodings), MemberType = typeof(MultiByteEncodingTests))]
+        public async Task MatchLinesByPattern_FollowTailExtendsWholeWordDuringLookup_KeepsTheSnapshotBoundary(TextEncoding encoding)
+        {
+            foreach (bool exclude in new[] { false, true })
+            {
+                var data = new GrowableByteSource();
+                data.Append(encoding.Bom);
+                data.Append(encoding.Encode("keep\nERROR"));
+                data.RefreshLength();
+                using var source = new ObservedByteSource(data);
+                var searcher = new TextSearcher(source);
+                var indexer = new LineIndexer(searcher, encoding);
+                await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+                source.BeforeRead = () =>
+                {
+                    source.BeforeRead = null;
+                    data.Append(encoding.Encode("S"));
+                    data.RefreshLength();
+                };
+                var options = new SearchOptions
+                {
+                    WholeWord = true,
+                    UnitAlignment = encoding.CodeUnitSize,
+                    BigEndian = encoding.IsBigEndian,
+                };
+
+                var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                    searcher, indexer, encoding.Encode("ERROR"), options, exclude: exclude);
+
+                Assert.Equal(exclude ? new[] { 0 } : new[] { 1 }, lines);
+                Assert.False(capped);
+
+                indexer.IsCompleted = false;
+                await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+                var (updated, _) = await LineFilter.MatchLinesByPatternAsync(
+                    searcher, indexer, encoding.Encode("ERROR"), options, exclude: exclude);
+                Assert.Equal(exclude ? new[] { 0, 1 } : Array.Empty<int>(), updated);
+            }
         }
 
         // ----- The scan must not map offsets the index does not cover (issue #169) -----
 
-        [Fact]
-        public async Task MatchLinesByPattern_FileGrewAfterIndexing_DoesNotEmitClampedLines()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_FileGrewAfterIndexing_DoesNotEmitClampedLines(bool exclude)
         {
             // "ERROR one\nplain two\nERROR three\n" = 32 bytes; line starts 0, 10, 20, 32; "ERROR" at 0 and 20.
             var source = new GrowableByteSource("ERROR one\nplain two\nERROR three\n");
@@ -173,28 +634,34 @@ namespace FujiyNotepad.Core.Tests
             // so it will still find these matches.
             source.Append("ERROR four\nERROR five\n");
 
-            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default);
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
 
             // Only the two indexed matches. The appended ones used to clamp onto line 3 — a row that does not
             // contain the term and that is past the provider's line count (the file has 3 lines, 0..2).
-            Assert.Equal(new[] { 0, 2 }, lines);
+            Assert.Equal(exclude ? new[] { 1 } : new[] { 0, 2 }, lines);
             Assert.DoesNotContain(3, lines);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_MatchOnTheFinalUnterminatedLine_IsStillReturned()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_MatchOnTheFinalUnterminatedLine_IsStillReturned(bool exclude)
         {
             // The bound must not cut off legitimate matches on the last line: the file ends without a newline,
             // so the final line's match sits between the last line start and the captured length.
             var (searcher, indexer) = await BuildAsync("plain one\nERROR last");
 
-            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default);
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
 
-            Assert.Equal(new[] { 1 }, lines);
+            Assert.Equal(exclude ? new[] { 0 } : new[] { 1 }, lines);
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_IndexNotComplete_StopsAtTheFrontierInsteadOfClamping()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_IndexNotComplete_StopsAtTheFrontierInsteadOfClamping(bool exclude)
         {
             // If the index is still building (the caller's IsCompleted check can lose a race with the Follow
             // Tail re-arm), the scan is bounded by the frontier rather than clamping everything past it.
@@ -206,13 +673,16 @@ namespace FujiyNotepad.Core.Tests
             indexer.SetPartialIndexForTest(8, 16);
             Assert.False(indexer.IsCompleted);
 
-            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default);
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
 
-            Assert.Equal(new[] { 0 }, lines); // only the match below the frontier; nothing clamped onto line 2
+            Assert.Equal(exclude ? new[] { 1 } : new[] { 0 }, lines); // nothing clamped onto line 2
         }
 
-        [Fact]
-        public async Task MatchLinesByPattern_IndexRanAheadOfTheCachedLength_OmitsRatherThanMisattributes()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_IndexRanAheadOfTheCachedLength_OmitsRatherThanMisattributes(bool exclude)
         {
             // Documents a deliberate conservative edge. Indexing reads to the LIVE end of file, but the source's
             // cached length only moves on an explicit RefreshLength — which the app issues only while Follow Tail
@@ -232,9 +702,51 @@ namespace FujiyNotepad.Core.Tests
             Assert.True(indexer.IsCompleted);
             Assert.Equal(4, indexer.GetNumberOfLinesIndexed()); // the index DID see both lines (starts 0, 10, 20)
 
-            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default);
+            var (lines, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
 
-            Assert.Equal(new[] { 0 }, lines); // line 1 is indexed, but sits past the cached length
+            Assert.Equal(exclude ? Array.Empty<int>() : new[] { 0 }, lines); // line 1 sits past the cached length
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_FollowTailRearmsDuringScan_KeepsTheOriginalSnapshot(bool exclude)
+        {
+            using var source = new GrowableByteSource("keep\nERROR\n");
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            var progress = new SyncProgress(p =>
+            {
+                if (p == 0)
+                {
+                    source.Append("new keep\nERROR\n");
+                    source.RefreshLength();
+                    indexer.SetPartialIndexForTest(5, 11, 20, 26);
+                }
+            });
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, progress: progress, exclude: exclude);
+
+            Assert.Equal(exclude ? new[] { 0 } : new[] { 1 }, lines);
+            Assert.False(capped);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_Exclude_NoCompletedLines_ReturnsEmpty()
+        {
+            using var source = new InMemoryByteSource("keep\nERROR\n");
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            indexer.SetPartialIndexForTest();
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: true);
+
+            Assert.Empty(lines);
+            Assert.False(capped);
         }
     }
 }
