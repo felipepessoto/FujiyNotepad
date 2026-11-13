@@ -177,9 +177,12 @@ namespace FujiyNotepad.Core
         /// the new end of the file; that resolves to empty text rather than failing, and is corrected when the
         /// shrink is noticed and the file reloaded. Detecting it here is not possible without re-reading — the
         /// source's cached length is itself stale until something calls <c>RefreshLength</c>.</para>
+        /// <para><paramref name="requireExact"/> opts out of that rendering fallback for strict filter reads:
+        /// a missing line start throws <see cref="EndOfStreamException"/> instead of clamping.</para>
         /// </summary>
-        public long GetOffsetFromLineNumber(int lineNumber)
+        public long GetOffsetFromLineNumber(int lineNumber, CancellationToken token = default, bool requireExact = false)
         {
+            token.ThrowIfCancellationRequested();
             int block;
             long checkpointOffset;
             int knownInBlock;
@@ -202,7 +205,7 @@ namespace FujiyNotepad.Core
                 knownInBlock = (int)Math.Min(CheckpointInterval, (long)lineStartCount - (long)block * CheckpointInterval);
             }
 
-            long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock);
+            long[] starts = GetBlockStarts(block, checkpointOffset, knownInBlock, token);
             int local = (lineNumber - 1) - block * CheckpointInterval;
 
             // ExpandBlock returns a SHORT array when the source shrank since it was indexed (log rotation /
@@ -212,6 +215,10 @@ namespace FujiyNotepad.Core
             // the clamping contract GetLineNumberFromOffset already documents. starts is never empty.
             if (local >= starts.Length)
             {
+                if (requireExact)
+                {
+                    throw new EndOfStreamException("The indexed line boundary is no longer available.");
+                }
                 local = starts.Length - 1;
             }
 

@@ -17,6 +17,8 @@ namespace FujiyNotepad.Core
         /// <c>[0, LineCount)</c> and stopping once <paramref name="maxMatches"/> lines are kept
         /// (then <paramref name="capped"/> is true) or the
         /// <paramref name="token"/> is cancelled (which throws <see cref="OperationCanceledException"/>).
+        /// Exclusion uses <see cref="ILineSource.GetLineForFilter"/> so an unread file row cannot be
+        /// classified as a nonmatch. An incomplete read aborts the scan rather than returning a partial result.
         /// </summary>
         public static List<int> Match(
             ILineSource source,
@@ -51,7 +53,8 @@ namespace FujiyNotepad.Core
                     }
                 }
 
-                if (predicate(source.GetLineUncached(i)) != exclude)
+                string text = exclude ? source.GetLineForFilter(i, token) : source.GetLineUncached(i);
+                if (predicate(text) != exclude)
                 {
                     result.Add(i);
                     if (result.Count >= maxMatches)

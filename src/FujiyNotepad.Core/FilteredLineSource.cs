@@ -26,6 +26,10 @@ namespace FujiyNotepad.Core
         /// <summary>Decoded text of the <paramref name="index"/>-th matching line without caching it (bulk export).</summary>
         public string GetLineUncached(int index) => source.GetLineUncached(sourceLines[index]);
 
+        /// <summary>Confirmed filter input from the original source row.</summary>
+        public string GetLineForFilter(int index, CancellationToken token = default) =>
+            source.GetLineForFilter(sourceLines[index], token);
+
         /// <summary>The 0-based source line that filtered row <paramref name="index"/> maps to.</summary>
         public int SourceLineAt(int index) => sourceLines[index];
 

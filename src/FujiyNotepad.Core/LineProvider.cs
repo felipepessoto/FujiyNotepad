@@ -171,13 +171,20 @@ namespace FujiyNotepad.Core
             return ReadLine(lineIndex);
         }
 
-        private (long start, long end) GetByteRange(int lineIndex)
+        /// <summary>
+        /// Reads confirmed filter input without using or modifying the viewport cache. Keeps the display cap,
+        /// but rejects missing line boundaries or bytes instead of returning partial text after truncation.
+        /// </summary>
+        public string GetLineForFilter(int lineIndex, CancellationToken token = default) =>
+            ReadLine(lineIndex, requireCompleteRead: true, token);
+
+        private (long start, long end) GetByteRange(int lineIndex, bool requireExact = false, CancellationToken token = default)
         {
             // 0-based display line i starts at index entry [i+1]; it ends at entry [i+2] when that next
             // start is known, otherwise at end of file.
-            long start = indexer.GetOffsetFromLineNumber(lineIndex + 1);
+            long start = indexer.GetOffsetFromLineNumber(lineIndex + 1, token, requireExact);
             long end = (lineIndex + 2 < indexer.GetNumberOfLinesIndexed())
-                ? indexer.GetOffsetFromLineNumber(lineIndex + 2)
+                ? indexer.GetOffsetFromLineNumber(lineIndex + 2, token, requireExact)
                 : fileSize;
             return (start, end);
         }
@@ -225,9 +232,9 @@ namespace FujiyNotepad.Core
             return LineEnding.Lf;
         }
 
-        private string ReadLine(int lineIndex)
+        private string ReadLine(int lineIndex, bool requireCompleteRead = false, CancellationToken token = default)
         {
-            (long start, long end) = GetByteRange(lineIndex);
+            (long start, long end) = GetByteRange(lineIndex, requireCompleteRead, token);
 
             long length = end - start;
             bool truncated = false;
@@ -239,11 +246,31 @@ namespace FujiyNotepad.Core
 
             if (length <= 0)
             {
+                if (requireCompleteRead)
+                {
+                    throw new EndOfStreamException("The indexed line is no longer available.");
+                }
                 return string.Empty;
             }
 
             byte[] buffer = new byte[length];
             int read = source.ReadFull(start, buffer);
+            token.ThrowIfCancellationRequested();
+            if (requireCompleteRead && read != length)
+            {
+                throw new EndOfStreamException("The source ended before the indexed line was fully read.");
+            }
+            if (requireCompleteRead && truncated)
+            {
+                // Validate the elided tail without decoding it or allocating beyond the display cap.
+                Span<byte> lastByte = stackalloc byte[1];
+                int tailRead = source.Read(end - 1, lastByte);
+                token.ThrowIfCancellationRequested();
+                if (tailRead != 1)
+                {
+                    throw new EndOfStreamException("The source ended before the indexed line's tail.");
+                }
+            }
 
             int textLen = read;
             if (!truncated)
