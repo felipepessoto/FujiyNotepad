@@ -81,8 +81,8 @@
   <data name="GoToPercentItem.Text" xml:space="preserve"><value>Ir Para Porcentagem...</value></data>
   <data name="FindItem.Text" xml:space="preserve"><value>Localizar...</value></data>
   <data name="FilterItem.Text" xml:space="preserve"><value>Filtrar...</value></data>
-  <data name="CopyMatchingItem.Text" xml:space="preserve"><value>Copiar Linhas Correspondentes</value></data>
-  <data name="SaveMatchingItem.Text" xml:space="preserve"><value>Salvar Linhas Correspondentes Como...</value></data>
+  <data name="CopyMatchingItem.Text" xml:space="preserve"><value>Copiar Linhas Filtradas</value></data>
+  <data name="SaveMatchingItem.Text" xml:space="preserve"><value>Salvar Linhas Filtradas Como...</value></data>
   <data name="ClearSearchHistoryItem.Text" xml:space="preserve"><value>Limpar Histórico de Pesquisa</value></data>
   <data name="ToggleBookmarkItem.Text" xml:space="preserve"><value>Alternar Marcador</value></data>
   <data name="NextBookmarkItem.Text" xml:space="preserve"><value>Próximo Marcador</value></data>
@@ -146,13 +146,16 @@
   <data name="FindCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Fechar</value></data>
 
   <!-- ===== Filter bar ===== -->
-  <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filtrar — mostrar apenas linhas correspondentes</value></data>
+  <data name="FilterBox.PlaceholderText" xml:space="preserve"><value>Filtrar — incluir ou excluir linhas correspondentes</value></data>
   <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Diferenciar maiúsculas/minúsculas</value></data>
   <data name="FilterMatchCase.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Diferenciar maiúsculas/minúsculas</value></data>
   <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Coincidir palavra inteira</value></data>
   <data name="FilterWholeWord.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Coincidir palavra inteira</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Usar expressão regular</value></data>
   <data name="FilterRegex.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Usar expressão regular</value></data>
+  <data name="FilterExclude.Content" xml:space="preserve"><value>Excluir</value></data>
+  <data name="FilterExclude.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Ocultar linhas correspondentes em vez de mantê-las</value></data>
+  <data name="FilterExclude.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Excluir linhas correspondentes</value></data>
   <data name="FilterSeverity.Content" xml:space="preserve"><value>Severidade</value></data>
   <data name="FilterSeverity.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Filtrar por severidade mínima</value></data>
   <data name="FilterSeverity.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Substituir o filtro por uma predefinição de severidade e aplicar imediatamente</value></data>
@@ -163,9 +166,14 @@
   <data name="SeverityError.Text" xml:space="preserve"><value>Error+</value></data>
   <data name="SeverityFatal.Text" xml:space="preserve"><value>Fatal / Crítico</value></data>
   <data name="FilterApplyButton.Content" xml:space="preserve"><value>Aplicar</value></data>
-  <data name="FilterApplyButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Mostrar apenas linhas correspondentes (Enter)</value></data>
+  <data name="FilterApplyButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Aplicar filtro (Enter)</value></data>
   <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve"><value>Limpar filtro e fechar</value></data>
   <data name="FilterCloseButton.[using:Microsoft.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve"><value>Limpar filtro e fechar (Esc)</value></data>
+  <data name="FilterLineCount" xml:space="preserve"><value>{0:N0} linhas filtradas</value></data>
+  <data name="FilterLineCountCapped" xml:space="preserve"><value>{0:N0} linhas filtradas (limite atingido)</value></data>
+  <data name="FilterCopiedLines" xml:space="preserve"><value>{0:N0} linhas filtradas copiadas</value></data>
+  <data name="FilterCopiedLinesCapped" xml:space="preserve"><value>Primeiras {0:N0} linhas filtradas copiadas (limite atingido)</value></data>
+  <data name="FilterSavedLines" xml:space="preserve"><value>{0:N0} linhas filtradas salvas</value></data>
 
   <!-- ===== Dialogs ===== -->
   <data name="DialogGo" xml:space="preserve"><value>Ir</value></data>

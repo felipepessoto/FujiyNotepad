@@ -30,6 +30,30 @@ namespace FujiyNotepad.Core.Tests
         }
 
         [Fact]
+        public void Match_Exclude_ReturnsTheComplement()
+        {
+            var src = new FakeLines("INFO start", "ERROR boom", "INFO tick", "ERROR again", "done");
+
+            List<int> hits = LineFilter.Match(src, l => Contains(l, "ERROR"), out bool capped, exclude: true);
+
+            Assert.Equal(new[] { 0, 2, 4 }, hits);
+            Assert.False(capped);
+        }
+
+        [Theory]
+        [InlineData("x", 0)]
+        [InlineData("absent", 3)]
+        public void Match_Exclude_AllOrNoMatches(string term, int expectedCount)
+        {
+            var src = new FakeLines("x", "x", "x");
+
+            List<int> hits = LineFilter.Match(src, l => Contains(l, term), out bool capped, exclude: true);
+
+            Assert.Equal(Enumerable.Range(0, expectedCount), hits);
+            Assert.False(capped);
+        }
+
+        [Fact]
         public void Match_CapsAtMaxMatchesAndReportsCapped()
         {
             var src = new FakeLines("x", "x", "x", "x", "x");
@@ -41,14 +65,27 @@ namespace FujiyNotepad.Core.Tests
         }
 
         [Fact]
-        public void Match_PreCancelledToken_Throws()
+        public void Match_Exclude_CapsKeptLinesNotDiscardedMatches()
+        {
+            var src = new FakeLines("x", "x", "x", "keep", "x", "keep", "keep");
+
+            List<int> hits = LineFilter.Match(src, l => Contains(l, "x"), out bool capped, maxMatches: 2, exclude: true);
+
+            Assert.Equal(new[] { 3, 5 }, hits);
+            Assert.True(capped);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Match_PreCancelledToken_Throws(bool exclude)
         {
             var src = new FakeLines("a", "b");
             using var cts = new CancellationTokenSource();
             cts.Cancel();
 
             Assert.ThrowsAny<OperationCanceledException>(
-                () => LineFilter.Match(src, _ => true, out _, token: cts.Token));
+                () => LineFilter.Match(src, _ => true, out _, token: cts.Token, exclude: exclude));
         }
 
         [Fact]

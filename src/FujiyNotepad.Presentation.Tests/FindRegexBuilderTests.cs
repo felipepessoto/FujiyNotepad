@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using FujiyNotepad.Core;
+using FujiyNotepad.TestSupport;
 
 namespace FujiyNotepad.Presentation.Tests
 {
@@ -49,6 +51,31 @@ namespace FujiyNotepad.Presentation.Tests
         public void InvalidPattern_Throws()
         {
             Assert.Throws<RegexParseException>(() => FindRegexBuilder.Build("(unclosed", matchCase: true, wholeWord: false));
+        }
+
+        [Theory]
+        [InlineData(true, false, new[] { 0, 2, 3, 4 }, new[] { 1, 5 })]
+        [InlineData(false, false, new[] { 0, 1, 2, 3, 4 }, new[] { 5 })]
+        [InlineData(true, true, new[] { 0, 4 }, new[] { 1, 2, 3, 5 })]
+        [InlineData(false, true, new[] { 0, 1, 4 }, new[] { 2, 3, 5 })]
+        public void Filter_RegexOptions_IncludeAndExcludeComplementEachOther(
+            bool matchCase, bool wholeWord, int[] included, int[] excluded)
+        {
+            var source = new FakeLines("cat", "DOG", "category", "dogma", "(cat)", "plain");
+            Regex regex = FindRegexBuilder.Build("cat|dog", matchCase, wholeWord);
+
+            Assert.Equal(included, LineFilter.Match(source, line => regex.IsMatch(line), out _));
+            Assert.Equal(excluded, LineFilter.Match(source, line => regex.IsMatch(line), out _, exclude: true));
+        }
+
+        [Fact]
+        public void Filter_Exclude_LiteralWholeWord_DoesNotInterpretMetacharacters()
+        {
+            var source = new FakeLines("a.c", "A.C", "abc", "xa.c", "(a.c)", "plain");
+            Regex regex = FindRegexBuilder.BuildLiteralWholeWord("a.c", matchCase: false);
+
+            Assert.Equal(new[] { 2, 3, 5 },
+                LineFilter.Match(source, line => regex.IsMatch(line), out _, exclude: true));
         }
 
         [Fact]
