@@ -49,14 +49,17 @@ namespace FujiyNotepad.Core
         /// <paramref name="endOffsetExclusive"/> bounds the scan: no match starting at or after it is yielded,
         /// and — more importantly — the read loop stops there instead of following a file that is still being
         /// appended to. Reads extend just far enough past the bound to complete a match that <em>starts</em>
-        /// before it, but never past the source length captured when the scan began, so a bounded scan can only
+        /// before it, but never past the captured source length, so a bounded scan can only
         /// ever report matches that existed in that snapshot.
+        /// An explicit <paramref name="snapshotLength"/> supplies an earlier captured length as a hard ceiling
+        /// for both scan reads and whole-word lookarounds, independently of the match-start bound.
         /// When <paramref name="requireCompleteRead"/> is set, a source shorter than the captured bound (or
-        /// cached length for an unbounded scan) throws <see cref="EndOfStreamException"/> instead of ending
+        /// captured length for an unbounded scan) throws <see cref="EndOfStreamException"/> instead of ending
         /// normally. This lets callers distinguish a complete scan from a file truncated underneath it.
         /// </summary>
-        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, SearchOptions options, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default, long endOffsetExclusive = long.MaxValue, bool requireCompleteRead = false)
+        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, SearchOptions options, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default, long endOffsetExclusive = long.MaxValue, bool requireCompleteRead = false, long? snapshotLength = null)
         {
+            ArgumentOutOfRangeException.ThrowIfNegative(snapshotLength ?? 0, nameof(snapshotLength));
             if (pattern.Length == 0)
             {
                 yield break;
@@ -64,7 +67,7 @@ namespace FujiyNotepad.Core
 
             byte[]? foldedPattern = options.IgnoreCase ? Fold(pattern) : null;
 
-            long length = source.Length;
+            long length = snapshotLength ?? source.Length;
             if (requireCompleteRead && endOffsetExclusive != long.MaxValue && length < endOffsetExclusive)
             {
                 if (token.IsCancellationRequested)
@@ -90,10 +93,9 @@ namespace FujiyNotepad.Core
             // snapshot at all (a pattern prefix at the old end of file, its suffix appended afterwards), which
             // would then be yielded because the match START is inside the bound.
             //
-            // Unbounded (the default) deliberately stays long.MaxValue so the loop still runs to the LIVE end
-            // of file: the cached length goes stale as a file is appended to, and indexing depends on reading
-            // past it. The comparison also keeps the addition below from overflowing.
-            long readLimit = long.MaxValue;
+            // Without a bound or explicit snapshot, keep reading to the LIVE end of file: indexing depends on
+            // reading past a stale cached length. The comparison also keeps the addition below from overflowing.
+            long readLimit = snapshotLength ?? long.MaxValue;
             if (endOffsetExclusive < long.MaxValue - overlap)
             {
                 readLimit = Math.Min(length, endOffsetExclusive + overlap);
@@ -171,7 +173,8 @@ namespace FujiyNotepad.Core
                     bool aligned = options.UnitAlignment <= 1 || matchOffset % options.UnitAlignment == 0;
                     if (matchOffset >= nextAllowedStart
                         && aligned
-                        && (!options.WholeWord || IsWholeWordMatch(buffer, available, bufferBase, matchAt, pattern.Length, options.UnitAlignment, options.BigEndian)))
+                        && (!options.WholeWord || IsWholeWordMatch(
+                            buffer, available, bufferBase, matchAt, pattern.Length, options.UnitAlignment, options.BigEndian, snapshotLength)))
                     {
                         yield return matchOffset;
                         nextAllowedStart = matchOffset + pattern.Length;
@@ -575,17 +578,17 @@ namespace FujiyNotepad.Core
             => value >= 0 && ((value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') || value == '_');
 
         // A match is "whole word" when the code units immediately before and after it are non-word characters
-        // or the file edge. For a multi-byte encoding the neighbour is a whole code unit (unitAlignment bytes
+        // or the file/snapshot edge. For a multi-byte encoding the neighbour is a whole code unit (unitAlignment bytes
         // combined per endianness), NOT a single byte — otherwise the zero high byte of an adjacent ASCII
         // UTF-16/UTF-32 character looks like a boundary and a match inside a word is wrongly accepted. The
         // neighbour bytes come from the buffer when present, else from a source read (only at a buffer edge),
         // so the check stays correct across chunk boundaries.
-        private bool IsWholeWordMatch(byte[] buffer, int available, long bufferBase, int matchAt, int patLen, int unitAlignment, bool bigEndian)
+        private bool IsWholeWordMatch(byte[] buffer, int available, long bufferBase, int matchAt, int patLen, int unitAlignment, bool bigEndian, long? snapshotLength = null)
         {
             int unit = unitAlignment > 1 ? unitAlignment : 1;
             long matchStart = bufferBase + matchAt;
-            int left = ReadUnitValue(buffer, available, bufferBase, matchStart - unit, unit, bigEndian);
-            int right = ReadUnitValue(buffer, available, bufferBase, matchStart + patLen, unit, bigEndian);
+            int left = ReadUnitValue(buffer, available, bufferBase, matchStart - unit, unit, bigEndian, snapshotLength);
+            int right = ReadUnitValue(buffer, available, bufferBase, matchStart + patLen, unit, bigEndian, snapshotLength);
             return !IsWordCodeUnit(left) && !IsWordCodeUnit(right);
         }
 
@@ -593,9 +596,9 @@ namespace FujiyNotepad.Core
         // combining its bytes into the unit's integer value per <paramref name="bigEndian"/>, or returns -1 when
         // the unit falls outside the file (a word boundary). Each byte is taken from the in-memory buffer when it
         // lies inside it, else from a direct source read, so a unit straddling a chunk edge is still read right.
-        private int ReadUnitValue(byte[] buffer, int available, long bufferBase, long unitOffset, int unitSize, bool bigEndian)
+        private int ReadUnitValue(byte[] buffer, int available, long bufferBase, long unitOffset, int unitSize, bool bigEndian, long? snapshotLength)
         {
-            if (unitOffset < 0 || unitOffset + unitSize > source.Length)
+            if (unitOffset < 0 || unitOffset + unitSize > (snapshotLength ?? source.Length))
             {
                 return -1;
             }
@@ -604,7 +607,7 @@ namespace FujiyNotepad.Core
             {
                 long abs = unitOffset + k;
                 long rel = abs - bufferBase;
-                int b = (rel >= 0 && rel < available) ? buffer[(int)rel] : ReadByteAt(abs);
+                int b = (rel >= 0 && rel < available) ? buffer[(int)rel] : ReadByteAt(abs, snapshotLength);
                 if (b < 0)
                 {
                     return -1;
@@ -615,9 +618,9 @@ namespace FujiyNotepad.Core
             return value;
         }
 
-        private int ReadByteAt(long offset)
+        private int ReadByteAt(long offset, long? snapshotLength)
         {
-            if (offset < 0 || offset >= source.Length)
+            if (offset < 0 || offset >= (snapshotLength ?? source.Length))
             {
                 return -1;
             }

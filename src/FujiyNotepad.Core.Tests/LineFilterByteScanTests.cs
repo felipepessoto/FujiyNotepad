@@ -432,6 +432,73 @@ namespace FujiyNotepad.Core.Tests
                 LineFilter.MatchLinesByPatternAsync(searcher, indexer, Ascii("ERROR"), default, exclude: true));
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_FollowTailCompletesTermDuringLookup_KeepsTheOriginalSnapshot(bool exclude)
+        {
+            var data = new GrowableByteSource("keep\nERR");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            source.BeforeRead = () =>
+            {
+                source.BeforeRead = null;
+                data.Append("OR");
+                data.RefreshLength();
+            };
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
+
+            Assert.Equal(exclude ? new[] { 0, 1 } : Array.Empty<int>(), lines);
+            Assert.False(capped);
+
+            var (updated, _) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
+            Assert.Equal(exclude ? new[] { 0 } : new[] { 1 }, updated);
+        }
+
+        [Theory]
+        [MemberData(nameof(MultiByteEncodingTests.AllEncodings), MemberType = typeof(MultiByteEncodingTests))]
+        public async Task MatchLinesByPattern_FollowTailExtendsWholeWordDuringLookup_KeepsTheSnapshotBoundary(TextEncoding encoding)
+        {
+            foreach (bool exclude in new[] { false, true })
+            {
+                var data = new GrowableByteSource();
+                data.Append(encoding.Bom);
+                data.Append(encoding.Encode("keep\nERROR"));
+                data.RefreshLength();
+                using var source = new ObservedByteSource(data);
+                var searcher = new TextSearcher(source);
+                var indexer = new LineIndexer(searcher, encoding);
+                await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+                source.BeforeRead = () =>
+                {
+                    source.BeforeRead = null;
+                    data.Append(encoding.Encode("S"));
+                    data.RefreshLength();
+                };
+                var options = new SearchOptions
+                {
+                    WholeWord = true,
+                    UnitAlignment = encoding.CodeUnitSize,
+                    BigEndian = encoding.IsBigEndian,
+                };
+
+                var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                    searcher, indexer, encoding.Encode("ERROR"), options, exclude: exclude);
+
+                Assert.Equal(exclude ? new[] { 0 } : new[] { 1 }, lines);
+                Assert.False(capped);
+
+                var (updated, _) = await LineFilter.MatchLinesByPatternAsync(
+                    searcher, indexer, encoding.Encode("ERROR"), options, exclude: exclude);
+                Assert.Equal(exclude ? new[] { 0, 1 } : Array.Empty<int>(), updated);
+            }
+        }
+
         // ----- The scan must not map offsets the index does not cover (issue #169) -----
 
         [Theory]

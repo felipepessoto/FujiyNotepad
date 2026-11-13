@@ -128,7 +128,8 @@ namespace FujiyNotepad.Core
                 // flips to false right afterwards, indexing has only appended, so this bound stays conservative
                 // rather than stale.
                 bool completeAtStart = indexer.IsCompleted;
-                long limit = searcher.SourceLength;
+                long snapshotLength = searcher.SourceLength;
+                long limit = snapshotLength;
                 if (!completeAtStart)
                 {
                     limit = Math.Min(limit, indexer.IndexedFrontier);
@@ -155,7 +156,8 @@ namespace FujiyNotepad.Core
 
                 // Bound the scan itself, not just the mapping. Exclusion also requires reaching that snapshot:
                 // an early EOF must not classify the unread tail as nonmatching.
-                await foreach (long offset in searcher.Search(0, pattern, options, progress, token, limit, requireCompleteRead: exclude))
+                await foreach (long offset in searcher.Search(
+                    0, pattern, options, progress, token, limit, requireCompleteRead: exclude, snapshotLength: snapshotLength))
                 {
                     token.ThrowIfCancellationRequested();
                     if (offset >= limit)
