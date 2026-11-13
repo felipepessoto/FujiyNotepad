@@ -76,9 +76,9 @@ namespace FujiyNotepad.Core
         /// Exclusion collects gaps between matching lines as the scan advances, without allocating a match set
         /// or taking the complement of an already capped or cancelled scan.
         /// <para>
-        /// Only offsets the index actually covers are mapped. The bound is taken once, up front: the source's
-        /// cached length, further limited to the indexed frontier if the index is not yet complete. Matches
-        /// beyond it end the scan, so the result is a snapshot of the file as indexed — the same semantics
+        /// Only bytes the index actually covers are scanned. The bound is taken once, up front: the source's
+        /// cached length, capped by the index's recorded extent, including a completed final unterminated line.
+        /// A length refresh alone cannot extend that coverage. The result is a snapshot of the file as indexed — the same semantics
         /// <see cref="Match"/> has by capturing <c>LineCount</c> once.
         /// </para>
         /// <para>
@@ -124,16 +124,9 @@ namespace FujiyNotepad.Core
                 token.ThrowIfCancellationRequested();
                 int lastLine = -1;
 
-                // Capture the covered region once, before scanning. Snapshot IsCompleted into a local first: if it
-                // flips to false right afterwards, indexing has only appended, so this bound stays conservative
-                // rather than stale.
-                bool completeAtStart = indexer.IsCompleted;
-                long snapshotLength = searcher.SourceLength;
-                long limit = snapshotLength;
-                if (!completeAtStart)
-                {
-                    limit = Math.Min(limit, indexer.IndexedFrontier);
-                }
+                // Follow Tail refreshes the source length before re-arming indexing. Use recorded index
+                // coverage, not that newer length paired with a still-true completion flag.
+                long limit = Math.Min(searcher.SourceLength, indexer.IndexedLength);
 
                 // The final byte belongs to the last covered line, even with a trailing newline. Deriving the
                 // count from this same bound avoids phantom rows and rows indexed past the cached file length.
@@ -157,7 +150,7 @@ namespace FujiyNotepad.Core
                 // Bound the scan itself, not just the mapping. Exclusion also requires reaching that snapshot:
                 // an early EOF must not classify the unread tail as nonmatching.
                 await foreach (long offset in searcher.Search(
-                    0, pattern, options, progress, token, limit, requireCompleteRead: exclude, snapshotLength: snapshotLength))
+                    0, pattern, options, progress, token, limit, requireCompleteRead: exclude, snapshotLength: limit))
                 {
                     token.ThrowIfCancellationRequested();
                     if (offset >= limit)

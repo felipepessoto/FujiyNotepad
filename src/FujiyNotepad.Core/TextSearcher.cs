@@ -57,7 +57,17 @@ namespace FujiyNotepad.Core
         /// captured length for an unbounded scan) throws <see cref="EndOfStreamException"/> instead of ending
         /// normally. This lets callers distinguish a complete scan from a file truncated underneath it.
         /// </summary>
-        public async IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, SearchOptions options, IProgress<int>? progress = null, [EnumeratorCancellation] CancellationToken token = default, long endOffsetExclusive = long.MaxValue, bool requireCompleteRead = false, long? snapshotLength = null)
+        public IAsyncEnumerable<long> Search(long startOffset, byte[] pattern, SearchOptions options, IProgress<int>? progress = null, CancellationToken token = default, long endOffsetExclusive = long.MaxValue, bool requireCompleteRead = false, long? snapshotLength = null)
+            => SearchCore(startOffset, pattern, options, progress, token, endOffsetExclusive, requireCompleteRead, snapshotLength, null);
+
+        // Indexing needs the actual read endpoint, not a mutable cached length sampled after reaching EOF.
+        internal IAsyncEnumerable<long> SearchForIndex(long startOffset, byte[] pattern, SearchOptions options,
+            IProgress<int> progress, CancellationToken token, Action<long> onCompleted)
+            => SearchCore(startOffset, pattern, options, progress, token, long.MaxValue, false, null, onCompleted);
+
+        private async IAsyncEnumerable<long> SearchCore(long startOffset, byte[] pattern, SearchOptions options,
+            IProgress<int>? progress, [EnumeratorCancellation] CancellationToken token, long endOffsetExclusive,
+            bool requireCompleteRead, long? snapshotLength, Action<long>? onCompleted)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(snapshotLength ?? 0, nameof(snapshotLength));
             if (pattern.Length == 0)
@@ -82,6 +92,10 @@ namespace FujiyNotepad.Core
             }
             if (startOffset >= length || startOffset >= endOffsetExclusive)
             {
+                if (!token.IsCancellationRequested)
+                {
+                    onCompleted?.Invoke(Math.Min(startOffset, length));
+                }
                 progress?.Report(100);
                 yield break;
             }
@@ -107,6 +121,7 @@ namespace FujiyNotepad.Core
             {
 
             long readPos = startOffset;     // next absolute read position
+            long readEnd = startOffset;
             int carry = 0;                  // bytes retained at the front of the buffer
             long bufferBase = startOffset;  // absolute offset of buffer[0]
             long nextAllowedStart = startOffset; // non-overlapping guard: never yield a match before this
@@ -130,6 +145,7 @@ namespace FujiyNotepad.Core
                 // (checked above) so the read never throws OperationCanceledException on the caller.
                 int want = (int)Math.Min(chunkSize, readLimit - readPos);
                 int read = await ReadFullAsync(readPos, buffer.AsMemory(carry, want));
+                readEnd = readPos + read;
                 if (requireCompleteRead && read < want && readPos + read < Math.Min(length, readLimit))
                 {
                     if (token.IsCancellationRequested)
@@ -220,6 +236,10 @@ namespace FujiyNotepad.Core
                 }
             }
 
+            if (!token.IsCancellationRequested)
+            {
+                onCompleted?.Invoke(readEnd);
+            }
             progress?.Report(100);
             }
             finally

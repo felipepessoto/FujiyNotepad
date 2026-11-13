@@ -28,8 +28,16 @@ namespace FujiyNotepad.Core.Tests
             private readonly IByteSource inner;
             public ObservedByteSource(IByteSource inner) => this.inner = inner;
             public Action? BeforeRead { get; set; }
+            public Action? BeforeLength { get; set; }
             public int Reads { get; private set; }
-            public long Length => inner.Length;
+            public long Length
+            {
+                get
+                {
+                    BeforeLength?.Invoke();
+                    return inner.Length;
+                }
+            }
             public long RefreshLength() => inner.RefreshLength();
 
             public int Read(long offset, Span<byte> buffer)
@@ -433,6 +441,110 @@ namespace FujiyNotepad.Core.Tests
         }
 
         [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task MatchLinesByPattern_LengthRefreshDuringCapture_DoesNotIncludeUnindexedRows(
+            bool exclude, bool rearmDuringRefresh)
+        {
+            var data = new GrowableByteSource("keep\nERROR\n");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            source.BeforeLength = () =>
+            {
+                source.BeforeLength = null;
+                data.Append("unindexed\n");
+                data.RefreshLength();
+                if (rearmDuringRefresh)
+                {
+                    indexer.IsCompleted = false;
+                }
+            };
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii(exclude ? "ERROR" : "unindexed"), default, exclude: exclude);
+
+            Assert.Equal(exclude ? new[] { 0 } : Array.Empty<int>(), lines);
+            Assert.False(capped);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MatchLinesByPattern_LengthRefreshBeforeRearm_PreservesTheCompletedUnterminatedSnapshot(bool exclude)
+        {
+            var data = new GrowableByteSource("keep\nERR");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+            source.BeforeLength = () =>
+            {
+                source.BeforeLength = null;
+                data.Append("OR");
+                data.RefreshLength();
+            };
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
+
+            Assert.Equal(exclude ? new[] { 0, 1 } : Array.Empty<int>(), lines);
+            Assert.False(capped);
+        }
+
+        [Theory]
+        [InlineData(8, new[] { 0 })]
+        [InlineData(16, new[] { 0, 1 })]
+        public async Task MatchLinesByPattern_IndexCompletion_CoversOnlyBytesActuallyScanned(int chunkSize, int[] expected)
+        {
+            using var source = new GrowableByteSource("keep\nERR");
+            var searcher = new TextSearcher(source, chunkSize);
+            var indexer = new LineIndexer(searcher);
+            bool grew = false;
+            var progress = new SyncProgress(p =>
+            {
+                if (p == 100 && !grew)
+                {
+                    grew = true;
+                    source.Append("OR");
+                    source.RefreshLength();
+                }
+            });
+            await indexer.StartTaskToIndexLines(CancellationToken.None, progress);
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: true);
+
+            Assert.True(grew);
+            Assert.Equal(expected, lines);
+            Assert.False(capped);
+        }
+
+        [Fact]
+        public async Task MatchLinesByPattern_IndexSourceShrinks_CoversOnlyTheReadPrefix()
+        {
+            var data = new GrowableByteSource("keep\nERROR\n");
+            using var source = new ObservedByteSource(data);
+            var searcher = new TextSearcher(source);
+            var indexer = new LineIndexer(searcher);
+            source.BeforeRead = () =>
+            {
+                source.BeforeRead = null;
+                data.Truncate(5);
+            };
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
+
+            var (lines, capped) = await LineFilter.MatchLinesByPatternAsync(
+                searcher, indexer, Ascii("ERROR"), default, exclude: true);
+
+            Assert.Equal(new[] { 0 }, lines);
+            Assert.False(capped);
+        }
+
+        [Theory]
         [InlineData(false)]
         [InlineData(true)]
         public async Task MatchLinesByPattern_FollowTailCompletesTermDuringLookup_KeepsTheOriginalSnapshot(bool exclude)
@@ -455,6 +567,8 @@ namespace FujiyNotepad.Core.Tests
             Assert.Equal(exclude ? new[] { 0, 1 } : Array.Empty<int>(), lines);
             Assert.False(capped);
 
+            indexer.IsCompleted = false;
+            await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
             var (updated, _) = await LineFilter.MatchLinesByPatternAsync(
                 searcher, indexer, Ascii("ERROR"), default, exclude: exclude);
             Assert.Equal(exclude ? new[] { 0 } : new[] { 1 }, updated);
@@ -493,6 +607,8 @@ namespace FujiyNotepad.Core.Tests
                 Assert.Equal(exclude ? new[] { 0 } : new[] { 1 }, lines);
                 Assert.False(capped);
 
+                indexer.IsCompleted = false;
+                await indexer.StartTaskToIndexLines(CancellationToken.None, new Progress<int>());
                 var (updated, _) = await LineFilter.MatchLinesByPatternAsync(
                     searcher, indexer, encoding.Encode("ERROR"), options, exclude: exclude);
                 Assert.Equal(exclude ? new[] { 0, 1 } : Array.Empty<int>(), updated);
